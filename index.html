@@ -13,18 +13,33 @@
           <p class="eyebrow">Yuanbao's First Game</p>
           <h1>元宝的星星大冒险</h1>
         </div>
-        <div class="score-board" aria-live="polite">
-          <span>分数</span>
-          <strong id="score">0</strong>
+        <div class="hud" aria-live="polite">
+          <div class="score-board">
+            <span>金币</span>
+            <strong id="coins">0</strong>
+          </div>
+          <div class="score-board">
+            <span>生命</span>
+            <strong id="hearts">2</strong>
+          </div>
+          <div class="score-board weapon-board">
+            <span>武器</span>
+            <strong id="weaponName">小剑</strong>
+          </div>
         </div>
       </section>
 
       <section class="stage-wrap" aria-label="游戏舞台">
         <canvas id="game" width="960" height="540"></canvas>
         <div id="message" class="message is-hidden">
-          <h2>再来一次！</h2>
-          <p>小勇士碰到小怪了，按 Enter 重新开始。</p>
+          <h2 id="messageTitle">再来一次！</h2>
+          <p id="messageText">小勇士倒下了，按 Enter 重新开始。</p>
           <button id="restartButton" type="button">重新开始</button>
+          <div id="shop" class="shop is-hidden">
+            <h3>武器店</h3>
+            <p id="shopHint">金币够了，可以升级装备。</p>
+            <div id="shopItems" class="shop-items"></div>
+          </div>
         </div>
       </section>
 
@@ -36,7 +51,11 @@
         </div>
         <div class="control-card">
           <span class="key">空格</span>
-          <p>跳跃</p>
+          <p>跳跃到平台上</p>
+        </div>
+        <div class="control-card">
+          <span class="key">J</span>
+          <p>攻击小怪</p>
         </div>
         <div class="control-card">
           <span class="key">Enter</span>
