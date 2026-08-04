@@ -17,6 +17,7 @@ const menuCoins = document.querySelector("#menuCoins");
 const shopItems = document.querySelector("#shopItems");
 const startButton = document.querySelector("#startButton");
 const professionChoices = document.querySelector("#professionChoices");
+const professionHint = document.querySelector("#professionHint");
 const gameActions = document.querySelector(".game-actions");
 const healButton = document.querySelector("#healButton");
 const cageButton = document.querySelector("#cageButton");
@@ -55,9 +56,9 @@ const shopGoods = [
 ];
 
 const professions = {
-  doctor: { name: "医生", description: "点击回复，立刻回满生命。" },
-  police: { name: "警察", description: "发射牢笼，困住怪物 10 秒。" },
-  boxer: { name: "黑拳", description: "短时间内所有伤害无效。" },
+  doctor: { name: "医生", button: "回复", description: "点击回复，立刻回满生命。" },
+  police: { name: "警察", button: "牢笼", description: "发射牢笼，困住怪物 10 秒。" },
+  boxer: { name: "黑拳", button: "黑拳", description: "短时间内所有伤害无效。" },
 };
 
 let player;
@@ -704,6 +705,7 @@ function renderShop() {
 
 function renderProfessions() {
   professionChoices.innerHTML = "";
+  professionHint.textContent = `${professions[selectedProfession].name}：${professions[selectedProfession].description}`;
 
   for (const [id, profession] of Object.entries(professions)) {
     const button = document.createElement("button");
@@ -815,6 +817,15 @@ function updateHud() {
 
 function updateActionButtons() {
   const inGame = gameState === "playing" && Boolean(player);
+  healButton.classList.toggle("is-hidden", selectedProfession !== "doctor");
+  cageButton.classList.toggle("is-hidden", selectedProfession !== "police");
+  blackFistButton.classList.toggle("is-hidden", selectedProfession !== "boxer");
+  healButton.classList.toggle("is-active-skill", selectedProfession === "doctor");
+  cageButton.classList.toggle("is-active-skill", selectedProfession === "police");
+  blackFistButton.classList.toggle("is-active-skill", selectedProfession === "boxer");
+  healButton.textContent = player && player.skillTimer > 0 && selectedProfession === "doctor" ? "回复冷却中" : "回复";
+  cageButton.textContent = player && player.skillTimer > 0 && selectedProfession === "police" ? "牢笼冷却中" : "牢笼";
+  blackFistButton.textContent = blackFistTimer > 0 ? "黑拳生效中" : player && player.skillTimer > 0 && selectedProfession === "boxer" ? "黑拳冷却中" : "黑拳";
   healButton.disabled = !inGame || selectedProfession !== "doctor" || player.skillTimer > 0;
   cageButton.disabled = !inGame || selectedProfession !== "police" || player.skillTimer > 0;
   blackFistButton.disabled = !inGame || selectedProfession !== "boxer" || player.skillTimer > 0;
