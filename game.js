@@ -6,6 +6,7 @@ const levelNumberElement = document.querySelector("#levelNumber");
 const playCountElement = document.querySelector("#playCount");
 const coinsElement = document.querySelector("#coins");
 const heartsElement = document.querySelector("#hearts");
+const monsterCountElement = document.querySelector("#monsterCount");
 const weaponNameElement = document.querySelector("#weaponName");
 const mainMenu = document.querySelector("#mainMenu");
 const resultLabel = document.querySelector("#resultLabel");
@@ -371,21 +372,23 @@ function attack() {
 }
 
 function throwGrenade() {
+  if (gameState !== "playing") return;
   if (player.grenadeTimer > 0) return;
 
-  player.grenadeTimer = 70;
+  player.grenadeTimer = 42;
   projectiles.push({
     x: player.facing > 0 ? player.x + player.width : player.x - 14,
     y: player.y + 20,
-    width: 16,
-    height: 16,
-    vx: 7.8 * player.facing,
-    vy: -8.5,
+    width: 22,
+    height: 22,
+    vx: 9.6 * player.facing,
+    vy: -6.8,
     damage: 60,
-    rangeLeft: 460,
+    rangeLeft: 560,
     kind: "grenade",
-    timer: 54,
+    timer: 42,
   });
+  effects.push({ x: player.x + player.width / 2, y: player.y + 18, width: 32, height: 32, life: 8, kind: "throw" });
 }
 
 function spawnBullet(weapon) {
@@ -416,8 +419,17 @@ function moveProjectiles() {
         projectile.y = floorY - projectile.height;
         projectile.vy *= -0.48;
       }
+
+      for (const enemy of level.enemies) {
+        if (enemy.alive && touches(projectile, enemy)) {
+          explode(projectile.x + projectile.width / 2, projectile.y + projectile.height / 2, projectile.damage, 112);
+          projectile.rangeLeft = 0;
+          break;
+        }
+      }
+
       if (projectile.timer <= 0) {
-        explode(projectile.x, projectile.y, projectile.damage, 96);
+        explode(projectile.x + projectile.width / 2, projectile.y + projectile.height / 2, projectile.damage, 112);
         projectile.rangeLeft = 0;
       }
       continue;
@@ -465,8 +477,10 @@ function damageEnemy(enemy, damage) {
     effects.push({ x: enemy.x, y: enemy.y, width: enemy.width, height: enemy.height, life: 24, kind: "poof" });
     if (level.enemies.every((monster) => !monster.alive)) {
       level.chest.locked = false;
+      effects.push({ x: level.chest.x - 42, y: level.chest.y - 42, width: 160, height: 36, life: 110, kind: "unlock" });
     }
   }
+  updateHud();
 }
 
 function collectStars() {
@@ -576,10 +590,12 @@ function updateCamera() {
 }
 
 function updateHud() {
+  const remainingMonsters = level ? level.enemies.filter((enemy) => enemy.alive).length : 0;
   levelNumberElement.textContent = currentLevel;
   playCountElement.textContent = playCount;
   coinsElement.textContent = coins;
   heartsElement.textContent = player ? Math.max(0, player.hearts) : 2;
+  monsterCountElement.textContent = remainingMonsters;
   weaponNameElement.textContent = hasHorse ? `${weapons[weaponLevel].name}+马` : weapons[weaponLevel].name;
   menuPlayCount.textContent = playCount;
   menuCoins.textContent = coins;
@@ -732,7 +748,11 @@ function drawChest() {
   ctx.fillRect(chest.x + chest.width - 14, chest.y + 6, 8, chest.height - 10);
   ctx.fillStyle = chest.locked ? "#8f95a3" : "#ffd34d";
   ctx.fillRect(chest.x + 25, chest.y + 19, 12, 16);
-  if (chest.locked) drawTinyText("打败所有怪", chest.x - 28, chest.y - 13, "#211b2c");
+  if (chest.locked) {
+    drawTinyText(`剩 ${level.enemies.filter((enemy) => enemy.alive).length} 只怪`, chest.x - 20, chest.y - 13, "#211b2c");
+  } else {
+    drawTinyText("宝箱已解锁", chest.x - 26, chest.y - 13, "#ffd34d");
+  }
   ctx.restore();
 }
 
@@ -884,8 +904,8 @@ function drawEffects() {
   ctx.save();
   ctx.translate(-cameraX, 0);
   for (const effect of effects) {
-    if (effect.kind === "slash" || effect.kind === "claw") {
-      ctx.fillStyle = effect.kind === "slash" ? "#fff29a" : "#ff4d2e";
+    if (effect.kind === "slash" || effect.kind === "claw" || effect.kind === "throw") {
+      ctx.fillStyle = effect.kind === "slash" ? "#fff29a" : effect.kind === "throw" ? "#45d06f" : "#ff4d2e";
       ctx.fillRect(effect.x + 10, effect.y + 12, Math.max(12, effect.width - 20), 8);
     }
 
@@ -899,6 +919,7 @@ function drawEffects() {
 
     if (effect.kind === "coins") drawTinyText(`+${level.reward} 金币`, effect.x, effect.y - (42 - effect.life), "#ffd34d");
     if (effect.kind === "starCoins") drawTinyText("+60 金币", effect.x, effect.y - (42 - effect.life), "#ffd34d");
+    if (effect.kind === "unlock") drawTinyText("宝箱已解锁！", effect.x, effect.y, "#ffd34d");
   }
   ctx.restore();
 }
@@ -920,6 +941,7 @@ function drawTinyText(text, x, y, color) {
 window.addEventListener("keydown", (event) => {
   keys.add(event.code);
   if (["ArrowLeft", "ArrowRight", "ArrowUp", "Space", "KeyJ", "KeyK", "Enter"].includes(event.code)) event.preventDefault();
+  if (event.code === "KeyK") throwGrenade();
   if (event.code === "Enter" && gameState === "menu") startGame();
 });
 
