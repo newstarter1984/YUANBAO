@@ -1,28 +1,29 @@
 const canvas = document.querySelector("#game");
 const ctx = canvas.getContext("2d");
+ctx.imageSmoothingEnabled = false;
+
+const playCountElement = document.querySelector("#playCount");
 const coinsElement = document.querySelector("#coins");
 const heartsElement = document.querySelector("#hearts");
 const weaponNameElement = document.querySelector("#weaponName");
-const message = document.querySelector("#message");
-const messageTitle = document.querySelector("#messageTitle");
-const messageText = document.querySelector("#messageText");
-const restartButton = document.querySelector("#restartButton");
-const shop = document.querySelector("#shop");
-const shopHint = document.querySelector("#shopHint");
+const mainMenu = document.querySelector("#mainMenu");
+const resultLabel = document.querySelector("#resultLabel");
+const menuText = document.querySelector("#menuText");
+const menuPlayCount = document.querySelector("#menuPlayCount");
+const menuCoins = document.querySelector("#menuCoins");
 const shopItems = document.querySelector("#shopItems");
+const startButton = document.querySelector("#startButton");
 
 const keys = new Set();
 const gravity = 0.75;
 const floorY = 454;
-const attackCooldown = 28;
 const playerStart = { x: 80, y: floorY - 72 };
 
 const weapons = [
   { name: "小剑", cost: 0, damage: 1, range: 70, cooldown: 28, kind: "melee" },
-  { name: "狼牙棒", cost: 20, damage: 2, range: 86, cooldown: 30, kind: "melee" },
-  { name: "步枪", cost: 40, damage: 2, range: 560, cooldown: 26, kind: "rifle" },
-  { name: "散弹枪", cost: 70, damage: 2, range: 350, cooldown: 36, kind: "shotgun" },
-  { name: "火箭筒", cost: 110, damage: 5, range: 620, cooldown: 48, kind: "rocket" },
+  { name: "狼牙棒", cost: 10, damage: 2, range: 88, cooldown: 30, kind: "melee" },
+  { name: "步枪", cost: 30, damage: 2, range: 560, cooldown: 24, kind: "rifle" },
+  { name: "火箭筒", cost: 100, damage: 5, range: 620, cooldown: 48, kind: "rocket" },
 ];
 
 const platforms = [
@@ -36,18 +37,23 @@ let player;
 let stars;
 let enemy;
 let chest;
-let projectiles;
-let effects;
+let projectiles = [];
+let effects = [];
 let coins = 0;
+let playCount = 0;
 let weaponLevel = 0;
-let gameOver = false;
+let gameState = "menu";
 let animationFrame;
 
-function resetGame() {
+function startGame() {
+  playCount += 1;
+  gameState = "playing";
+  mainMenu.classList.add("is-hidden");
+
   player = {
     x: playerStart.x,
     y: playerStart.y,
-    width: 54,
+    width: 48,
     height: 72,
     vx: 0,
     vy: 0,
@@ -62,25 +68,25 @@ function resetGame() {
   };
 
   stars = [
-    { x: 230, y: 336, size: 26, collected: false },
-    { x: 420, y: 274, size: 26, collected: false },
-    { x: 620, y: 330, size: 26, collected: false },
-    { x: 810, y: 250, size: 26, collected: false },
+    { x: 230, y: 336, size: 24, collected: false },
+    { x: 420, y: 274, size: 24, collected: false },
+    { x: 620, y: 330, size: 24, collected: false },
+    { x: 810, y: 250, size: 24, collected: false },
   ];
 
-  const sizeBonus = weaponLevel * 10;
-  const enemyWidth = 58 + sizeBonus;
-  const enemyHeight = 46 + sizeBonus;
+  const sizeBonus = weaponLevel * 14;
+  const enemyWidth = 56 + sizeBonus;
+  const enemyHeight = 48 + sizeBonus;
   enemy = {
     x: 645,
     y: floorY - enemyHeight,
     width: enemyWidth,
     height: enemyHeight,
-    vx: 2.2 + weaponLevel * 0.28,
+    vx: 2.2 + weaponLevel * 0.35,
     left: 548,
     right: 842,
-    maxHp: 3 + weaponLevel * 3,
-    hp: 3 + weaponLevel * 3,
+    maxHp: 3 + weaponLevel * 4,
+    hp: 3 + weaponLevel * 4,
     alive: true,
     hurtFlash: 0,
   };
@@ -96,14 +102,35 @@ function resetGame() {
 
   projectiles = [];
   effects = [];
-  gameOver = false;
-  message.classList.add("is-hidden");
   updateHud();
   cancelAnimationFrame(animationFrame);
   update();
 }
 
+function showMenu(reason) {
+  gameState = "menu";
+  cancelAnimationFrame(animationFrame);
+
+  if (reason === "win") {
+    resultLabel.textContent = "胜利！";
+    menuText.textContent = "宝箱打开了，金币到手。可以升级武器，再挑战更强的小怪。";
+  } else if (reason === "death") {
+    resultLabel.textContent = "挑战失败";
+    menuText.textContent = "小勇士被碰到两次就会回到主界面。看看金币够不够升级武器。";
+  } else {
+    resultLabel.textContent = "准备冒险";
+    menuText.textContent = "打败小怪，打开宝箱，攒金币升级武器。";
+  }
+
+  drawMenuBackdrop();
+  updateHud();
+  renderShop();
+  mainMenu.classList.remove("is-hidden");
+}
+
 function update() {
+  if (gameState !== "playing") return;
+
   handleInput();
   movePlayer();
   moveEnemy();
@@ -113,10 +140,7 @@ function update() {
   checkEnemyHitPlayer();
   tickTimers();
   draw();
-
-  if (!gameOver) {
-    animationFrame = requestAnimationFrame(update);
-  }
+  animationFrame = requestAnimationFrame(update);
 }
 
 function handleInput() {
@@ -186,7 +210,7 @@ function attack() {
   const weapon = weapons[weaponLevel];
   if (player.attackTimer > 0) return;
 
-  player.attackTimer = weapon.cooldown || attackCooldown;
+  player.attackTimer = weapon.cooldown;
   player.attacking = 12;
 
   if (weapon.kind === "melee") {
@@ -201,25 +225,17 @@ function attack() {
     return;
   }
 
-  if (weapon.kind === "shotgun") {
-    for (const offset of [-0.22, 0, 0.22]) {
-      spawnBullet(weapon, offset);
-    }
-    return;
-  }
-
-  spawnBullet(weapon, 0);
+  spawnBullet(weapon);
 }
 
-function spawnBullet(weapon, slope) {
+function spawnBullet(weapon) {
   const speed = weapon.kind === "rocket" ? 8 : 12;
   projectiles.push({
-    x: player.facing > 0 ? player.x + player.width : player.x - 10,
+    x: player.facing > 0 ? player.x + player.width : player.x - 12,
     y: player.y + 34,
-    width: weapon.kind === "rocket" ? 22 : 12,
+    width: weapon.kind === "rocket" ? 24 : 12,
     height: weapon.kind === "rocket" ? 12 : 6,
     vx: speed * player.facing,
-    vy: slope * speed,
     damage: weapon.damage,
     rangeLeft: weapon.range,
     kind: weapon.kind,
@@ -229,7 +245,6 @@ function spawnBullet(weapon, slope) {
 function moveProjectiles() {
   for (const projectile of projectiles) {
     projectile.x += projectile.vx;
-    projectile.y += projectile.vy;
     projectile.rangeLeft -= Math.abs(projectile.vx);
 
     if (enemy.alive && touches(projectile, enemy)) {
@@ -237,7 +252,7 @@ function moveProjectiles() {
       projectile.rangeLeft = 0;
 
       if (projectile.kind === "rocket") {
-        effects.push({ x: projectile.x - 28, y: projectile.y - 28, width: 70, height: 70, life: 18, kind: "boom" });
+        effects.push({ x: projectile.x - 28, y: projectile.y - 28, width: 72, height: 72, life: 18, kind: "boom" });
       }
     }
   }
@@ -258,7 +273,7 @@ function damageEnemy(damage) {
   if (enemy.hp === 0) {
     enemy.alive = false;
     chest.locked = false;
-    effects.push({ x: enemy.x, y: enemy.y, width: enemy.width, height: enemy.height, life: 28, kind: "poof" });
+    effects.push({ x: enemy.x, y: enemy.y, width: enemy.width, height: enemy.height, life: 24, kind: "poof" });
   }
 }
 
@@ -277,7 +292,9 @@ function handleChest() {
     chest.opened = true;
     coins += 20;
     updateHud();
-    effects.push({ x: chest.x - 4, y: chest.y - 36, width: 72, height: 36, life: 54, kind: "coins" });
+    effects.push({ x: chest.x - 4, y: chest.y - 36, width: 72, height: 36, life: 42, kind: "coins" });
+    draw();
+    setTimeout(() => showMenu("win"), 450);
   }
 }
 
@@ -291,39 +308,22 @@ function checkEnemyHitPlayer() {
   updateHud();
 
   if (player.hearts <= 0) {
-    showDeathScreen();
+    showMenu("death");
   }
-}
-
-function showDeathScreen() {
-  gameOver = true;
-  messageTitle.textContent = "小勇士倒下了";
-  messageText.textContent = "被小怪碰到两次就会失败。升级武器后，小怪也会更强。";
-  renderShop();
-  message.classList.remove("is-hidden");
 }
 
 function renderShop() {
-  const nextWeapon = weapons[weaponLevel + 1];
   shopItems.innerHTML = "";
-
-  if (!nextWeapon) {
-    shop.classList.remove("is-hidden");
-    shopHint.textContent = "装备已经升到最高级了。";
-    return;
-  }
-
-  const canAffordAny = weapons.slice(1).some((weapon) => coins >= weapon.cost && weapons.indexOf(weapon) > weaponLevel);
-  shop.classList.toggle("is-hidden", !canAffordAny);
-  shopHint.textContent = `当前金币：${coins}。下一件装备：${nextWeapon.name}，需要 ${nextWeapon.cost} 金币。`;
 
   for (let i = 1; i < weapons.length; i += 1) {
     const weapon = weapons[i];
     const button = document.createElement("button");
     const owned = i <= weaponLevel;
+    const lockedByOrder = i !== weaponLevel + 1 && !owned;
     button.type = "button";
-    button.textContent = owned ? `${weapon.name} 已拥有` : `${weapon.name} ${weapon.cost} 金币`;
-    button.disabled = owned || coins < weapon.cost || i !== weaponLevel + 1;
+    button.className = owned ? "shop-item is-owned" : "shop-item";
+    button.disabled = owned || lockedByOrder || coins < weapon.cost;
+    button.innerHTML = `<strong>${weapon.name}</strong><span>${owned ? "已拥有" : `${weapon.cost} 金币`}</span>`;
     button.addEventListener("click", () => buyWeapon(i));
     shopItems.append(button);
   }
@@ -352,9 +352,12 @@ function tickTimers() {
 }
 
 function updateHud() {
+  playCountElement.textContent = playCount;
   coinsElement.textContent = coins;
   heartsElement.textContent = player ? player.hearts : 2;
   weaponNameElement.textContent = weapons[weaponLevel].name;
+  menuPlayCount.textContent = playCount;
+  menuCoins.textContent = coins;
 }
 
 function touches(a, b) {
@@ -376,9 +379,7 @@ function starBox(star) {
 }
 
 function draw() {
-  drawSky();
-  drawGround();
-  drawPlatforms();
+  drawWorld();
   drawStars();
   drawChest();
   drawEnemy();
@@ -387,97 +388,90 @@ function draw() {
   drawEffects();
 }
 
-function drawSky() {
-  const sky = ctx.createLinearGradient(0, 0, 0, canvas.height);
-  sky.addColorStop(0, "#72cdf4");
-  sky.addColorStop(0.72, "#caefff");
-  sky.addColorStop(1, "#f7df85");
-  ctx.fillStyle = sky;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  drawCloud(138, 96, 1.1);
-  drawCloud(514, 78, 0.82);
-  drawCloud(785, 132, 1);
+function drawMenuBackdrop() {
+  drawWorld();
+  drawPixelSign(346, 238, "PIXEL QUEST");
 }
 
-function drawCloud(x, y, scale) {
-  ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
-  ctx.beginPath();
-  ctx.arc(x, y, 28 * scale, 0, Math.PI * 2);
-  ctx.arc(x + 30 * scale, y - 10 * scale, 34 * scale, 0, Math.PI * 2);
-  ctx.arc(x + 66 * scale, y, 26 * scale, 0, Math.PI * 2);
-  ctx.rect(x - 6 * scale, y, 86 * scale, 24 * scale);
-  ctx.fill();
+function drawWorld() {
+  drawSky();
+  drawGround();
+  drawPlatforms();
+}
+
+function drawSky() {
+  ctx.fillStyle = "#6dcff6";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#4db4e6";
+  ctx.fillRect(0, 284, canvas.width, 170);
+
+  drawBlockCloud(96, 88, 4);
+  drawBlockCloud(492, 70, 3);
+  drawBlockCloud(772, 126, 4);
+
+  ctx.fillStyle = "#ffe66d";
+  ctx.fillRect(54, 52, 56, 56);
+  ctx.fillStyle = "#fff29a";
+  ctx.fillRect(70, 66, 24, 24);
+}
+
+function drawBlockCloud(x, y, scale) {
+  const size = 12 * scale;
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(x, y + size, size * 6, size);
+  ctx.fillRect(x + size, y, size * 4, size);
+  ctx.fillRect(x + size * 2, y - size, size * 2, size);
 }
 
 function drawGround() {
-  ctx.fillStyle = "#54c878";
+  ctx.fillStyle = "#42c96d";
   ctx.fillRect(0, floorY, canvas.width, canvas.height - floorY);
-  ctx.fillStyle = "#2e9a55";
+  ctx.fillStyle = "#2aa654";
   ctx.fillRect(0, floorY, canvas.width, 16);
+  ctx.fillStyle = "#7d4a2b";
+  ctx.fillRect(0, floorY + 42, canvas.width, canvas.height - floorY - 42);
 
-  for (let x = 0; x < canvas.width; x += 42) {
-    ctx.fillStyle = x % 84 === 0 ? "#237f45" : "#319e57";
-    ctx.fillRect(x, floorY + 16, 22, 8);
+  for (let x = 0; x < canvas.width; x += 32) {
+    ctx.fillStyle = x % 64 === 0 ? "#216f3e" : "#2d8c4a";
+    ctx.fillRect(x, floorY + 16, 16, 10);
   }
 }
 
 function drawPlatforms() {
   for (const platform of platforms) {
-    ctx.fillStyle = "#8b5a36";
+    ctx.fillStyle = "#6a3d24";
     ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
-    ctx.fillStyle = "#4fc370";
-    ctx.fillRect(platform.x, platform.y - 10, platform.width, 14);
+    ctx.fillStyle = "#45d06f";
+    ctx.fillRect(platform.x, platform.y - 12, platform.width, 14);
+    ctx.fillStyle = "#2b9a54";
+    ctx.fillRect(platform.x, platform.y, platform.width, 5);
   }
 }
 
 function drawStars() {
   for (const star of stars) {
     if (star.collected) continue;
-    drawStar(star.x, star.y, star.size);
+    ctx.fillStyle = "#ffd34d";
+    ctx.fillRect(star.x - 4, star.y - 16, 8, 32);
+    ctx.fillRect(star.x - 16, star.y - 4, 32, 8);
+    ctx.fillRect(star.x - 10, star.y - 10, 20, 20);
+    ctx.fillStyle = "#fff29a";
+    ctx.fillRect(star.x - 4, star.y - 4, 8, 8);
   }
-}
-
-function drawStar(x, y, size) {
-  const spikes = 5;
-  const outerRadius = size;
-  const innerRadius = size * 0.45;
-
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(-Math.PI / 2);
-  ctx.beginPath();
-
-  for (let i = 0; i < spikes * 2; i += 1) {
-    const radius = i % 2 === 0 ? outerRadius : innerRadius;
-    const angle = (i * Math.PI) / spikes;
-    ctx.lineTo(Math.cos(angle) * radius, Math.sin(angle) * radius);
-  }
-
-  ctx.closePath();
-  ctx.fillStyle = "#ffd447";
-  ctx.strokeStyle = "#8c6414";
-  ctx.lineWidth = 4;
-  ctx.fill();
-  ctx.stroke();
-  ctx.restore();
 }
 
 function drawChest() {
-  ctx.fillStyle = chest.opened ? "#b0783d" : "#d99b45";
-  roundRect(chest.x, chest.y + (chest.opened ? 10 : 0), chest.width, chest.height - (chest.opened ? 10 : 0), 7);
-  ctx.fill();
-  ctx.strokeStyle = "#5d351d";
-  ctx.lineWidth = 4;
-  ctx.stroke();
-
-  ctx.fillStyle = chest.locked ? "#777" : "#ffd447";
+  ctx.fillStyle = chest.opened ? "#8e5a32" : "#d9903d";
+  ctx.fillRect(chest.x, chest.y + (chest.opened ? 12 : 0), chest.width, chest.height - (chest.opened ? 12 : 0));
+  ctx.fillStyle = "#5d351d";
+  ctx.fillRect(chest.x, chest.y + 18, chest.width, 6);
+  ctx.fillRect(chest.x + 6, chest.y + 6, 8, chest.height - 10);
+  ctx.fillRect(chest.x + chest.width - 14, chest.y + 6, 8, chest.height - 10);
+  ctx.fillStyle = chest.locked ? "#8f95a3" : "#ffd34d";
   ctx.fillRect(chest.x + 23, chest.y + 18, 12, 16);
 
   if (chest.locked) {
-    ctx.fillStyle = "#172033";
-    ctx.font = "700 14px Microsoft YaHei, sans-serif";
-    ctx.fillText("打败小怪", chest.x - 8, chest.y - 8);
+    drawTinyText("打败小怪", chest.x - 9, chest.y - 13, "#211b2c");
   }
 }
 
@@ -487,22 +481,17 @@ function drawEnemy() {
     return;
   }
 
-  ctx.fillStyle = enemy.hurtFlash > 0 ? "#ffffff" : "#e64b55";
-  roundRect(enemy.x, enemy.y + 10, enemy.width, enemy.height - 10, 14);
-  ctx.fill();
-
-  ctx.fillStyle = "#fff";
-  ctx.beginPath();
-  ctx.arc(enemy.x + enemy.width * 0.32, enemy.y + enemy.height * 0.42, 6, 0, Math.PI * 2);
-  ctx.arc(enemy.x + enemy.width * 0.68, enemy.y + enemy.height * 0.42, 6, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.fillStyle = "#172033";
-  ctx.beginPath();
-  ctx.arc(enemy.x + enemy.width * 0.34, enemy.y + enemy.height * 0.42, 2.5, 0, Math.PI * 2);
-  ctx.arc(enemy.x + enemy.width * 0.66, enemy.y + enemy.height * 0.42, 2.5, 0, Math.PI * 2);
-  ctx.fill();
-
+  ctx.fillStyle = enemy.hurtFlash > 0 ? "#ffffff" : "#e84c5f";
+  ctx.fillRect(enemy.x, enemy.y + 10, enemy.width, enemy.height - 10);
+  ctx.fillStyle = "#bb2b43";
+  ctx.fillRect(enemy.x + 8, enemy.y, enemy.width - 16, 16);
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(enemy.x + enemy.width * 0.24, enemy.y + enemy.height * 0.34, 10, 10);
+  ctx.fillRect(enemy.x + enemy.width * 0.62, enemy.y + enemy.height * 0.34, 10, 10);
+  ctx.fillStyle = "#211b2c";
+  ctx.fillRect(enemy.x + enemy.width * 0.28, enemy.y + enemy.height * 0.38, 4, 4);
+  ctx.fillRect(enemy.x + enemy.width * 0.66, enemy.y + enemy.height * 0.38, 4, 4);
+  ctx.fillRect(enemy.x + enemy.width * 0.32, enemy.y + enemy.height * 0.68, enemy.width * 0.36, 6);
   drawEnemyHealthBar();
 }
 
@@ -510,82 +499,68 @@ function drawEnemyHealthBar() {
   const barWidth = Math.max(58, enemy.width);
   const x = enemy.x + enemy.width / 2 - barWidth / 2;
   const y = enemy.y - 16;
-  ctx.fillStyle = "#222f44";
+  ctx.fillStyle = "#211b2c";
   ctx.fillRect(x, y, barWidth, 8);
-  ctx.fillStyle = enemy.alive ? "#73df64" : "#8aa0aa";
+  ctx.fillStyle = enemy.alive ? "#45d06f" : "#8f95a3";
   ctx.fillRect(x, y, barWidth * (enemy.hp / enemy.maxHp), 8);
 }
 
 function drawProjectiles() {
   for (const projectile of projectiles) {
-    ctx.fillStyle = projectile.kind === "rocket" ? "#ff8f3d" : "#172033";
-    roundRect(projectile.x, projectile.y, projectile.width, projectile.height, 4);
-    ctx.fill();
+    ctx.fillStyle = projectile.kind === "rocket" ? "#ff6b50" : "#211b2c";
+    ctx.fillRect(projectile.x, projectile.y, projectile.width, projectile.height);
+    if (projectile.kind === "rocket") {
+      ctx.fillStyle = "#ffd34d";
+      ctx.fillRect(projectile.x - Math.sign(projectile.vx) * 10, projectile.y + 3, 10, 6);
+    }
   }
 }
 
 function drawPlayer() {
-  const x = player.x;
-  const y = player.y;
   const flashing = player.invincible > 0 && Math.floor(player.invincible / 6) % 2 === 0;
-
   if (flashing) return;
 
+  const x = player.x;
+  const y = player.y;
   ctx.fillStyle = "#2451c5";
-  roundRect(x + 10, y + 32, 34, 38, 8);
-  ctx.fill();
-
+  ctx.fillRect(x + 10, y + 34, 30, 34);
+  ctx.fillStyle = "#16358f";
+  ctx.fillRect(x + 10, y + 60, 12, 12);
+  ctx.fillRect(x + 28, y + 60, 12, 12);
   ctx.fillStyle = "#f2b279";
-  ctx.beginPath();
-  ctx.arc(x + 27, y + 22, 23, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.fillStyle = "#172033";
-  ctx.beginPath();
-  ctx.arc(x + (player.facing > 0 ? 35 : 20), y + 18, 3.5, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.strokeStyle = "#172033";
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.arc(x + 28, y + 27, 8, 0.1 * Math.PI, 0.85 * Math.PI);
-  ctx.stroke();
-
-  ctx.fillStyle = "#ffcf4a";
-  ctx.beginPath();
-  ctx.moveTo(x + 9, y + 5);
-  ctx.lineTo(x + 45, y + 5);
-  ctx.lineTo(x + 27, y - 13);
-  ctx.closePath();
-  ctx.fill();
-  ctx.strokeStyle = "#8c6414";
-  ctx.stroke();
-
+  ctx.fillRect(x + 8, y + 10, 36, 30);
+  ctx.fillStyle = "#8a4b2b";
+  ctx.fillRect(x + 8, y + 6, 36, 10);
+  ctx.fillRect(x + 4, y + 14, 8, 14);
+  ctx.fillStyle = "#211b2c";
+  ctx.fillRect(x + (player.facing > 0 ? 32 : 16), y + 21, 5, 5);
+  ctx.fillRect(x + 21, y + 32, 12, 4);
+  ctx.fillStyle = "#ffd34d";
+  ctx.fillRect(x + 14, y - 8, 24, 10);
+  ctx.fillRect(x + 22, y - 16, 8, 8);
   drawWeapon();
 }
 
 function drawWeapon() {
   const weapon = weapons[weaponLevel];
-  const handX = player.facing > 0 ? player.x + 47 : player.x + 7;
+  const handX = player.facing > 0 ? player.x + 42 : player.x + 6;
   const handY = player.y + 44;
   const direction = player.facing;
 
   ctx.save();
   ctx.translate(handX, handY);
   ctx.scale(direction, 1);
-  ctx.rotate(player.attacking > 0 ? -0.55 : 0.2);
 
   if (weapon.kind === "melee") {
-    ctx.strokeStyle = weaponLevel === 0 ? "#d9dde5" : "#5e5b62";
-    ctx.lineWidth = weaponLevel === 0 ? 6 : 12;
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.lineTo(weaponLevel === 0 ? 44 : 54, -10);
-    ctx.stroke();
+    ctx.fillStyle = weaponLevel === 0 ? "#d9dde5" : "#5e5b62";
+    ctx.fillRect(0, player.attacking > 0 ? -18 : -8, weaponLevel === 0 ? 44 : 54, weaponLevel === 0 ? 7 : 14);
+    ctx.fillStyle = "#8b5a36";
+    ctx.fillRect(-8, -3, 12, 8);
   } else {
-    ctx.fillStyle = weapon.kind === "rocket" ? "#5e5b62" : "#333c4d";
-    roundRect(0, -10, weapon.kind === "shotgun" ? 54 : 66, weapon.kind === "rocket" ? 20 : 14, 5);
-    ctx.fill();
+    ctx.fillStyle = weapon.kind === "rocket" ? "#595461" : "#2d3142";
+    ctx.fillRect(0, -10, weapon.kind === "rocket" ? 68 : 60, weapon.kind === "rocket" ? 20 : 14);
+    ctx.fillStyle = "#8f95a3";
+    ctx.fillRect(weapon.kind === "rocket" ? 52 : 46, -6, 18, 8);
   }
 
   ctx.restore();
@@ -593,58 +568,48 @@ function drawWeapon() {
 
 function drawEffects() {
   for (const effect of effects) {
-    const alpha = Math.max(0, effect.life / 54);
-    ctx.save();
-    ctx.globalAlpha = alpha;
-
     if (effect.kind === "slash") {
-      ctx.strokeStyle = "#fff8a8";
-      ctx.lineWidth = 5;
-      ctx.beginPath();
-      ctx.arc(effect.x + effect.width / 2, effect.y + effect.height / 2, effect.width / 2, -0.7, 0.6);
-      ctx.stroke();
+      ctx.fillStyle = "#fff29a";
+      ctx.fillRect(effect.x + 10, effect.y + 12, effect.width - 20, 8);
     }
 
     if (effect.kind === "boom" || effect.kind === "poof") {
-      ctx.fillStyle = effect.kind === "boom" ? "#ff8f3d" : "#d8edf5";
-      ctx.beginPath();
-      ctx.arc(effect.x + effect.width / 2, effect.y + effect.height / 2, effect.width * alpha, 0, Math.PI * 2);
-      ctx.fill();
+      const size = Math.max(8, effect.life * 3);
+      ctx.fillStyle = effect.kind === "boom" ? "#ff6b50" : "#d8edf5";
+      ctx.fillRect(effect.x + effect.width / 2 - size / 2, effect.y + effect.height / 2 - size / 2, size, size);
+      ctx.fillStyle = "#ffd34d";
+      ctx.fillRect(effect.x + effect.width / 2 - size / 4, effect.y + effect.height / 2 - size / 4, size / 2, size / 2);
     }
 
     if (effect.kind === "coins") {
-      ctx.fillStyle = "#ffd447";
-      ctx.font = "900 24px Microsoft YaHei, sans-serif";
-      ctx.fillText("+20 金币", effect.x, effect.y + (1 - alpha) * -24);
+      drawTinyText("+20 金币", effect.x, effect.y - (42 - effect.life), "#ffd34d");
     }
-
-    ctx.restore();
   }
 }
 
-function roundRect(x, y, width, height, radius) {
-  ctx.beginPath();
-  ctx.moveTo(x + radius, y);
-  ctx.lineTo(x + width - radius, y);
-  ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
-  ctx.lineTo(x + width, y + height - radius);
-  ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
-  ctx.lineTo(x + radius, y + height);
-  ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
-  ctx.lineTo(x, y + radius);
-  ctx.quadraticCurveTo(x, y, x + radius, y);
-  ctx.closePath();
+function drawPixelSign(x, y, text) {
+  ctx.fillStyle = "#211b2c";
+  ctx.fillRect(x - 18, y - 18, 268, 70);
+  ctx.fillStyle = "#fff4c7";
+  ctx.fillRect(x - 10, y - 10, 252, 54);
+  drawTinyText(text, x + 8, y + 12, "#211b2c");
+}
+
+function drawTinyText(text, x, y, color) {
+  ctx.fillStyle = color;
+  ctx.font = "900 18px Microsoft YaHei, sans-serif";
+  ctx.fillText(text, x, y);
 }
 
 window.addEventListener("keydown", (event) => {
   keys.add(event.code);
 
-  if (["ArrowLeft", "ArrowRight", "ArrowUp", "Space", "KeyJ"].includes(event.code)) {
+  if (["ArrowLeft", "ArrowRight", "ArrowUp", "Space", "KeyJ", "Enter"].includes(event.code)) {
     event.preventDefault();
   }
 
-  if (event.code === "Enter" && gameOver) {
-    resetGame();
+  if (event.code === "Enter" && gameState === "menu") {
+    startGame();
   }
 });
 
@@ -652,6 +617,6 @@ window.addEventListener("keyup", (event) => {
   keys.delete(event.code);
 });
 
-restartButton.addEventListener("click", resetGame);
+startButton.addEventListener("click", startGame);
 
-resetGame();
+showMenu("ready");

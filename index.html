@@ -10,10 +10,14 @@
     <main class="game-shell">
       <section class="top-bar" aria-label="游戏信息">
         <div>
-          <p class="eyebrow">Yuanbao's First Game</p>
+          <p class="eyebrow">Pixel Adventure</p>
           <h1>元宝的星星大冒险</h1>
         </div>
         <div class="hud" aria-live="polite">
+          <div class="score-board">
+            <span>游玩次数</span>
+            <strong id="playCount">0</strong>
+          </div>
           <div class="score-board">
             <span>金币</span>
             <strong id="coins">0</strong>
@@ -31,15 +35,29 @@
 
       <section class="stage-wrap" aria-label="游戏舞台">
         <canvas id="game" width="960" height="540"></canvas>
-        <div id="message" class="message is-hidden">
-          <h2 id="messageTitle">再来一次！</h2>
-          <p id="messageText">小勇士倒下了，按 Enter 重新开始。</p>
-          <button id="restartButton" type="button">重新开始</button>
-          <div id="shop" class="shop is-hidden">
-            <h3>武器店</h3>
-            <p id="shopHint">金币够了，可以升级装备。</p>
+        <div id="mainMenu" class="main-menu">
+          <div class="menu-panel">
+            <p id="resultLabel" class="result-label">准备冒险</p>
+            <h2>主界面</h2>
+            <p id="menuText">打败小怪，打开宝箱，攒金币升级武器。</p>
+            <div class="menu-stats" aria-live="polite">
+              <div>
+                <span>游玩次数</span>
+                <strong id="menuPlayCount">0</strong>
+              </div>
+              <div>
+                <span>金币</span>
+                <strong id="menuCoins">0</strong>
+              </div>
+            </div>
+          </div>
+
+          <div class="shop-panel">
+            <h3>武器商店</h3>
             <div id="shopItems" class="shop-items"></div>
           </div>
+
+          <button id="startButton" class="start-button" type="button">开始游戏</button>
         </div>
       </section>
 
@@ -59,7 +77,7 @@
         </div>
         <div class="control-card">
           <span class="key">Enter</span>
-          <p>重新开始</p>
+          <p>开始游戏</p>
         </div>
       </section>
     </main>
