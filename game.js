@@ -2,6 +2,7 @@ const canvas = document.querySelector("#game");
 const ctx = canvas.getContext("2d");
 ctx.imageSmoothingEnabled = false;
 
+const levelNumberElement = document.querySelector("#levelNumber");
 const playCountElement = document.querySelector("#playCount");
 const coinsElement = document.querySelector("#coins");
 const heartsElement = document.querySelector("#hearts");
@@ -17,31 +18,32 @@ const startButton = document.querySelector("#startButton");
 const keys = new Set();
 const gravity = 0.75;
 const floorY = 454;
-const playerStart = { x: 80, y: floorY - 72 };
+const starValue = 60;
 
 const weapons = [
-  { name: "小剑", cost: 0, damage: 1, range: 70, cooldown: 28, kind: "melee" },
-  { name: "狼牙棒", cost: 10, damage: 2, range: 88, cooldown: 30, kind: "melee" },
-  { name: "步枪", cost: 30, damage: 2, range: 560, cooldown: 24, kind: "rifle" },
-  { name: "火箭筒", cost: 100, damage: 5, range: 620, cooldown: 48, kind: "rocket" },
+  { name: "小剑", cost: 0, damage: 12, range: 70, cooldown: 28, kind: "melee" },
+  { name: "狼牙棒", cost: 10, damage: 22, range: 88, cooldown: 30, kind: "melee" },
+  { name: "步枪", cost: 30, damage: 28, range: 560, cooldown: 24, kind: "rifle" },
+  { name: "火箭筒", cost: 100, damage: 54, range: 620, cooldown: 48, kind: "rocket" },
 ];
 
-const platforms = [
-  { x: 176, y: 378, width: 128, height: 20 },
-  { x: 374, y: 318, width: 132, height: 20 },
-  { x: 574, y: 374, width: 132, height: 20 },
-  { x: 760, y: 294, width: 130, height: 20 },
+const shopGoods = [
+  { type: "weapon", index: 1, name: "狼牙棒", cost: 10 },
+  { type: "weapon", index: 2, name: "步枪", cost: 30 },
+  { type: "horse", name: "马", cost: 60 },
+  { type: "weapon", index: 3, name: "火箭筒", cost: 100 },
 ];
 
 let player;
-let stars;
-let enemy;
-let chest;
+let level;
 let projectiles = [];
 let effects = [];
 let coins = 0;
 let playCount = 0;
 let weaponLevel = 0;
+let hasHorse = false;
+let currentLevel = 1;
+let cameraX = 0;
 let gameState = "menu";
 let animationFrame;
 
@@ -49,62 +51,128 @@ function startGame() {
   playCount += 1;
   gameState = "playing";
   mainMenu.classList.add("is-hidden");
+  level = buildLevel(currentLevel);
 
   player = {
-    x: playerStart.x,
-    y: playerStart.y,
-    width: 48,
-    height: 72,
+    x: 80,
+    y: floorY - 72,
+    width: hasHorse ? 70 : 48,
+    height: hasHorse ? 84 : 72,
     vx: 0,
     vy: 0,
-    speed: 5.8,
-    jumpPower: -16,
+    speed: hasHorse ? 7.4 : 5.8,
+    jumpPower: hasHorse ? -17.2 : -16,
     onGround: true,
     facing: 1,
     hearts: 2,
     invincible: 0,
     attackTimer: 0,
+    grenadeTimer: 0,
     attacking: 0,
-  };
-
-  stars = [
-    { x: 230, y: 336, size: 24, collected: false },
-    { x: 420, y: 274, size: 24, collected: false },
-    { x: 620, y: 330, size: 24, collected: false },
-    { x: 810, y: 250, size: 24, collected: false },
-  ];
-
-  const sizeBonus = weaponLevel * 14;
-  const enemyWidth = 56 + sizeBonus;
-  const enemyHeight = 48 + sizeBonus;
-  enemy = {
-    x: 645,
-    y: floorY - enemyHeight,
-    width: enemyWidth,
-    height: enemyHeight,
-    vx: 2.2 + weaponLevel * 0.35,
-    left: 548,
-    right: 842,
-    maxHp: 3 + weaponLevel * 4,
-    hp: 3 + weaponLevel * 4,
-    alive: true,
-    hurtFlash: 0,
-  };
-
-  chest = {
-    x: 862,
-    y: floorY - 48,
-    width: 58,
-    height: 48,
-    opened: false,
-    locked: true,
   };
 
   projectiles = [];
   effects = [];
+  cameraX = 0;
   updateHud();
   cancelAnimationFrame(animationFrame);
   update();
+}
+
+function buildLevel(number) {
+  const worldWidth = 2200 + number * 520;
+  const enemyCount = 2 + number;
+  const platforms = [
+    { x: 210, y: 378, width: 150, height: 20 },
+    { x: 520, y: 320, width: 160, height: 20 },
+    { x: 900, y: 370, width: 160, height: 20 },
+    { x: 1260, y: 308, width: 170, height: 20 },
+    { x: 1660, y: 362, width: 160, height: 20 },
+    { x: worldWidth - 560, y: 318, width: 180, height: 20 },
+  ];
+
+  for (let x = 2050; x < worldWidth - 620; x += 430) {
+    platforms.push({ x, y: 318 + ((x / 430) % 2) * 52, width: 170, height: 20 });
+  }
+
+  const stars = [];
+  for (let i = 0; i < 5 + number; i += 1) {
+    stars.push({ x: 260 + i * 360, y: i % 2 === 0 ? 332 : 254, size: 24, collected: false });
+  }
+
+  const enemies = [];
+  const enemyKinds = ["slime", "bat", "guard", "brute"];
+  for (let i = 0; i < enemyCount; i += 1) {
+    const kind = enemyKinds[i % enemyKinds.length];
+    const sizeBonus = number * 4 + i * 3;
+    const width = kind === "brute" ? 72 + sizeBonus : 54 + sizeBonus;
+    const height = kind === "bat" ? 42 + sizeBonus : 52 + sizeBonus;
+    const x = 620 + i * Math.max(320, (worldWidth - 1000) / enemyCount);
+    enemies.push({
+      kind,
+      x,
+      y: kind === "bat" ? floorY - 170 : floorY - height,
+      baseY: kind === "bat" ? floorY - 170 : floorY - height,
+      width,
+      height,
+      vx: 0,
+      facing: -1,
+      maxHp: 42 + number * 22 + i * 12,
+      hp: 42 + number * 22 + i * 12,
+      alive: true,
+      hurtFlash: 0,
+      attackTimer: 0,
+      patrolLeft: x - 160,
+      patrolRight: x + 160,
+      phase: i * 18,
+    });
+  }
+
+  const spikeTraps = [];
+  for (let i = 0; i < 3 + number; i += 1) {
+    spikeTraps.push({
+      x: 760 + i * 430,
+      y: 78,
+      width: 76,
+      height: 38,
+      state: "idle",
+      timer: 0,
+      vy: 0,
+      originalY: 78,
+    });
+  }
+
+  const lavaTraps = [];
+  for (let i = 0; i < 2 + number; i += 1) {
+    lavaTraps.push({
+      x: 1110 + i * 520,
+      y: floorY - 10,
+      width: 132,
+      height: 18,
+      state: "safe",
+      timer: 0,
+      shake: 0,
+    });
+  }
+
+  return {
+    number,
+    worldWidth,
+    reward: 40 + number * 40,
+    platforms,
+    stars,
+    enemies,
+    spikeTraps,
+    lavaTraps,
+    chest: {
+      x: worldWidth - 150,
+      y: floorY - 52,
+      width: 62,
+      height: 52,
+      opened: false,
+      locked: true,
+    },
+  };
 }
 
 function showMenu(reason) {
@@ -112,16 +180,17 @@ function showMenu(reason) {
   cancelAnimationFrame(animationFrame);
 
   if (reason === "win") {
-    resultLabel.textContent = "胜利！";
-    menuText.textContent = "宝箱打开了，金币到手。可以升级武器，再挑战更强的小怪。";
+    resultLabel.textContent = `第 ${currentLevel - 1} 关胜利！`;
+    menuText.textContent = "奖励到手。下一关地图更长、怪更多、奖励也更丰富。";
   } else if (reason === "death") {
     resultLabel.textContent = "挑战失败";
-    menuText.textContent = "小勇士被碰到两次就会回到主界面。看看金币够不够升级武器。";
+    menuText.textContent = "回商店升级一下，再去试试更聪明的怪物和陷阱。";
   } else {
     resultLabel.textContent = "准备冒险";
-    menuText.textContent = "打败小怪，打开宝箱，攒金币升级武器。";
+    menuText.textContent = "长地图里有怪物、尖刺、岩浆陷阱和宝箱。小星星每个值 60 金币。";
   }
 
+  level = buildLevel(currentLevel);
   drawMenuBackdrop();
   updateHud();
   renderShop();
@@ -133,12 +202,14 @@ function update() {
 
   handleInput();
   movePlayer();
-  moveEnemy();
+  moveEnemies();
+  moveTraps();
   moveProjectiles();
   collectStars();
   handleChest();
-  checkEnemyHitPlayer();
+  checkDangerHits();
   tickTimers();
+  updateCamera();
   draw();
   animationFrame = requestAnimationFrame(update);
 }
@@ -161,9 +232,8 @@ function handleInput() {
     player.onGround = false;
   }
 
-  if (keys.has("KeyJ")) {
-    attack();
-  }
+  if (keys.has("KeyJ")) attack();
+  if (keys.has("KeyK")) throwGrenade();
 }
 
 function movePlayer() {
@@ -174,7 +244,7 @@ function movePlayer() {
   player.vy += gravity;
   player.onGround = false;
 
-  for (const platform of platforms) {
+  for (const platform of level.platforms) {
     const nextBottom = player.y + player.height;
     const isFalling = player.vy >= 0;
     const wasAbove = previousBottom <= platform.y + 4;
@@ -193,16 +263,88 @@ function movePlayer() {
     player.onGround = true;
   }
 
-  player.x = Math.max(18, Math.min(canvas.width - player.width - 18, player.x));
+  player.x = Math.max(18, Math.min(level.worldWidth - player.width - 18, player.x));
 }
 
-function moveEnemy() {
-  if (!enemy.alive) return;
+function moveEnemies() {
+  for (const enemy of level.enemies) {
+    if (!enemy.alive) continue;
 
-  enemy.x += enemy.vx;
+    const distance = player.x + player.width / 2 - (enemy.x + enemy.width / 2);
+    const absDistance = Math.abs(distance);
+    const inSight = absDistance < 430;
+    enemy.facing = distance > 0 ? 1 : -1;
 
-  if (enemy.x < enemy.left || enemy.x + enemy.width > enemy.right) {
-    enemy.vx *= -1;
+    if (enemy.kind === "bat") {
+      enemy.y = enemy.baseY + Math.sin((Date.now() / 160 + enemy.phase) % 80) * 22;
+    }
+
+    if (inSight && absDistance > 82) {
+      enemy.x += Math.sign(distance) * (enemy.kind === "brute" ? 1.45 : 2.05);
+    } else if (!inSight) {
+      enemy.x += Math.sin((Date.now() / 550 + enemy.phase) % 20) * 0.85;
+    }
+
+    enemy.x = Math.max(enemy.patrolLeft, Math.min(enemy.patrolRight, enemy.x));
+
+    if (absDistance >= 48 && absDistance <= 110 && Math.abs(player.y - enemy.y) < 96 && enemy.attackTimer === 0) {
+      enemy.attackTimer = enemy.kind === "brute" ? 92 : 70;
+      hurtPlayer(enemy.kind === "brute" ? 2 : 1);
+      effects.push({ x: enemy.x, y: enemy.y + 8, width: enemy.width, height: enemy.height, life: 12, kind: "claw" });
+    }
+  }
+}
+
+function moveTraps() {
+  for (const trap of level.spikeTraps) {
+    const underTrap = player.x + player.width > trap.x && player.x < trap.x + trap.width && player.y > trap.y;
+
+    if (trap.state === "idle" && underTrap) {
+      trap.state = "warning";
+      trap.timer = 34;
+    } else if (trap.state === "warning") {
+      trap.timer -= 1;
+      if (trap.timer <= 0) {
+        trap.state = "falling";
+        trap.vy = 0;
+      }
+    } else if (trap.state === "falling") {
+      trap.vy += 0.9;
+      trap.y += trap.vy;
+      if (trap.y > floorY - trap.height) {
+        trap.state = "resetting";
+        trap.timer = 70;
+      }
+    } else if (trap.state === "resetting") {
+      trap.timer -= 1;
+      if (trap.timer <= 0) {
+        trap.y = trap.originalY;
+        trap.state = "idle";
+      }
+    }
+  }
+
+  for (const trap of level.lavaTraps) {
+    const onTrap = player.x + player.width > trap.x && player.x < trap.x + trap.width && player.y + player.height >= floorY - 4;
+
+    if (trap.state === "safe" && onTrap) {
+      trap.state = "shaking";
+      trap.timer = 74;
+    } else if (trap.state === "shaking") {
+      trap.timer -= 1;
+      trap.shake = trap.timer % 12 < 6 ? -4 : 4;
+      if (trap.timer <= 0) {
+        trap.state = "lava";
+        trap.timer = 170;
+        trap.shake = 0;
+      }
+    } else if (trap.state === "lava") {
+      trap.timer -= 1;
+      if (onTrap) hurtPlayer(1);
+      if (trap.timer <= 0) {
+        trap.state = "safe";
+      }
+    }
   }
 }
 
@@ -220,12 +362,30 @@ function attack() {
       width: weapon.range,
       height: 42,
     };
-    damageEnemyIfHit(hitBox, weapon.damage);
+    damageEnemiesIfHit(hitBox, weapon.damage);
     effects.push({ x: hitBox.x, y: hitBox.y, width: hitBox.width, height: hitBox.height, life: 10, kind: "slash" });
     return;
   }
 
   spawnBullet(weapon);
+}
+
+function throwGrenade() {
+  if (player.grenadeTimer > 0) return;
+
+  player.grenadeTimer = 70;
+  projectiles.push({
+    x: player.facing > 0 ? player.x + player.width : player.x - 14,
+    y: player.y + 20,
+    width: 16,
+    height: 16,
+    vx: 7.8 * player.facing,
+    vy: -8.5,
+    damage: 60,
+    rangeLeft: 460,
+    kind: "grenade",
+    timer: 54,
+  });
 }
 
 function spawnBullet(weapon) {
@@ -236,6 +396,7 @@ function spawnBullet(weapon) {
     width: weapon.kind === "rocket" ? 24 : 12,
     height: weapon.kind === "rocket" ? 12 : 6,
     vx: speed * player.facing,
+    vy: 0,
     damage: weapon.damage,
     rangeLeft: weapon.range,
     kind: weapon.kind,
@@ -245,66 +406,114 @@ function spawnBullet(weapon) {
 function moveProjectiles() {
   for (const projectile of projectiles) {
     projectile.x += projectile.vx;
+    projectile.y += projectile.vy || 0;
     projectile.rangeLeft -= Math.abs(projectile.vx);
 
-    if (enemy.alive && touches(projectile, enemy)) {
-      damageEnemy(projectile.damage);
-      projectile.rangeLeft = 0;
+    if (projectile.kind === "grenade") {
+      projectile.vy += 0.34;
+      projectile.timer -= 1;
+      if (projectile.y + projectile.height >= floorY) {
+        projectile.y = floorY - projectile.height;
+        projectile.vy *= -0.48;
+      }
+      if (projectile.timer <= 0) {
+        explode(projectile.x, projectile.y, projectile.damage, 96);
+        projectile.rangeLeft = 0;
+      }
+      continue;
+    }
 
-      if (projectile.kind === "rocket") {
-        effects.push({ x: projectile.x - 28, y: projectile.y - 28, width: 72, height: 72, life: 18, kind: "boom" });
+    for (const enemy of level.enemies) {
+      if (enemy.alive && touches(projectile, enemy)) {
+        damageEnemy(enemy, projectile.damage);
+        projectile.rangeLeft = 0;
+        if (projectile.kind === "rocket") explode(projectile.x, projectile.y, projectile.damage, 86);
+        break;
       }
     }
   }
 
-  projectiles = projectiles.filter((projectile) => projectile.rangeLeft > 0 && projectile.x > -40 && projectile.x < canvas.width + 40);
+  projectiles = projectiles.filter((projectile) => projectile.rangeLeft > 0 && projectile.x > cameraX - 80 && projectile.x < cameraX + canvas.width + 80);
 }
 
-function damageEnemyIfHit(hitBox, damage) {
-  if (enemy.alive && touches(hitBox, enemy)) {
-    damageEnemy(damage);
+function explode(x, y, damage, radius) {
+  effects.push({ x: x - radius / 2, y: y - radius / 2, width: radius, height: radius, life: 18, kind: "boom" });
+
+  for (const enemy of level.enemies) {
+    const dx = enemy.x + enemy.width / 2 - x;
+    const dy = enemy.y + enemy.height / 2 - y;
+    if (enemy.alive && Math.hypot(dx, dy) < radius) {
+      damageEnemy(enemy, damage);
+    }
   }
 }
 
-function damageEnemy(damage) {
+function damageEnemiesIfHit(hitBox, damage) {
+  for (const enemy of level.enemies) {
+    if (enemy.alive && touches(hitBox, enemy)) {
+      damageEnemy(enemy, damage);
+    }
+  }
+}
+
+function damageEnemy(enemy, damage) {
   enemy.hp = Math.max(0, enemy.hp - damage);
   enemy.hurtFlash = 10;
 
   if (enemy.hp === 0) {
     enemy.alive = false;
-    chest.locked = false;
     effects.push({ x: enemy.x, y: enemy.y, width: enemy.width, height: enemy.height, life: 24, kind: "poof" });
+    if (level.enemies.every((monster) => !monster.alive)) {
+      level.chest.locked = false;
+    }
   }
 }
 
 function collectStars() {
-  for (const star of stars) {
+  for (const star of level.stars) {
     if (!star.collected && touches(player, starBox(star))) {
       star.collected = true;
-      coins += 1;
+      coins += starValue;
+      effects.push({ x: star.x - 28, y: star.y - 32, width: 90, height: 30, life: 42, kind: "starCoins" });
       updateHud();
     }
   }
 }
 
 function handleChest() {
+  const chest = level.chest;
   if (!chest.opened && !chest.locked && touches(player, chest)) {
     chest.opened = true;
-    coins += 20;
+    coins += level.reward;
+    currentLevel += 1;
     updateHud();
-    effects.push({ x: chest.x - 4, y: chest.y - 36, width: 72, height: 36, life: 42, kind: "coins" });
+    effects.push({ x: chest.x - 4, y: chest.y - 36, width: 96, height: 36, life: 42, kind: "coins" });
     draw();
     setTimeout(() => showMenu("win"), 450);
   }
 }
 
-function checkEnemyHitPlayer() {
-  if (!enemy.alive || player.invincible > 0 || !touches(player, enemy)) return;
+function checkDangerHits() {
+  for (const enemy of level.enemies) {
+    if (enemy.alive && touches(player, enemy)) {
+      hurtPlayer(1);
+    }
+  }
 
-  player.hearts -= 1;
-  player.invincible = 70;
-  player.vx = player.x < enemy.x ? -8 : 8;
-  player.vy = -8;
+  for (const trap of level.spikeTraps) {
+    if (trap.state === "falling" && touches(player, trap)) {
+      hurtPlayer(1);
+    }
+  }
+}
+
+function hurtPlayer(amount) {
+  if (player.invincible > 0 || gameState !== "playing") return;
+
+  player.hearts -= amount;
+  player.invincible = 76;
+  player.vx = -player.facing * 9;
+  player.vy = -9;
   updateHud();
 
   if (player.hearts <= 0) {
@@ -315,35 +524,44 @@ function checkEnemyHitPlayer() {
 function renderShop() {
   shopItems.innerHTML = "";
 
-  for (let i = 1; i < weapons.length; i += 1) {
-    const weapon = weapons[i];
+  for (const item of shopGoods) {
     const button = document.createElement("button");
-    const owned = i <= weaponLevel;
-    const lockedByOrder = i !== weaponLevel + 1 && !owned;
+    const owned = item.type === "horse" ? hasHorse : item.index <= weaponLevel;
+    const lockedByOrder = item.type === "weapon" && item.index !== weaponLevel + 1 && !owned;
     button.type = "button";
     button.className = owned ? "shop-item is-owned" : "shop-item";
-    button.disabled = owned || lockedByOrder || coins < weapon.cost;
-    button.innerHTML = `<strong>${weapon.name}</strong><span>${owned ? "已拥有" : `${weapon.cost} 金币`}</span>`;
-    button.addEventListener("click", () => buyWeapon(i));
+    button.disabled = owned || lockedByOrder || coins < item.cost;
+    button.innerHTML = `<strong>${item.name}</strong><span>${owned ? "已拥有" : `${item.cost} 金币`}</span>`;
+    button.addEventListener("click", () => buyItem(item));
     shopItems.append(button);
   }
 }
 
-function buyWeapon(index) {
-  const weapon = weapons[index];
-  if (!weapon || index !== weaponLevel + 1 || coins < weapon.cost) return;
+function buyItem(item) {
+  const owned = item.type === "horse" ? hasHorse : item.index <= weaponLevel;
+  if (owned || coins < item.cost) return;
+  if (item.type === "weapon" && item.index !== weaponLevel + 1) return;
 
-  coins -= weapon.cost;
-  weaponLevel = index;
+  coins -= item.cost;
+  if (item.type === "horse") {
+    hasHorse = true;
+  } else {
+    weaponLevel = item.index;
+  }
   updateHud();
   renderShop();
 }
 
 function tickTimers() {
   player.attackTimer = Math.max(0, player.attackTimer - 1);
+  player.grenadeTimer = Math.max(0, player.grenadeTimer - 1);
   player.attacking = Math.max(0, player.attacking - 1);
   player.invincible = Math.max(0, player.invincible - 1);
-  enemy.hurtFlash = Math.max(0, enemy.hurtFlash - 1);
+
+  for (const enemy of level.enemies) {
+    enemy.hurtFlash = Math.max(0, enemy.hurtFlash - 1);
+    enemy.attackTimer = Math.max(0, enemy.attackTimer - 1);
+  }
 
   for (const effect of effects) {
     effect.life -= 1;
@@ -351,11 +569,18 @@ function tickTimers() {
   effects = effects.filter((effect) => effect.life > 0);
 }
 
+function updateCamera() {
+  const target = player.x + player.width / 2 - canvas.width * 0.42;
+  cameraX += (target - cameraX) * 0.14;
+  cameraX = Math.max(0, Math.min(level.worldWidth - canvas.width, cameraX));
+}
+
 function updateHud() {
+  levelNumberElement.textContent = currentLevel;
   playCountElement.textContent = playCount;
   coinsElement.textContent = coins;
-  heartsElement.textContent = player ? player.hearts : 2;
-  weaponNameElement.textContent = weapons[weaponLevel].name;
+  heartsElement.textContent = player ? Math.max(0, player.hearts) : 2;
+  weaponNameElement.textContent = hasHorse ? `${weapons[weaponLevel].name}+马` : weapons[weaponLevel].name;
   menuPlayCount.textContent = playCount;
   menuCoins.textContent = coins;
 }
@@ -381,38 +606,44 @@ function starBox(star) {
 function draw() {
   drawWorld();
   drawStars();
+  drawTraps();
   drawChest();
-  drawEnemy();
+  drawEnemies();
   drawProjectiles();
   drawPlayer();
   drawEffects();
 }
 
 function drawMenuBackdrop() {
+  cameraX = Math.max(0, Math.min(level.worldWidth - canvas.width, level.worldWidth - canvas.width - 120));
   drawWorld();
-  drawPixelSign(346, 238, "PIXEL QUEST");
+  drawTraps();
+  drawPixelSign(cameraX + 318, 238, "LONG QUEST");
 }
 
 function drawWorld() {
+  ctx.save();
+  ctx.translate(-cameraX, 0);
   drawSky();
   drawGround();
   drawPlatforms();
+  ctx.restore();
 }
 
 function drawSky() {
   ctx.fillStyle = "#6dcff6";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillRect(cameraX, 0, canvas.width, canvas.height);
   ctx.fillStyle = "#4db4e6";
-  ctx.fillRect(0, 284, canvas.width, 170);
+  ctx.fillRect(cameraX, 284, canvas.width, 170);
 
-  drawBlockCloud(96, 88, 4);
-  drawBlockCloud(492, 70, 3);
-  drawBlockCloud(772, 126, 4);
+  for (let x = 80; x < level.worldWidth; x += 470) {
+    drawBlockCloud(x, 78 + (x % 3) * 18, x % 2 === 0 ? 3 : 4);
+  }
 
   ctx.fillStyle = "#ffe66d";
-  ctx.fillRect(54, 52, 56, 56);
+  ctx.fillRect(cameraX + 54, 52, 56, 56);
   ctx.fillStyle = "#fff29a";
-  ctx.fillRect(70, 66, 24, 24);
+  ctx.fillRect(cameraX + 70, 66, 24, 24);
 }
 
 function drawBlockCloud(x, y, scale) {
@@ -425,20 +656,20 @@ function drawBlockCloud(x, y, scale) {
 
 function drawGround() {
   ctx.fillStyle = "#42c96d";
-  ctx.fillRect(0, floorY, canvas.width, canvas.height - floorY);
+  ctx.fillRect(0, floorY, level.worldWidth, canvas.height - floorY);
   ctx.fillStyle = "#2aa654";
-  ctx.fillRect(0, floorY, canvas.width, 16);
+  ctx.fillRect(0, floorY, level.worldWidth, 16);
   ctx.fillStyle = "#7d4a2b";
-  ctx.fillRect(0, floorY + 42, canvas.width, canvas.height - floorY - 42);
+  ctx.fillRect(0, floorY + 42, level.worldWidth, canvas.height - floorY - 42);
 
-  for (let x = 0; x < canvas.width; x += 32) {
+  for (let x = 0; x < level.worldWidth; x += 32) {
     ctx.fillStyle = x % 64 === 0 ? "#216f3e" : "#2d8c4a";
     ctx.fillRect(x, floorY + 16, 16, 10);
   }
 }
 
 function drawPlatforms() {
-  for (const platform of platforms) {
+  for (const platform of level.platforms) {
     ctx.fillStyle = "#6a3d24";
     ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
     ctx.fillStyle = "#45d06f";
@@ -449,7 +680,9 @@ function drawPlatforms() {
 }
 
 function drawStars() {
-  for (const star of stars) {
+  ctx.save();
+  ctx.translate(-cameraX, 0);
+  for (const star of level.stars) {
     if (star.collected) continue;
     ctx.fillStyle = "#ffd34d";
     ctx.fillRect(star.x - 4, star.y - 16, 8, 32);
@@ -458,9 +691,39 @@ function drawStars() {
     ctx.fillStyle = "#fff29a";
     ctx.fillRect(star.x - 4, star.y - 4, 8, 8);
   }
+  ctx.restore();
+}
+
+function drawTraps() {
+  ctx.save();
+  ctx.translate(-cameraX, 0);
+  for (const trap of level.spikeTraps) {
+    ctx.fillStyle = trap.state === "warning" ? "#fff29a" : "#8f95a3";
+    ctx.fillRect(trap.x, trap.y - 8, trap.width, 10);
+    ctx.fillStyle = "#e84c5f";
+    for (let x = trap.x; x < trap.x + trap.width; x += 19) {
+      ctx.beginPath();
+      ctx.moveTo(x, trap.y + trap.height);
+      ctx.lineTo(x + 9, trap.y);
+      ctx.lineTo(x + 18, trap.y + trap.height);
+      ctx.fill();
+    }
+  }
+
+  for (const trap of level.lavaTraps) {
+    const x = trap.x + trap.shake;
+    ctx.fillStyle = trap.state === "lava" ? "#ff4d2e" : trap.state === "shaking" ? "#d9903d" : "#6a3d24";
+    ctx.fillRect(x, trap.y, trap.width, trap.height);
+    ctx.fillStyle = trap.state === "lava" ? "#ffd34d" : "#45d06f";
+    ctx.fillRect(x, trap.y - 8, trap.width, 8);
+  }
+  ctx.restore();
 }
 
 function drawChest() {
+  const chest = level.chest;
+  ctx.save();
+  ctx.translate(-cameraX, 0);
   ctx.fillStyle = chest.opened ? "#8e5a32" : "#d9903d";
   ctx.fillRect(chest.x, chest.y + (chest.opened ? 12 : 0), chest.width, chest.height - (chest.opened ? 12 : 0));
   ctx.fillStyle = "#5d351d";
@@ -468,34 +731,71 @@ function drawChest() {
   ctx.fillRect(chest.x + 6, chest.y + 6, 8, chest.height - 10);
   ctx.fillRect(chest.x + chest.width - 14, chest.y + 6, 8, chest.height - 10);
   ctx.fillStyle = chest.locked ? "#8f95a3" : "#ffd34d";
-  ctx.fillRect(chest.x + 23, chest.y + 18, 12, 16);
-
-  if (chest.locked) {
-    drawTinyText("打败小怪", chest.x - 9, chest.y - 13, "#211b2c");
-  }
+  ctx.fillRect(chest.x + 25, chest.y + 19, 12, 16);
+  if (chest.locked) drawTinyText("打败所有怪", chest.x - 28, chest.y - 13, "#211b2c");
+  ctx.restore();
 }
 
-function drawEnemy() {
-  if (!enemy.alive) {
-    drawEnemyHealthBar();
-    return;
-  }
+function drawEnemies() {
+  ctx.save();
+  ctx.translate(-cameraX, 0);
+  for (const enemy of level.enemies) {
+    if (!enemy.alive) {
+      drawEnemyHealthBar(enemy);
+      continue;
+    }
 
+    if (enemy.kind === "slime") drawSlime(enemy);
+    if (enemy.kind === "bat") drawBat(enemy);
+    if (enemy.kind === "guard") drawGuard(enemy);
+    if (enemy.kind === "brute") drawBrute(enemy);
+    drawEnemyHealthBar(enemy);
+  }
+  ctx.restore();
+}
+
+function drawSlime(enemy) {
+  ctx.fillStyle = enemy.hurtFlash > 0 ? "#ffffff" : "#66d86f";
+  ctx.fillRect(enemy.x, enemy.y + 14, enemy.width, enemy.height - 14);
+  ctx.fillRect(enemy.x + 10, enemy.y, enemy.width - 20, 18);
+  ctx.fillStyle = "#211b2c";
+  ctx.fillRect(enemy.x + 14, enemy.y + 24, 6, 6);
+  ctx.fillRect(enemy.x + enemy.width - 20, enemy.y + 24, 6, 6);
+}
+
+function drawBat(enemy) {
+  ctx.fillStyle = enemy.hurtFlash > 0 ? "#ffffff" : "#673ab7";
+  ctx.fillRect(enemy.x + 16, enemy.y + 10, enemy.width - 32, enemy.height - 12);
+  ctx.fillRect(enemy.x, enemy.y + 18, 22, 12);
+  ctx.fillRect(enemy.x + enemy.width - 22, enemy.y + 18, 22, 12);
+  ctx.fillStyle = "#ffd34d";
+  ctx.fillRect(enemy.x + 24, enemy.y + 24, 6, 6);
+  ctx.fillRect(enemy.x + enemy.width - 30, enemy.y + 24, 6, 6);
+}
+
+function drawGuard(enemy) {
+  ctx.fillStyle = enemy.hurtFlash > 0 ? "#ffffff" : "#3a76f0";
+  ctx.fillRect(enemy.x + 8, enemy.y + 8, enemy.width - 16, enemy.height - 8);
+  ctx.fillStyle = "#d9dde5";
+  ctx.fillRect(enemy.x + 12, enemy.y, enemy.width - 24, 18);
+  ctx.fillStyle = "#211b2c";
+  ctx.fillRect(enemy.x + 18, enemy.y + 28, 7, 7);
+  ctx.fillRect(enemy.x + enemy.width - 25, enemy.y + 28, 7, 7);
+}
+
+function drawBrute(enemy) {
   ctx.fillStyle = enemy.hurtFlash > 0 ? "#ffffff" : "#e84c5f";
   ctx.fillRect(enemy.x, enemy.y + 10, enemy.width, enemy.height - 10);
-  ctx.fillStyle = "#bb2b43";
-  ctx.fillRect(enemy.x + 8, enemy.y, enemy.width - 16, 16);
+  ctx.fillStyle = "#8e2440";
+  ctx.fillRect(enemy.x + 12, enemy.y, enemy.width - 24, 18);
   ctx.fillStyle = "#ffffff";
-  ctx.fillRect(enemy.x + enemy.width * 0.24, enemy.y + enemy.height * 0.34, 10, 10);
-  ctx.fillRect(enemy.x + enemy.width * 0.62, enemy.y + enemy.height * 0.34, 10, 10);
+  ctx.fillRect(enemy.x + 18, enemy.y + 30, 9, 9);
+  ctx.fillRect(enemy.x + enemy.width - 27, enemy.y + 30, 9, 9);
   ctx.fillStyle = "#211b2c";
-  ctx.fillRect(enemy.x + enemy.width * 0.28, enemy.y + enemy.height * 0.38, 4, 4);
-  ctx.fillRect(enemy.x + enemy.width * 0.66, enemy.y + enemy.height * 0.38, 4, 4);
-  ctx.fillRect(enemy.x + enemy.width * 0.32, enemy.y + enemy.height * 0.68, enemy.width * 0.36, 6);
-  drawEnemyHealthBar();
+  ctx.fillRect(enemy.x + enemy.width * 0.32, enemy.y + enemy.height * 0.7, enemy.width * 0.36, 7);
 }
 
-function drawEnemyHealthBar() {
+function drawEnemyHealthBar(enemy) {
   const barWidth = Math.max(58, enemy.width);
   const x = enemy.x + enemy.width / 2 - barWidth / 2;
   const y = enemy.y - 16;
@@ -506,50 +806,64 @@ function drawEnemyHealthBar() {
 }
 
 function drawProjectiles() {
+  ctx.save();
+  ctx.translate(-cameraX, 0);
   for (const projectile of projectiles) {
-    ctx.fillStyle = projectile.kind === "rocket" ? "#ff6b50" : "#211b2c";
+    ctx.fillStyle = projectile.kind === "rocket" ? "#ff6b50" : projectile.kind === "grenade" ? "#2f6b3f" : "#211b2c";
     ctx.fillRect(projectile.x, projectile.y, projectile.width, projectile.height);
     if (projectile.kind === "rocket") {
       ctx.fillStyle = "#ffd34d";
       ctx.fillRect(projectile.x - Math.sign(projectile.vx) * 10, projectile.y + 3, 10, 6);
     }
   }
+  ctx.restore();
 }
 
 function drawPlayer() {
   const flashing = player.invincible > 0 && Math.floor(player.invincible / 6) % 2 === 0;
   if (flashing) return;
 
+  ctx.save();
+  ctx.translate(-cameraX, 0);
   const x = player.x;
   const y = player.y;
-  ctx.fillStyle = "#2451c5";
-  ctx.fillRect(x + 10, y + 34, 30, 34);
-  ctx.fillStyle = "#16358f";
-  ctx.fillRect(x + 10, y + 60, 12, 12);
-  ctx.fillRect(x + 28, y + 60, 12, 12);
-  ctx.fillStyle = "#f2b279";
-  ctx.fillRect(x + 8, y + 10, 36, 30);
-  ctx.fillStyle = "#8a4b2b";
-  ctx.fillRect(x + 8, y + 6, 36, 10);
-  ctx.fillRect(x + 4, y + 14, 8, 14);
+
+  if (hasHorse) {
+    ctx.fillStyle = "#8b5a36";
+    ctx.fillRect(x - 6, y + 44, 72, 30);
+    ctx.fillRect(x + 44, y + 24, 26, 28);
+    ctx.fillStyle = "#211b2c";
+    ctx.fillRect(x + 6, y + 70, 10, 14);
+    ctx.fillRect(x + 48, y + 70, 10, 14);
+    ctx.fillStyle = "#fff4c7";
+    ctx.fillRect(x + 58, y + 34, 5, 5);
+  }
+
+  const knightY = hasHorse ? y + 4 : y;
+  ctx.fillStyle = "#d9dde5";
+  ctx.fillRect(x + 10, knightY + 30, 30, 36);
+  ctx.fillStyle = "#8f95a3";
+  ctx.fillRect(x + 10, knightY + 56, 12, 12);
+  ctx.fillRect(x + 28, knightY + 56, 12, 12);
+  ctx.fillStyle = "#c7d4e8";
+  ctx.fillRect(x + 8, knightY + 8, 36, 30);
   ctx.fillStyle = "#211b2c";
-  ctx.fillRect(x + (player.facing > 0 ? 32 : 16), y + 21, 5, 5);
-  ctx.fillRect(x + 21, y + 32, 12, 4);
+  ctx.fillRect(x + (player.facing > 0 ? 30 : 16), knightY + 20, 12, 5);
   ctx.fillStyle = "#ffd34d";
-  ctx.fillRect(x + 14, y - 8, 24, 10);
-  ctx.fillRect(x + 22, y - 16, 8, 8);
-  drawWeapon();
+  ctx.fillRect(x + 14, knightY - 8, 24, 10);
+  ctx.fillRect(x + 22, knightY - 16, 8, 8);
+  drawWeapon(knightY);
+  ctx.restore();
 }
 
-function drawWeapon() {
+function drawWeapon(knightY) {
   const weapon = weapons[weaponLevel];
   const handX = player.facing > 0 ? player.x + 42 : player.x + 6;
-  const handY = player.y + 44;
-  const direction = player.facing;
+  const handY = knightY + 44;
 
   ctx.save();
   ctx.translate(handX, handY);
-  ctx.scale(direction, 1);
+  ctx.scale(player.facing, 1);
 
   if (weapon.kind === "melee") {
     ctx.fillStyle = weaponLevel === 0 ? "#d9dde5" : "#5e5b62";
@@ -567,10 +881,12 @@ function drawWeapon() {
 }
 
 function drawEffects() {
+  ctx.save();
+  ctx.translate(-cameraX, 0);
   for (const effect of effects) {
-    if (effect.kind === "slash") {
-      ctx.fillStyle = "#fff29a";
-      ctx.fillRect(effect.x + 10, effect.y + 12, effect.width - 20, 8);
+    if (effect.kind === "slash" || effect.kind === "claw") {
+      ctx.fillStyle = effect.kind === "slash" ? "#fff29a" : "#ff4d2e";
+      ctx.fillRect(effect.x + 10, effect.y + 12, Math.max(12, effect.width - 20), 8);
     }
 
     if (effect.kind === "boom" || effect.kind === "poof") {
@@ -581,10 +897,10 @@ function drawEffects() {
       ctx.fillRect(effect.x + effect.width / 2 - size / 4, effect.y + effect.height / 2 - size / 4, size / 2, size / 2);
     }
 
-    if (effect.kind === "coins") {
-      drawTinyText("+20 金币", effect.x, effect.y - (42 - effect.life), "#ffd34d");
-    }
+    if (effect.kind === "coins") drawTinyText(`+${level.reward} 金币`, effect.x, effect.y - (42 - effect.life), "#ffd34d");
+    if (effect.kind === "starCoins") drawTinyText("+60 金币", effect.x, effect.y - (42 - effect.life), "#ffd34d");
   }
+  ctx.restore();
 }
 
 function drawPixelSign(x, y, text) {
@@ -603,14 +919,8 @@ function drawTinyText(text, x, y, color) {
 
 window.addEventListener("keydown", (event) => {
   keys.add(event.code);
-
-  if (["ArrowLeft", "ArrowRight", "ArrowUp", "Space", "KeyJ", "Enter"].includes(event.code)) {
-    event.preventDefault();
-  }
-
-  if (event.code === "Enter" && gameState === "menu") {
-    startGame();
-  }
+  if (["ArrowLeft", "ArrowRight", "ArrowUp", "Space", "KeyJ", "KeyK", "Enter"].includes(event.code)) event.preventDefault();
+  if (event.code === "Enter" && gameState === "menu") startGame();
 });
 
 window.addEventListener("keyup", (event) => {
