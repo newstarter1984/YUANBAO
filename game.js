@@ -7,6 +7,7 @@ const playCountElement = document.querySelector("#playCount");
 const coinsElement = document.querySelector("#coins");
 const heartsElement = document.querySelector("#hearts");
 const monsterCountElement = document.querySelector("#monsterCount");
+const professionNameElement = document.querySelector("#professionName");
 const weaponNameElement = document.querySelector("#weaponName");
 const mainMenu = document.querySelector("#mainMenu");
 const resultLabel = document.querySelector("#resultLabel");
@@ -15,6 +16,17 @@ const menuPlayCount = document.querySelector("#menuPlayCount");
 const menuCoins = document.querySelector("#menuCoins");
 const shopItems = document.querySelector("#shopItems");
 const startButton = document.querySelector("#startButton");
+const professionChoices = document.querySelector("#professionChoices");
+const gameActions = document.querySelector(".game-actions");
+const healButton = document.querySelector("#healButton");
+const cageButton = document.querySelector("#cageButton");
+const blackFistButton = document.querySelector("#blackFistButton");
+const powerPotionButton = document.querySelector("#powerPotionButton");
+const medkitButton = document.querySelector("#medkitButton");
+const backpackButton = document.querySelector("#backpackButton");
+const backpackPanel = document.querySelector("#backpackPanel");
+const closeBackpackButton = document.querySelector("#closeBackpackButton");
+const inventoryItems = document.querySelector("#inventoryItems");
 
 const keys = new Set();
 const gravity = 0.75;
@@ -26,6 +38,8 @@ const weapons = [
   { name: "狼牙棒", cost: 10, damage: 22, range: 88, cooldown: 30, kind: "melee" },
   { name: "步枪", cost: 30, damage: 28, range: 560, cooldown: 24, kind: "rifle" },
   { name: "火箭筒", cost: 100, damage: 54, range: 620, cooldown: 48, kind: "rocket" },
+  { name: "魔法棒", cost: 80, damage: 42, range: 620, cooldown: 32, kind: "magic" },
+  { name: "火焰剑", cost: 120, damage: 46, range: 96, cooldown: 26, kind: "fireSword" },
 ];
 
 const shopGoods = [
@@ -33,16 +47,37 @@ const shopGoods = [
   { type: "weapon", index: 2, name: "步枪", cost: 30 },
   { type: "horse", name: "马", cost: 60 },
   { type: "weapon", index: 3, name: "火箭筒", cost: 100 },
+  { type: "weapon", index: 4, name: "魔法棒", cost: 80 },
+  { type: "weapon", index: 5, name: "火焰剑", cost: 120 },
+  { type: "item", item: "powerPotion", name: "力量药水", cost: 45 },
+  { type: "item", item: "speedPotion", name: "速度药水", cost: 90 },
+  { type: "item", item: "medkit", name: "医疗包", cost: 25 },
 ];
+
+const professions = {
+  doctor: { name: "医生", description: "点击回复，立刻回满生命。" },
+  police: { name: "警察", description: "发射牢笼，困住怪物 10 秒。" },
+  boxer: { name: "黑拳", description: "短时间内所有伤害无效。" },
+};
 
 let player;
 let level;
 let projectiles = [];
 let effects = [];
-let coins = 0;
+let coins = 50;
 let playCount = 0;
 let weaponLevel = 0;
 let hasHorse = false;
+let selectedProfession = "doctor";
+let speedPotionOwned = false;
+let powerBoostTimer = 0;
+let blackFistTimer = 0;
+let inventory = {
+  medkit: 0,
+  powerPotion: 0,
+  painting: 0,
+  watch: 0,
+};
 let currentLevel = 1;
 let cameraX = 0;
 let gameState = "menu";
@@ -52,6 +87,8 @@ function startGame() {
   playCount += 1;
   gameState = "playing";
   mainMenu.classList.add("is-hidden");
+  gameActions.classList.remove("is-hidden");
+  backpackButton.classList.remove("is-hidden");
   level = buildLevel(currentLevel);
 
   player = {
@@ -61,7 +98,7 @@ function startGame() {
     height: hasHorse ? 84 : 72,
     vx: 0,
     vy: 0,
-    speed: hasHorse ? 7.4 : 5.8,
+    speed: (hasHorse ? 7.4 : 5.8) * (speedPotionOwned ? 3 : 1),
     jumpPower: hasHorse ? -17.2 : -16,
     onGround: true,
     facing: 1,
@@ -69,6 +106,7 @@ function startGame() {
     invincible: 0,
     attackTimer: 0,
     grenadeTimer: 0,
+    skillTimer: 0,
     attacking: 0,
   };
 
@@ -126,8 +164,36 @@ function buildLevel(number) {
       patrolLeft: x - 160,
       patrolRight: x + 160,
       phase: i * 18,
+      cagedTimer: 0,
     });
   }
+
+  const river = {
+    x: Math.floor(worldWidth * 0.48),
+    y: floorY - 36,
+    width: 270 + number * 35,
+    height: 78,
+  };
+
+  enemies.push({
+    kind: "drowned",
+    x: river.x + river.width / 2,
+    y: floorY - 70,
+    baseY: floorY - 70,
+    width: 58 + number * 5,
+    height: 64 + number * 5,
+    vx: 0,
+    facing: -1,
+    maxHp: 58 + number * 24,
+    hp: 58 + number * 24,
+    alive: true,
+    hurtFlash: 0,
+    attackTimer: 0,
+    patrolLeft: river.x + 10,
+    patrolRight: river.x + river.width - 70,
+    phase: 44,
+    cagedTimer: 0,
+  });
 
   const spikeTraps = [];
   for (let i = 0; i < 3 + number; i += 1) {
@@ -163,6 +229,7 @@ function buildLevel(number) {
     platforms,
     stars,
     enemies,
+    river,
     spikeTraps,
     lavaTraps,
     chest: {
@@ -195,6 +262,9 @@ function showMenu(reason) {
   drawMenuBackdrop();
   updateHud();
   renderShop();
+  gameActions.classList.add("is-hidden");
+  backpackButton.classList.add("is-hidden");
+  backpackPanel.classList.add("is-hidden");
   mainMenu.classList.remove("is-hidden");
 }
 
@@ -233,8 +303,17 @@ function handleInput() {
     player.onGround = false;
   }
 
+  if ((keys.has("Space") || keys.has("ArrowUp") || keys.has("KeyW")) && isPlayerInRiver()) {
+    player.vy = -5.8;
+  }
+
   if (keys.has("KeyJ")) attack();
   if (keys.has("KeyK")) throwGrenade();
+}
+
+function isPlayerInRiver() {
+  if (!level || !level.river) return false;
+  return touches(player, level.river);
 }
 
 function movePlayer() {
@@ -243,6 +322,9 @@ function movePlayer() {
   player.x += player.vx;
   player.y += player.vy;
   player.vy += gravity;
+  if (isPlayerInRiver()) {
+    player.vy *= 0.72;
+  }
   player.onGround = false;
 
   for (const platform of level.platforms) {
@@ -270,13 +352,16 @@ function movePlayer() {
 function moveEnemies() {
   for (const enemy of level.enemies) {
     if (!enemy.alive) continue;
+    if (enemy.cagedTimer > 0) {
+      continue;
+    }
 
     const distance = player.x + player.width / 2 - (enemy.x + enemy.width / 2);
     const absDistance = Math.abs(distance);
     const inSight = absDistance < 430;
     enemy.facing = distance > 0 ? 1 : -1;
 
-    if (enemy.kind === "bat") {
+    if (enemy.kind === "bat" || enemy.kind === "drowned") {
       enemy.y = enemy.baseY + Math.sin((Date.now() / 160 + enemy.phase) % 80) * 22;
     }
 
@@ -356,19 +441,23 @@ function attack() {
   player.attackTimer = weapon.cooldown;
   player.attacking = 12;
 
-  if (weapon.kind === "melee") {
+  if (weapon.kind === "melee" || weapon.kind === "fireSword") {
     const hitBox = {
       x: player.facing > 0 ? player.x + player.width - 6 : player.x - weapon.range + 6,
       y: player.y + 18,
       width: weapon.range,
       height: 42,
     };
-    damageEnemiesIfHit(hitBox, weapon.damage);
+    damageEnemiesIfHit(hitBox, getAttackDamage(weapon.damage));
     effects.push({ x: hitBox.x, y: hitBox.y, width: hitBox.width, height: hitBox.height, life: 10, kind: "slash" });
     return;
   }
 
   spawnBullet(weapon);
+}
+
+function getAttackDamage(baseDamage) {
+  return baseDamage * (powerBoostTimer > 0 ? 3 : 1);
 }
 
 function throwGrenade() {
@@ -391,6 +480,56 @@ function throwGrenade() {
   effects.push({ x: player.x + player.width / 2, y: player.y + 18, width: 32, height: 32, life: 8, kind: "throw" });
 }
 
+function useProfessionSkill() {
+  if (gameState !== "playing" || !player || player.skillTimer > 0) return;
+
+  if (selectedProfession === "doctor") {
+    player.hearts = 2;
+    player.skillTimer = 180;
+    effects.push({ x: player.x - 10, y: player.y - 28, width: 90, height: 30, life: 44, kind: "heal" });
+  }
+
+  if (selectedProfession === "police") {
+    player.skillTimer = 90;
+    projectiles.push({
+      x: player.facing > 0 ? player.x + player.width : player.x - 18,
+      y: player.y + 28,
+      width: 24,
+      height: 24,
+      vx: 10 * player.facing,
+      vy: 0,
+      damage: 0,
+      rangeLeft: 560,
+      kind: "cage",
+    });
+  }
+
+  if (selectedProfession === "boxer") {
+    blackFistTimer = 360;
+    player.skillTimer = 420;
+    effects.push({ x: player.x - 10, y: player.y - 28, width: 100, height: 30, life: 70, kind: "blackFist" });
+  }
+
+  updateHud();
+}
+
+function usePowerPotion() {
+  if (inventory.powerPotion <= 0) return;
+  inventory.powerPotion -= 1;
+  powerBoostTimer = 900;
+  effects.push({ x: player ? player.x : cameraX + 360, y: player ? player.y - 28 : 250, width: 130, height: 30, life: 70, kind: "power" });
+  renderBackpack();
+}
+
+function useMedkit() {
+  if (!player || inventory.medkit <= 0) return;
+  inventory.medkit -= 1;
+  player.hearts = 2;
+  effects.push({ x: player.x - 10, y: player.y - 28, width: 90, height: 30, life: 44, kind: "heal" });
+  updateHud();
+  renderBackpack();
+}
+
 function spawnBullet(weapon) {
   const speed = weapon.kind === "rocket" ? 8 : 12;
   projectiles.push({
@@ -400,7 +539,7 @@ function spawnBullet(weapon) {
     height: weapon.kind === "rocket" ? 12 : 6,
     vx: speed * player.facing,
     vy: 0,
-    damage: weapon.damage,
+    damage: getAttackDamage(weapon.damage),
     rangeLeft: weapon.range,
     kind: weapon.kind,
   });
@@ -437,7 +576,12 @@ function moveProjectiles() {
 
     for (const enemy of level.enemies) {
       if (enemy.alive && touches(projectile, enemy)) {
-        damageEnemy(enemy, projectile.damage);
+        if (projectile.kind === "cage") {
+          enemy.cagedTimer = 600;
+          effects.push({ x: enemy.x - 8, y: enemy.y - 12, width: enemy.width + 16, height: enemy.height + 22, life: 60, kind: "cageHit" });
+        } else {
+          damageEnemy(enemy, projectile.damage);
+        }
         projectile.rangeLeft = 0;
         if (projectile.kind === "rocket") explode(projectile.x, projectile.y, projectile.damage, 86);
         break;
@@ -499,9 +643,16 @@ function handleChest() {
   if (!chest.opened && !chest.locked && touches(player, chest)) {
     chest.opened = true;
     coins += level.reward;
+    const gotPainting = Math.random() < 0.9;
+    const gotWatch = Math.random() < 0.65;
+    if (gotPainting) inventory.painting += 1;
+    if (gotWatch) inventory.watch += 1;
     currentLevel += 1;
     updateHud();
+    renderBackpack();
     effects.push({ x: chest.x - 4, y: chest.y - 36, width: 96, height: 36, life: 42, kind: "coins" });
+    if (gotPainting) effects.push({ x: chest.x - 18, y: chest.y - 76, width: 150, height: 30, life: 88, kind: "painting" });
+    if (gotWatch) effects.push({ x: chest.x - 10, y: chest.y - 104, width: 130, height: 30, life: 88, kind: "watch" });
     draw();
     setTimeout(() => showMenu("win"), 450);
   }
@@ -522,7 +673,7 @@ function checkDangerHits() {
 }
 
 function hurtPlayer(amount) {
-  if (player.invincible > 0 || gameState !== "playing") return;
+  if (blackFistTimer > 0 || player.invincible > 0 || gameState !== "playing") return;
 
   player.hearts -= amount;
   player.invincible = 76;
@@ -540,7 +691,7 @@ function renderShop() {
 
   for (const item of shopGoods) {
     const button = document.createElement("button");
-    const owned = item.type === "horse" ? hasHorse : item.index <= weaponLevel;
+    const owned = item.type === "horse" ? hasHorse : item.type === "item" && item.item === "speedPotion" ? speedPotionOwned : item.type === "weapon" && item.index <= weaponLevel;
     const lockedByOrder = item.type === "weapon" && item.index !== weaponLevel + 1 && !owned;
     button.type = "button";
     button.className = owned ? "shop-item is-owned" : "shop-item";
@@ -551,36 +702,95 @@ function renderShop() {
   }
 }
 
+function renderProfessions() {
+  professionChoices.innerHTML = "";
+
+  for (const [id, profession] of Object.entries(professions)) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = id === selectedProfession ? "is-selected" : "";
+    button.innerHTML = `<strong>${profession.name}</strong><span>${profession.description}</span>`;
+    button.addEventListener("click", () => {
+      selectedProfession = id;
+      updateHud();
+      renderProfessions();
+    });
+    professionChoices.append(button);
+  }
+}
+
+function renderBackpack() {
+  inventoryItems.innerHTML = "";
+  const rows = [
+    { key: "painting", name: "家人是一幅画", count: inventory.painting, action: "卖 300", onClick: () => sellTreasure("painting", 300) },
+    { key: "watch", name: "黄金手表", count: inventory.watch, action: "卖 100", onClick: () => sellTreasure("watch", 100) },
+    { key: "powerPotion", name: "力量药水", count: inventory.powerPotion, action: "使用", onClick: usePowerPotion },
+    { key: "medkit", name: "医疗包", count: inventory.medkit, action: "使用", onClick: useMedkit },
+  ];
+
+  for (const row of rows) {
+    const item = document.createElement("div");
+    item.className = "inventory-item";
+    item.innerHTML = `<span>${row.name} x${row.count}</span>`;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = row.action;
+    button.disabled = row.count <= 0;
+    button.addEventListener("click", row.onClick);
+    item.append(button);
+    inventoryItems.append(item);
+  }
+}
+
+function sellTreasure(key, value) {
+  if (inventory[key] <= 0) return;
+  inventory[key] -= 1;
+  coins += value;
+  updateHud();
+  renderBackpack();
+  renderShop();
+}
+
 function buyItem(item) {
-  const owned = item.type === "horse" ? hasHorse : item.index <= weaponLevel;
+  const owned = item.type === "horse" ? hasHorse : item.type === "item" && item.item === "speedPotion" ? speedPotionOwned : item.type === "weapon" && item.index <= weaponLevel;
   if (owned || coins < item.cost) return;
   if (item.type === "weapon" && item.index !== weaponLevel + 1) return;
 
   coins -= item.cost;
   if (item.type === "horse") {
     hasHorse = true;
+  } else if (item.type === "item" && item.item === "speedPotion") {
+    speedPotionOwned = true;
+  } else if (item.type === "item") {
+    inventory[item.item] += 1;
   } else {
     weaponLevel = item.index;
   }
   updateHud();
   renderShop();
+  renderBackpack();
 }
 
 function tickTimers() {
   player.attackTimer = Math.max(0, player.attackTimer - 1);
   player.grenadeTimer = Math.max(0, player.grenadeTimer - 1);
+  player.skillTimer = Math.max(0, player.skillTimer - 1);
   player.attacking = Math.max(0, player.attacking - 1);
   player.invincible = Math.max(0, player.invincible - 1);
+  powerBoostTimer = Math.max(0, powerBoostTimer - 1);
+  blackFistTimer = Math.max(0, blackFistTimer - 1);
 
   for (const enemy of level.enemies) {
     enemy.hurtFlash = Math.max(0, enemy.hurtFlash - 1);
     enemy.attackTimer = Math.max(0, enemy.attackTimer - 1);
+    enemy.cagedTimer = Math.max(0, enemy.cagedTimer - 1);
   }
 
   for (const effect of effects) {
     effect.life -= 1;
   }
   effects = effects.filter((effect) => effect.life > 0);
+  updateActionButtons();
 }
 
 function updateCamera() {
@@ -596,9 +806,20 @@ function updateHud() {
   coinsElement.textContent = coins;
   heartsElement.textContent = player ? Math.max(0, player.hearts) : 2;
   monsterCountElement.textContent = remainingMonsters;
+  professionNameElement.textContent = professions[selectedProfession].name;
   weaponNameElement.textContent = hasHorse ? `${weapons[weaponLevel].name}+马` : weapons[weaponLevel].name;
   menuPlayCount.textContent = playCount;
   menuCoins.textContent = coins;
+  updateActionButtons();
+}
+
+function updateActionButtons() {
+  const inGame = gameState === "playing" && Boolean(player);
+  healButton.disabled = !inGame || selectedProfession !== "doctor" || player.skillTimer > 0;
+  cageButton.disabled = !inGame || selectedProfession !== "police" || player.skillTimer > 0;
+  blackFistButton.disabled = !inGame || selectedProfession !== "boxer" || player.skillTimer > 0;
+  powerPotionButton.disabled = !inGame || inventory.powerPotion <= 0;
+  medkitButton.disabled = !inGame || inventory.medkit <= 0;
 }
 
 function touches(a, b) {
@@ -642,6 +863,7 @@ function drawWorld() {
   ctx.translate(-cameraX, 0);
   drawSky();
   drawGround();
+  drawRiver();
   drawPlatforms();
   ctx.restore();
 }
@@ -693,6 +915,19 @@ function drawPlatforms() {
     ctx.fillStyle = "#2b9a54";
     ctx.fillRect(platform.x, platform.y, platform.width, 5);
   }
+}
+
+function drawRiver() {
+  const river = level.river;
+  ctx.fillStyle = "#1d8fd8";
+  ctx.fillRect(river.x, river.y, river.width, river.height);
+  ctx.fillStyle = "#65d7ff";
+  for (let x = river.x + 12; x < river.x + river.width; x += 46) {
+    ctx.fillRect(x, river.y + 14, 24, 6);
+    ctx.fillRect(x + 18, river.y + 42, 30, 6);
+  }
+  ctx.fillStyle = "#0f5f9f";
+  ctx.fillRect(river.x, river.y + river.height - 12, river.width, 12);
 }
 
 function drawStars() {
@@ -769,6 +1004,8 @@ function drawEnemies() {
     if (enemy.kind === "bat") drawBat(enemy);
     if (enemy.kind === "guard") drawGuard(enemy);
     if (enemy.kind === "brute") drawBrute(enemy);
+    if (enemy.kind === "drowned") drawDrowned(enemy);
+    if (enemy.cagedTimer > 0) drawCage(enemy);
     drawEnemyHealthBar(enemy);
   }
   ctx.restore();
@@ -815,6 +1052,34 @@ function drawBrute(enemy) {
   ctx.fillRect(enemy.x + enemy.width * 0.32, enemy.y + enemy.height * 0.7, enemy.width * 0.36, 7);
 }
 
+function drawDrowned(enemy) {
+  ctx.fillStyle = enemy.hurtFlash > 0 ? "#ffffff" : "#227c8f";
+  ctx.fillRect(enemy.x + 6, enemy.y + 12, enemy.width - 12, enemy.height - 12);
+  ctx.fillStyle = "#49c7bd";
+  ctx.fillRect(enemy.x + 12, enemy.y, enemy.width - 24, 22);
+  ctx.fillStyle = "#b6fff3";
+  ctx.fillRect(enemy.x + 18, enemy.y + 30, 8, 8);
+  ctx.fillRect(enemy.x + enemy.width - 26, enemy.y + 30, 8, 8);
+  ctx.fillStyle = "#15454f";
+  ctx.fillRect(enemy.x + 26, enemy.y + enemy.height - 18, enemy.width - 52, 8);
+  ctx.fillStyle = "#7fffd4";
+  ctx.fillRect(enemy.x - 10, enemy.y + 28, 12, 30);
+  ctx.fillRect(enemy.x + enemy.width - 2, enemy.y + 28, 12, 30);
+}
+
+function drawCage(enemy) {
+  ctx.strokeStyle = "#fff29a";
+  ctx.lineWidth = 4;
+  ctx.strokeRect(enemy.x - 8, enemy.y - 10, enemy.width + 16, enemy.height + 18);
+  ctx.lineWidth = 2;
+  for (let x = enemy.x - 2; x < enemy.x + enemy.width + 12; x += 14) {
+    ctx.beginPath();
+    ctx.moveTo(x, enemy.y - 10);
+    ctx.lineTo(x, enemy.y + enemy.height + 8);
+    ctx.stroke();
+  }
+}
+
 function drawEnemyHealthBar(enemy) {
   const barWidth = Math.max(58, enemy.width);
   const x = enemy.x + enemy.width / 2 - barWidth / 2;
@@ -829,7 +1094,12 @@ function drawProjectiles() {
   ctx.save();
   ctx.translate(-cameraX, 0);
   for (const projectile of projectiles) {
-    ctx.fillStyle = projectile.kind === "rocket" ? "#ff6b50" : projectile.kind === "grenade" ? "#2f6b3f" : "#211b2c";
+    ctx.fillStyle =
+      projectile.kind === "rocket" ? "#ff6b50" :
+      projectile.kind === "grenade" ? "#2f6b3f" :
+      projectile.kind === "cage" ? "#fff29a" :
+      projectile.kind === "magic" ? "#9b5cff" :
+      "#211b2c";
     ctx.fillRect(projectile.x, projectile.y, projectile.width, projectile.height);
     if (projectile.kind === "rocket") {
       ctx.fillStyle = "#ffd34d";
@@ -885,13 +1155,17 @@ function drawWeapon(knightY) {
   ctx.translate(handX, handY);
   ctx.scale(player.facing, 1);
 
-  if (weapon.kind === "melee") {
-    ctx.fillStyle = weaponLevel === 0 ? "#d9dde5" : "#5e5b62";
+  if (weapon.kind === "melee" || weapon.kind === "fireSword") {
+    ctx.fillStyle = weapon.kind === "fireSword" ? "#ff6b50" : weaponLevel === 0 ? "#d9dde5" : "#5e5b62";
     ctx.fillRect(0, player.attacking > 0 ? -18 : -8, weaponLevel === 0 ? 44 : 54, weaponLevel === 0 ? 7 : 14);
+    if (weapon.kind === "fireSword") {
+      ctx.fillStyle = "#ffd34d";
+      ctx.fillRect(12, player.attacking > 0 ? -25 : -15, 28, 7);
+    }
     ctx.fillStyle = "#8b5a36";
     ctx.fillRect(-8, -3, 12, 8);
   } else {
-    ctx.fillStyle = weapon.kind === "rocket" ? "#595461" : "#2d3142";
+    ctx.fillStyle = weapon.kind === "rocket" ? "#595461" : weapon.kind === "magic" ? "#8b5cf6" : "#2d3142";
     ctx.fillRect(0, -10, weapon.kind === "rocket" ? 68 : 60, weapon.kind === "rocket" ? 20 : 14);
     ctx.fillStyle = "#8f95a3";
     ctx.fillRect(weapon.kind === "rocket" ? 52 : 46, -6, 18, 8);
@@ -920,6 +1194,12 @@ function drawEffects() {
     if (effect.kind === "coins") drawTinyText(`+${level.reward} 金币`, effect.x, effect.y - (42 - effect.life), "#ffd34d");
     if (effect.kind === "starCoins") drawTinyText("+60 金币", effect.x, effect.y - (42 - effect.life), "#ffd34d");
     if (effect.kind === "unlock") drawTinyText("宝箱已解锁！", effect.x, effect.y, "#ffd34d");
+    if (effect.kind === "heal") drawTinyText("生命回满", effect.x, effect.y, "#45d06f");
+    if (effect.kind === "power") drawTinyText("力量 x3", effect.x, effect.y, "#ff6b50");
+    if (effect.kind === "blackFist") drawTinyText("黑拳无敌", effect.x, effect.y, "#fff29a");
+    if (effect.kind === "cageHit") drawTinyText("困住 10 秒", effect.x, effect.y - 8, "#fff29a");
+    if (effect.kind === "painting") drawTinyText("获得：家人是一幅画", effect.x, effect.y, "#ffd34d");
+    if (effect.kind === "watch") drawTinyText("获得：黄金手表", effect.x, effect.y, "#ffd34d");
   }
   ctx.restore();
 }
@@ -950,5 +1230,19 @@ window.addEventListener("keyup", (event) => {
 });
 
 startButton.addEventListener("click", startGame);
+healButton.addEventListener("click", useProfessionSkill);
+cageButton.addEventListener("click", useProfessionSkill);
+blackFistButton.addEventListener("click", useProfessionSkill);
+powerPotionButton.addEventListener("click", usePowerPotion);
+medkitButton.addEventListener("click", useMedkit);
+backpackButton.addEventListener("click", () => {
+  renderBackpack();
+  backpackPanel.classList.toggle("is-hidden");
+});
+closeBackpackButton.addEventListener("click", () => {
+  backpackPanel.classList.add("is-hidden");
+});
 
+renderProfessions();
+renderBackpack();
 showMenu("ready");

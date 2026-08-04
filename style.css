@@ -55,8 +55,9 @@ body {
 h1 {
   margin: 0;
   color: #fff8db;
-  font-size: clamp(28px, 5vw, 50px);
+  font-size: clamp(26px, 4vw, 42px);
   line-height: 1;
+  white-space: nowrap;
   text-shadow: 0 4px 0 #352448;
 }
 
@@ -147,6 +148,8 @@ canvas {
   grid-column: 2;
   grid-row: 1 / 3;
   padding: 18px;
+  max-height: 405px;
+  overflow: auto;
 }
 
 .result-label {
@@ -169,6 +172,31 @@ canvas {
 .menu-panel p {
   margin: 0;
   font-weight: 800;
+}
+
+.profession-panel {
+  margin-top: 14px;
+}
+
+.profession-panel h3 {
+  margin: 0 0 8px;
+  font-size: 22px;
+}
+
+.profession-choices {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.profession-choices button {
+  min-height: 58px;
+  padding: 8px;
+  text-align: left;
+}
+
+.profession-choices button.is-selected {
+  background: var(--green);
 }
 
 .menu-stats {
@@ -254,6 +282,90 @@ button:disabled {
   font-size: 28px;
 }
 
+.game-actions {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: calc(100% - 150px);
+}
+
+.game-actions.is-hidden,
+.backpack-button.is-hidden {
+  display: none;
+}
+
+.game-actions button {
+  min-width: 88px;
+  min-height: 40px;
+  padding: 4px 8px;
+}
+
+.backpack-button {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  min-width: 112px;
+  min-height: 58px;
+  background: #8ee8ff;
+}
+
+.backpack-panel {
+  position: absolute;
+  right: 12px;
+  bottom: 82px;
+  width: min(390px, calc(100% - 24px));
+  max-height: calc(100% - 104px);
+  overflow: auto;
+  border: 5px solid var(--line);
+  background: var(--panel);
+  box-shadow: 8px 8px 0 #0b0a12;
+  padding: 14px;
+}
+
+.backpack-panel.is-hidden {
+  display: none;
+}
+
+.backpack-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.backpack-header h3 {
+  margin: 0;
+  font-size: 26px;
+}
+
+.backpack-header button {
+  min-width: 78px;
+}
+
+.inventory-items {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.inventory-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+  border: 4px solid var(--line);
+  background: #fffdf0;
+  padding: 8px;
+  font-weight: 900;
+}
+
+.inventory-item button {
+  min-width: 74px;
+}
+
 .controls {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
@@ -314,6 +426,18 @@ button:disabled {
     padding: 12px;
   }
 
+  .profession-choices {
+    grid-template-columns: 1fr;
+  }
+
+  .game-actions {
+    position: static;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    max-width: none;
+    margin-top: 8px;
+  }
+
   .menu-panel,
   .shop-panel,
   .start-button {
@@ -324,6 +448,10 @@ button:disabled {
   .menu-panel h2,
   .shop-panel h3 {
     font-size: 26px;
+  }
+
+  h1 {
+    white-space: normal;
   }
 
   .start-button {

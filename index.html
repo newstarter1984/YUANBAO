@@ -35,6 +35,10 @@
             <strong id="monsterCount">0</strong>
           </div>
           <div class="score-board weapon-board">
+            <span>职业</span>
+            <strong id="professionName">医生</strong>
+          </div>
+          <div class="score-board weapon-board">
             <span>武器</span>
             <strong id="weaponName">小剑</strong>
           </div>
@@ -48,6 +52,10 @@
             <p id="resultLabel" class="result-label">准备冒险</p>
             <h2>主界面</h2>
             <p id="menuText">打败小怪，打开宝箱，攒金币升级武器。</p>
+            <div class="profession-panel">
+              <h3>选择职业</h3>
+              <div id="professionChoices" class="profession-choices"></div>
+            </div>
             <div class="menu-stats" aria-live="polite">
               <div>
                 <span>游玩次数</span>
@@ -66,6 +74,21 @@
           </div>
 
           <button id="startButton" class="start-button" type="button">开始游戏</button>
+        </div>
+        <div class="game-actions">
+          <button id="healButton" type="button">回复</button>
+          <button id="cageButton" type="button">牢笼</button>
+          <button id="blackFistButton" type="button">黑拳</button>
+          <button id="powerPotionButton" type="button">力量药水</button>
+          <button id="medkitButton" type="button">医疗包</button>
+        </div>
+        <button id="backpackButton" class="backpack-button" type="button">背包</button>
+        <div id="backpackPanel" class="backpack-panel is-hidden">
+          <div class="backpack-header">
+            <h3>背包</h3>
+            <button id="closeBackpackButton" type="button">关闭</button>
+          </div>
+          <div id="inventoryItems" class="inventory-items"></div>
         </div>
       </section>
 
@@ -94,6 +117,6 @@
       </section>
     </main>
 
-    <script src="game.js?v=20260804-2"></script>
+    <script src="game.js?v=20260804-3"></script>
   </body>
 </html>
