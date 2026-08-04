@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>元宝的星星大冒险</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main class="game-shell">
+      <section class="top-bar" aria-label="游戏信息">
+        <div>
+          <p class="eyebrow">Yuanbao's First Game</p>
+          <h1>元宝的星星大冒险</h1>
+        </div>
+        <div class="score-board" aria-live="polite">
+          <span>分数</span>
+          <strong id="score">0</strong>
+        </div>
+      </section>
+
+      <section class="stage-wrap" aria-label="游戏舞台">
+        <canvas id="game" width="960" height="540"></canvas>
+        <div id="message" class="message is-hidden">
+          <h2>再来一次！</h2>
+          <p>小勇士碰到小怪了，按 Enter 重新开始。</p>
+          <button id="restartButton" type="button">重新开始</button>
+        </div>
+      </section>
+
+      <section class="controls" aria-label="操作说明">
+        <div class="control-card">
+          <span class="key">←</span>
+          <span class="key">→</span>
+          <p>左右移动</p>
+        </div>
+        <div class="control-card">
+          <span class="key">空格</span>
+          <p>跳跃</p>
+        </div>
+        <div class="control-card">
+          <span class="key">Enter</span>
+          <p>重新开始</p>
+        </div>
+      </section>
+    </main>
+
+    <script src="game.js"></script>
+  </body>
+</html>
