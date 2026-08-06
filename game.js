@@ -307,7 +307,7 @@ function showMenu(reason) {
   if (reason === "win") {
     const nextTheme = getTheme(currentLevel);
     resultLabel.textContent = `第 ${currentLevel - 1} 关胜利！`;
-    menuText.textContent = `奖励到手。下一站是${nextTheme.name}，路会一直向前延伸。`;
+    menuText.textContent = `奖励到手。点击右下角按钮，就会继续第 ${currentLevel} 关：${nextTheme.name}。`;
   } else if (reason === "death") {
     resultLabel.textContent = "挑战失败";
     menuText.textContent = "回商店升级一下，再去试试更聪明的怪物和陷阱。";
@@ -318,6 +318,7 @@ function showMenu(reason) {
   }
 
   level = buildLevel(currentLevel);
+  startButton.textContent = `开始第 ${currentLevel} 关：${level.theme.name}`;
   drawMenuBackdrop();
   updateHud();
   renderShop();
