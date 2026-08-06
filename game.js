@@ -88,11 +88,64 @@ let currentLevel = 1;
 let cameraX = 0;
 let gameState = "menu";
 let animationFrame;
+let audioContext;
+let musicTimer;
+let musicStarted = false;
+
+function ensureAudio() {
+  if (!audioContext) {
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (audioContext.state === "suspended") {
+    audioContext.resume();
+  }
+}
+
+function playTone(frequency, duration, type = "square", volume = 0.035, when = 0) {
+  if (!audioContext) return;
+  const start = audioContext.currentTime + when;
+  const oscillator = audioContext.createOscillator();
+  const gain = audioContext.createGain();
+  oscillator.type = type;
+  oscillator.frequency.setValueAtTime(frequency, start);
+  gain.gain.setValueAtTime(0.0001, start);
+  gain.gain.exponentialRampToValueAtTime(volume, start + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+  oscillator.connect(gain).connect(audioContext.destination);
+  oscillator.start(start);
+  oscillator.stop(start + duration + 0.03);
+}
+
 function playSound() {
-  // Sound is intentionally disabled.
+  // Sound effects are intentionally disabled; only background music plays.
+}
+
+function startMusic() {
+  ensureAudio();
+  if (musicStarted) return;
+  musicStarted = true;
+  scheduleMusicPhrase();
+}
+
+function scheduleMusicPhrase() {
+  const melody = [
+    [659, 0.11], [659, 0.11, 0.14], [784, 0.13, 0.31],
+    [523, 0.12, 0.52], [659, 0.12, 0.68], [784, 0.16, 0.86],
+    [392, 0.14, 1.14], [523, 0.11, 1.48], [587, 0.11, 1.62],
+    [494, 0.12, 1.78], [523, 0.14, 1.95],
+  ];
+  const bass = [
+    [196, 0.08], [262, 0.08, 0.28], [196, 0.08, 0.56],
+    [262, 0.08, 0.84], [196, 0.08, 1.12], [262, 0.08, 1.4],
+  ];
+
+  melody.forEach(([frequency, duration, when = 0]) => playTone(frequency, duration, "square", 0.026, when));
+  bass.forEach(([frequency, duration, when = 0]) => playTone(frequency, duration, "triangle", 0.016, when));
+  musicTimer = window.setTimeout(scheduleMusicPhrase, 2600);
 }
 
 function startGame() {
+  startMusic();
   playCount += 1;
   gameState = "playing";
   mainMenu.classList.add("is-hidden");
