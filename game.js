@@ -128,7 +128,7 @@ function startGame() {
     jumpPower: hasHorse ? -17.2 : -16,
     onGround: true,
     facing: 1,
-    hearts: 2,
+    hearts: getMaxHearts(),
     invincible: 0,
     attackTimer: 0,
     grenadeTimer: 0,
@@ -719,6 +719,10 @@ function getAttackDamage(baseDamage) {
   return baseDamage * (2 ** (heroLevel - 1)) * (powerBoostTimer > 0 ? 3 : 1);
 }
 
+function getMaxHearts() {
+  return 2 + heroLevel - 1;
+}
+
 function throwGrenade() {
   if (gameState !== "playing") return;
   if (player.grenadeTimer > 0) return;
@@ -743,7 +747,7 @@ function useProfessionSkill() {
   if (gameState !== "playing" || !player || player.skillTimer > 0) return;
 
   if (selectedProfession === "doctor") {
-    player.hearts = 2;
+    player.hearts = getMaxHearts();
     player.skillTimer = 180;
     effects.push({ x: player.x - 10, y: player.y - 28, width: 90, height: 30, life: 44, kind: "heal" });
   }
@@ -783,7 +787,7 @@ function usePowerPotion() {
 function useMedkit() {
   if (!player || inventory.medkit <= 0) return;
   inventory.medkit -= 1;
-  player.hearts = 2;
+  player.hearts = getMaxHearts();
   effects.push({ x: player.x - 10, y: player.y - 28, width: 90, height: 30, life: 44, kind: "heal" });
   updateHud();
   renderBackpack();
@@ -951,8 +955,11 @@ function addExperience(amount, x, y) {
   while (experience >= experienceNeeded) {
     experience -= experienceNeeded;
     heroLevel += 1;
+    if (player) {
+      player.hearts = Math.min(getMaxHearts(), player.hearts + 1);
+    }
     playSound("levelUp");
-    effects.push({ x: player ? player.x - 18 : x, y: player ? player.y - 38 : y, width: 110, height: 30, life: 90, kind: "levelUp" });
+    effects.push({ x: player ? player.x - 18 : x, y: player ? player.y - 38 : y, width: 150, height: 30, life: 90, kind: "levelUp" });
   }
   updateHud();
 }
@@ -1159,7 +1166,7 @@ function updateHud() {
   coinsElement.textContent = coins;
   heroLevelElement.textContent = heroLevel;
   experienceElement.textContent = `${experience}/${experienceNeeded}`;
-  heartsElement.textContent = player ? Math.max(0, player.hearts) : 2;
+  heartsElement.textContent = player ? `${Math.max(0, player.hearts)}/${getMaxHearts()}` : getMaxHearts();
   monsterCountElement.textContent = remainingMonsters;
   professionNameElement.textContent = professions[selectedProfession].name;
   weaponNameElement.textContent = hasHorse ? `${weapons[weaponLevel].name}+马` : weapons[weaponLevel].name;
@@ -2074,7 +2081,7 @@ function drawEffects() {
     if (effect.kind === "coins") drawTinyText(`+${level.reward} 金币`, effect.x, effect.y - (42 - effect.life), "#ffd34d");
     if (effect.kind === "starCoins") drawTinyText("+60 金币", effect.x, effect.y - (42 - effect.life), "#ffd34d");
     if (effect.kind === "xp") drawTinyText(`+${effect.amount} 经验`, effect.x, effect.y, "#8ee8ff");
-    if (effect.kind === "levelUp") drawTinyText(`升级！攻击 x${2 ** (heroLevel - 1)}`, effect.x, effect.y, "#ffd34d");
+    if (effect.kind === "levelUp") drawTinyText(`升级！攻击 x${2 ** (heroLevel - 1)} 生命+1`, effect.x, effect.y, "#ffd34d");
     if (effect.kind === "unlock") drawTinyText("宝箱已解锁！", effect.x, effect.y, "#ffd34d");
     if (effect.kind === "heal") drawTinyText("生命回满", effect.x, effect.y, "#45d06f");
     if (effect.kind === "power") drawTinyText("力量 x3", effect.x, effect.y, "#ff6b50");
