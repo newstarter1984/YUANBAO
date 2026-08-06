@@ -21,7 +21,6 @@ const startButton = document.querySelector("#startButton");
 const professionChoices = document.querySelector("#professionChoices");
 const professionHint = document.querySelector("#professionHint");
 const gameActions = document.querySelector(".game-actions");
-const musicButton = document.querySelector("#musicButton");
 const healButton = document.querySelector("#healButton");
 const cageButton = document.querySelector("#cageButton");
 const blackFistButton = document.querySelector("#blackFistButton");
@@ -89,100 +88,11 @@ let currentLevel = 1;
 let cameraX = 0;
 let gameState = "menu";
 let animationFrame;
-let audioContext;
-let musicEnabled = false;
-let musicTimer;
-
-function ensureAudio() {
-  if (!audioContext) {
-    audioContext = new (window.AudioContext || window.webkitAudioContext)();
-  }
-  if (audioContext.state === "suspended") {
-    audioContext.resume();
-  }
-}
-
-function playTone(frequency, duration, type = "square", volume = 0.045, when = 0) {
-  if (!audioContext) return;
-  const start = audioContext.currentTime + when;
-  const oscillator = audioContext.createOscillator();
-  const gain = audioContext.createGain();
-  oscillator.type = type;
-  oscillator.frequency.setValueAtTime(frequency, start);
-  gain.gain.setValueAtTime(0.0001, start);
-  gain.gain.exponentialRampToValueAtTime(volume, start + 0.02);
-  gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
-  oscillator.connect(gain).connect(audioContext.destination);
-  oscillator.start(start);
-  oscillator.stop(start + duration + 0.03);
-}
-
-function playSound(name) {
-  ensureAudio();
-  const sounds = {
-    chicken: () => [[820, 0.06], [1040, 0.05, 0.08], [760, 0.06, 0.16]].forEach(([f, d, w = 0]) => playTone(f, d, "square", 0.04, w)),
-    cow: () => [[165, 0.2], [130, 0.24, 0.17]].forEach(([f, d, w = 0]) => playTone(f, d, "sawtooth", 0.04, w)),
-    pig: () => [[330, 0.07], [250, 0.08, 0.08], [370, 0.07, 0.16]].forEach(([f, d, w = 0]) => playTone(f, d, "square", 0.04, w)),
-    hurt: () => [[220, 0.07], [160, 0.1, 0.07]].forEach(([f, d, w = 0]) => playTone(f, d, "sawtooth", 0.055, w)),
-    levelUp: () => [[440, 0.08], [660, 0.08, 0.1], [880, 0.12, 0.2]].forEach(([f, d, w = 0]) => playTone(f, d, "square", 0.05, w)),
-    attack: () => playTone(520, 0.05, "square", 0.035),
-    animalDrop: () => [[620, 0.05], [760, 0.07, 0.06]].forEach(([f, d, w = 0]) => playTone(f, d, "triangle", 0.035, w)),
-  };
-  if (sounds[name]) sounds[name]();
-}
-
-function startMusic() {
-  ensureAudio();
-  if (!musicEnabled || musicTimer) return;
-  scheduleMusicPhrase();
-}
-
-function scheduleMusicPhrase() {
-  if (!musicEnabled) {
-    musicTimer = undefined;
-    return;
-  }
-
-  const melody = [
-    [659, 0.11], [659, 0.11, 0.14], [784, 0.13, 0.31],
-    [523, 0.12, 0.52], [659, 0.12, 0.68], [784, 0.16, 0.86],
-    [392, 0.14, 1.14], [523, 0.11, 1.48], [587, 0.11, 1.62],
-    [494, 0.12, 1.78], [523, 0.14, 1.95],
-  ];
-  const bass = [
-    [196, 0.08], [262, 0.08, 0.28], [196, 0.08, 0.56],
-    [262, 0.08, 0.84], [196, 0.08, 1.12], [262, 0.08, 1.4],
-  ];
-
-  melody.forEach(([frequency, duration, when = 0]) => playTone(frequency, duration, "square", 0.028, when));
-  bass.forEach(([frequency, duration, when = 0]) => playTone(frequency, duration, "triangle", 0.018, when));
-  musicTimer = window.setTimeout(() => {
-    musicTimer = undefined;
-    scheduleMusicPhrase();
-  }, 2600);
-}
-
-function stopMusic() {
-  if (musicTimer) {
-    window.clearTimeout(musicTimer);
-    musicTimer = undefined;
-  }
-}
-
-function toggleMusic() {
-  ensureAudio();
-  musicEnabled = !musicEnabled;
-  musicButton.textContent = musicEnabled ? "音乐：开" : "音乐：关";
-  if (musicEnabled) {
-    startMusic();
-  } else {
-    stopMusic();
-  }
+function playSound() {
+  // Sound is intentionally disabled.
 }
 
 function startGame() {
-  ensureAudio();
-  startMusic();
   playCount += 1;
   gameState = "playing";
   mainMenu.classList.add("is-hidden");
@@ -1482,7 +1392,6 @@ window.addEventListener("keyup", (event) => {
 });
 
 startButton.addEventListener("click", startGame);
-musicButton.addEventListener("click", toggleMusic);
 healButton.addEventListener("click", useProfessionSkill);
 cageButton.addEventListener("click", useProfessionSkill);
 blackFistButton.addEventListener("click", useProfessionSkill);
