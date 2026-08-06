@@ -5,6 +5,8 @@ ctx.imageSmoothingEnabled = false;
 const levelNumberElement = document.querySelector("#levelNumber");
 const playCountElement = document.querySelector("#playCount");
 const coinsElement = document.querySelector("#coins");
+const heroLevelElement = document.querySelector("#heroLevel");
+const experienceElement = document.querySelector("#experience");
 const heartsElement = document.querySelector("#hearts");
 const monsterCountElement = document.querySelector("#monsterCount");
 const professionNameElement = document.querySelector("#professionName");
@@ -33,6 +35,7 @@ const keys = new Set();
 const gravity = 0.75;
 const floorY = 454;
 const starValue = 60;
+const experienceNeeded = 10;
 
 const weapons = [
   { name: "小剑", cost: 0, damage: 12, range: 70, cooldown: 28, kind: "melee" },
@@ -66,6 +69,8 @@ let level;
 let projectiles = [];
 let effects = [];
 let coins = 50;
+let experience = 0;
+let heroLevel = 1;
 let playCount = 0;
 let weaponLevel = 0;
 let hasHorse = false;
@@ -83,8 +88,69 @@ let currentLevel = 1;
 let cameraX = 0;
 let gameState = "menu";
 let animationFrame;
+let audioContext;
+let musicNodes = [];
+
+function ensureAudio() {
+  if (!audioContext) {
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (audioContext.state === "suspended") {
+    audioContext.resume();
+  }
+}
+
+function playTone(frequency, duration, type = "square", volume = 0.08, when = 0) {
+  if (!audioContext) return;
+  const start = audioContext.currentTime + when;
+  const oscillator = audioContext.createOscillator();
+  const gain = audioContext.createGain();
+  oscillator.type = type;
+  oscillator.frequency.setValueAtTime(frequency, start);
+  gain.gain.setValueAtTime(0.0001, start);
+  gain.gain.exponentialRampToValueAtTime(volume, start + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+  oscillator.connect(gain).connect(audioContext.destination);
+  oscillator.start(start);
+  oscillator.stop(start + duration + 0.03);
+}
+
+function playSound(name) {
+  ensureAudio();
+  const sounds = {
+    chicken: () => [[820, 0.06], [1040, 0.05, 0.08], [760, 0.06, 0.16]].forEach(([f, d, w = 0]) => playTone(f, d, "square", 0.07, w)),
+    cow: () => [[165, 0.22], [130, 0.28, 0.18]].forEach(([f, d, w = 0]) => playTone(f, d, "sawtooth", 0.08, w)),
+    pig: () => [[330, 0.08], [250, 0.1, 0.09], [370, 0.08, 0.18]].forEach(([f, d, w = 0]) => playTone(f, d, "square", 0.075, w)),
+    hurt: () => [[220, 0.08], [160, 0.12, 0.08]].forEach(([f, d, w = 0]) => playTone(f, d, "sawtooth", 0.1, w)),
+    levelUp: () => [[440, 0.08], [660, 0.08, 0.1], [880, 0.12, 0.2]].forEach(([f, d, w = 0]) => playTone(f, d, "square", 0.08, w)),
+    attack: () => playTone(520, 0.06, "square", 0.06),
+    animalDrop: () => [[620, 0.05], [760, 0.07, 0.06]].forEach(([f, d, w = 0]) => playTone(f, d, "triangle", 0.06, w)),
+  };
+  if (sounds[name]) sounds[name]();
+}
+
+function startMusic() {
+  ensureAudio();
+  if (musicNodes.length > 0) return;
+  const gain = audioContext.createGain();
+  gain.gain.value = 0.018;
+  const bass = audioContext.createOscillator();
+  bass.type = "square";
+  bass.frequency.value = 110;
+  const pulse = audioContext.createOscillator();
+  pulse.type = "triangle";
+  pulse.frequency.value = 220;
+  bass.connect(gain);
+  pulse.connect(gain);
+  gain.connect(audioContext.destination);
+  bass.start();
+  pulse.start();
+  musicNodes = [bass, pulse, gain];
+}
 
 function startGame() {
+  ensureAudio();
+  startMusic();
   playCount += 1;
   gameState = "playing";
   mainMenu.classList.add("is-hidden");
@@ -223,6 +289,13 @@ function buildLevel(number) {
     });
   }
 
+  const animals = [
+    { kind: "cow", x: 360, y: floorY - 46, width: 62, height: 46, alive: true, vx: 0.45, left: 300, right: 520, phase: 0 },
+    { kind: "chicken", x: 720, y: floorY - 30, width: 34, height: 30, alive: true, vx: 0.55, left: 650, right: 860, phase: 20 },
+    { kind: "pig", x: 1500, y: floorY - 38, width: 54, height: 38, alive: true, vx: 0.5, left: 1420, right: 1660, phase: 40 },
+    { kind: "cow", x: Math.floor(worldWidth * 0.72), y: floorY - 46, width: 62, height: 46, alive: true, vx: 0.48, left: Math.floor(worldWidth * 0.72) - 90, right: Math.floor(worldWidth * 0.72) + 150, phase: 60 },
+  ];
+
   return {
     number,
     worldWidth,
@@ -230,6 +303,7 @@ function buildLevel(number) {
     platforms,
     stars,
     enemies,
+    animals,
     river,
     spikeTraps,
     lavaTraps,
@@ -275,6 +349,7 @@ function update() {
   handleInput();
   movePlayer();
   moveEnemies();
+  moveAnimals();
   moveTraps();
   moveProjectiles();
   collectStars();
@@ -382,6 +457,16 @@ function moveEnemies() {
   }
 }
 
+function moveAnimals() {
+  for (const animal of level.animals) {
+    if (!animal.alive) continue;
+    animal.x += animal.vx;
+    if (animal.x < animal.left || animal.x + animal.width > animal.right) {
+      animal.vx *= -1;
+    }
+  }
+}
+
 function moveTraps() {
   for (const trap of level.spikeTraps) {
     const underTrap = player.x + player.width > trap.x && player.x < trap.x + trap.width && player.y > trap.y;
@@ -439,6 +524,7 @@ function attack() {
   const weapon = weapons[weaponLevel];
   if (player.attackTimer > 0) return;
 
+  playSound("attack");
   player.attackTimer = weapon.cooldown;
   player.attacking = 12;
 
@@ -458,7 +544,7 @@ function attack() {
 }
 
 function getAttackDamage(baseDamage) {
-  return baseDamage * (powerBoostTimer > 0 ? 3 : 1);
+  return baseDamage * (2 ** (heroLevel - 1)) * (powerBoostTimer > 0 ? 3 : 1);
 }
 
 function throwGrenade() {
@@ -473,7 +559,7 @@ function throwGrenade() {
     height: 22,
     vx: 9.6 * player.facing,
     vy: -6.8,
-    damage: 60,
+    damage: getAttackDamage(60),
     rangeLeft: 560,
     kind: "grenade",
     timer: 42,
@@ -568,6 +654,14 @@ function moveProjectiles() {
         }
       }
 
+      for (const animal of level.animals) {
+        if (animal.alive && touches(projectile, animal)) {
+          collectAnimal(animal);
+          projectile.rangeLeft = 0;
+          break;
+        }
+      }
+
       if (projectile.timer <= 0) {
         explode(projectile.x + projectile.width / 2, projectile.y + projectile.height / 2, projectile.damage, 112);
         projectile.rangeLeft = 0;
@@ -588,6 +682,13 @@ function moveProjectiles() {
         break;
       }
     }
+    for (const animal of level.animals) {
+      if (animal.alive && touches(projectile, animal)) {
+        collectAnimal(animal);
+        projectile.rangeLeft = 0;
+        break;
+      }
+    }
   }
 
   projectiles = projectiles.filter((projectile) => projectile.rangeLeft > 0 && projectile.x > cameraX - 80 && projectile.x < cameraX + canvas.width + 80);
@@ -603,12 +704,24 @@ function explode(x, y, damage, radius) {
       damageEnemy(enemy, damage);
     }
   }
+  for (const animal of level.animals) {
+    const dx = animal.x + animal.width / 2 - x;
+    const dy = animal.y + animal.height / 2 - y;
+    if (animal.alive && Math.hypot(dx, dy) < radius) {
+      collectAnimal(animal);
+    }
+  }
 }
 
 function damageEnemiesIfHit(hitBox, damage) {
   for (const enemy of level.enemies) {
     if (enemy.alive && touches(hitBox, enemy)) {
       damageEnemy(enemy, damage);
+    }
+  }
+  for (const animal of level.animals) {
+    if (animal.alive && touches(hitBox, animal)) {
+      collectAnimal(animal);
     }
   }
 }
@@ -624,6 +737,30 @@ function damageEnemy(enemy, damage) {
       level.chest.locked = false;
       effects.push({ x: level.chest.x - 42, y: level.chest.y - 42, width: 160, height: 36, life: 110, kind: "unlock" });
     }
+  }
+  updateHud();
+}
+
+function collectAnimal(animal) {
+  if (!animal.alive) return;
+  animal.alive = false;
+  const gained = animal.kind === "cow" ? 1 + Math.floor(Math.random() * 2) : animal.kind === "pig" ? 1 : 0;
+  playSound(animal.kind);
+  effects.push({ x: animal.x, y: animal.y - 20, width: animal.width, height: animal.height, life: 34, kind: "animalPoof" });
+  if (gained > 0) {
+    addExperience(gained, animal.x, animal.y);
+    playSound("animalDrop");
+  }
+}
+
+function addExperience(amount, x, y) {
+  experience += amount;
+  effects.push({ x, y: y - 18, width: 80, height: 26, life: 58, kind: "xp", amount });
+  while (experience >= experienceNeeded) {
+    experience -= experienceNeeded;
+    heroLevel += 1;
+    playSound("levelUp");
+    effects.push({ x: player ? player.x - 18 : x, y: player ? player.y - 38 : y, width: 110, height: 30, life: 90, kind: "levelUp" });
   }
   updateHud();
 }
@@ -676,6 +813,7 @@ function checkDangerHits() {
 function hurtPlayer(amount) {
   if (blackFistTimer > 0 || player.invincible > 0 || gameState !== "playing") return;
 
+  playSound("hurt");
   player.hearts -= amount;
   player.invincible = 76;
   player.vx = -player.facing * 9;
@@ -806,6 +944,8 @@ function updateHud() {
   levelNumberElement.textContent = currentLevel;
   playCountElement.textContent = playCount;
   coinsElement.textContent = coins;
+  heroLevelElement.textContent = heroLevel;
+  experienceElement.textContent = `${experience}/${experienceNeeded}`;
   heartsElement.textContent = player ? Math.max(0, player.hearts) : 2;
   monsterCountElement.textContent = remainingMonsters;
   professionNameElement.textContent = professions[selectedProfession].name;
@@ -856,6 +996,7 @@ function draw() {
   drawStars();
   drawTraps();
   drawChest();
+  drawAnimals();
   drawEnemies();
   drawProjectiles();
   drawPlayer();
@@ -1020,6 +1161,65 @@ function drawEnemies() {
     drawEnemyHealthBar(enemy);
   }
   ctx.restore();
+}
+
+function drawAnimals() {
+  ctx.save();
+  ctx.translate(-cameraX, 0);
+  for (const animal of level.animals) {
+    if (!animal.alive) continue;
+    if (animal.kind === "cow") drawCow(animal);
+    if (animal.kind === "chicken") drawChicken(animal);
+    if (animal.kind === "pig") drawPig(animal);
+  }
+  ctx.restore();
+}
+
+function drawCow(animal) {
+  ctx.fillStyle = "#f4f1df";
+  ctx.fillRect(animal.x, animal.y + 12, animal.width, animal.height - 12);
+  ctx.fillStyle = "#4a342a";
+  ctx.fillRect(animal.x + 8, animal.y + 18, 14, 12);
+  ctx.fillRect(animal.x + 36, animal.y + 28, 16, 12);
+  ctx.fillStyle = "#f4f1df";
+  ctx.fillRect(animal.x + 42, animal.y, 24, 24);
+  ctx.fillStyle = "#211b2c";
+  ctx.fillRect(animal.x + 48, animal.y + 8, 5, 5);
+  ctx.fillStyle = "#f6c2a9";
+  ctx.fillRect(animal.x + 56, animal.y + 14, 12, 8);
+  ctx.fillStyle = "#4a342a";
+  ctx.fillRect(animal.x + 10, animal.y + animal.height - 4, 9, 12);
+  ctx.fillRect(animal.x + 42, animal.y + animal.height - 4, 9, 12);
+}
+
+function drawChicken(animal) {
+  ctx.fillStyle = "#fffdf0";
+  ctx.fillRect(animal.x + 6, animal.y + 8, 24, 20);
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(animal.x + 14, animal.y, 20, 18);
+  ctx.fillStyle = "#ffcf4a";
+  ctx.fillRect(animal.x + 30, animal.y + 8, 8, 5);
+  ctx.fillStyle = "#e84c5f";
+  ctx.fillRect(animal.x + 18, animal.y - 6, 10, 8);
+  ctx.fillStyle = "#211b2c";
+  ctx.fillRect(animal.x + 26, animal.y + 6, 4, 4);
+  ctx.fillStyle = "#d9903d";
+  ctx.fillRect(animal.x + 10, animal.y + 26, 5, 8);
+  ctx.fillRect(animal.x + 24, animal.y + 26, 5, 8);
+}
+
+function drawPig(animal) {
+  ctx.fillStyle = "#f4a0b7";
+  ctx.fillRect(animal.x, animal.y + 10, animal.width, animal.height - 10);
+  ctx.fillStyle = "#ffc0d0";
+  ctx.fillRect(animal.x + 34, animal.y, 22, 22);
+  ctx.fillStyle = "#211b2c";
+  ctx.fillRect(animal.x + 42, animal.y + 7, 4, 4);
+  ctx.fillStyle = "#e77796";
+  ctx.fillRect(animal.x + 48, animal.y + 12, 10, 8);
+  ctx.fillStyle = "#b85c7a";
+  ctx.fillRect(animal.x + 8, animal.y + animal.height - 3, 8, 10);
+  ctx.fillRect(animal.x + 34, animal.y + animal.height - 3, 8, 10);
 }
 
 function drawSlime(enemy) {
@@ -1202,8 +1402,17 @@ function drawEffects() {
       ctx.fillRect(effect.x + effect.width / 2 - size / 4, effect.y + effect.height / 2 - size / 4, size / 2, size / 2);
     }
 
+    if (effect.kind === "animalPoof") {
+      ctx.fillStyle = "#fffdf0";
+      ctx.fillRect(effect.x + effect.width / 2 - 18, effect.y + effect.height / 2 - 12, 36, 24);
+      ctx.fillStyle = "#d8edf5";
+      ctx.fillRect(effect.x + effect.width / 2 - 10, effect.y + effect.height / 2 - 20, 20, 12);
+    }
+
     if (effect.kind === "coins") drawTinyText(`+${level.reward} 金币`, effect.x, effect.y - (42 - effect.life), "#ffd34d");
     if (effect.kind === "starCoins") drawTinyText("+60 金币", effect.x, effect.y - (42 - effect.life), "#ffd34d");
+    if (effect.kind === "xp") drawTinyText(`+${effect.amount} 经验`, effect.x, effect.y, "#8ee8ff");
+    if (effect.kind === "levelUp") drawTinyText(`升级！攻击 x${2 ** (heroLevel - 1)}`, effect.x, effect.y, "#ffd34d");
     if (effect.kind === "unlock") drawTinyText("宝箱已解锁！", effect.x, effect.y, "#ffd34d");
     if (effect.kind === "heal") drawTinyText("生命回满", effect.x, effect.y, "#45d06f");
     if (effect.kind === "power") drawTinyText("力量 x3", effect.x, effect.y, "#ff6b50");
