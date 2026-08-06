@@ -1939,6 +1939,11 @@ function drawCage(enemy) {
 }
 
 function drawEnemyHealthBar(enemy) {
+  if (enemy.kind === "lavaBoss") {
+    drawBossHealthBar(enemy);
+    return;
+  }
+
   const barWidth = Math.max(58, enemy.width);
   const x = enemy.x + enemy.width / 2 - barWidth / 2;
   const y = enemy.y - 16;
@@ -1946,6 +1951,23 @@ function drawEnemyHealthBar(enemy) {
   ctx.fillRect(x, y, barWidth, 8);
   ctx.fillStyle = enemy.alive ? "#45d06f" : "#8f95a3";
   ctx.fillRect(x, y, barWidth * (enemy.hp / enemy.maxHp), 8);
+}
+
+function drawBossHealthBar(enemy) {
+  const barWidth = Math.max(220, enemy.width + 86);
+  const x = enemy.x + enemy.width / 2 - barWidth / 2;
+  const y = Math.max(26, enemy.y - 30);
+  const ratio = Math.max(0, enemy.hp / enemy.maxHp);
+
+  ctx.fillStyle = "#21161b";
+  ctx.fillRect(x - 4, y - 4, barWidth + 8, 18);
+  ctx.fillStyle = "#4a2028";
+  ctx.fillRect(x, y, barWidth, 10);
+  ctx.fillStyle = enemy.alive ? "#e62735" : "#8f95a3";
+  ctx.fillRect(x, y, barWidth * ratio, 10);
+  ctx.fillStyle = "#ffd34d";
+  ctx.fillRect(x, y + 10, Math.max(0, barWidth * ratio), 3);
+  drawTinyText("BOSS", x, y - 8, "#ffd34d");
 }
 
 function drawProjectiles() {
