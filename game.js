@@ -3,6 +3,7 @@ const ctx = canvas.getContext("2d");
 ctx.imageSmoothingEnabled = false;
 
 const levelNumberElement = document.querySelector("#levelNumber");
+const themeNameElement = document.querySelector("#themeName");
 const playCountElement = document.querySelector("#playCount");
 const coinsElement = document.querySelector("#coins");
 const heroLevelElement = document.querySelector("#heroLevel");
@@ -37,6 +38,19 @@ const floorY = 454;
 const starValue = 60;
 const experienceNeeded = 10;
 
+const worldThemes = [
+  { id: "gravel", name: "砾石草原", next: "海洋" },
+  { id: "ocean", name: "海洋", next: "沙漠" },
+  { id: "desert", name: "沙漠", next: "沼泽" },
+  { id: "swamp", name: "沼泽", next: "砾石草原" },
+];
+
+const monsterXp = {
+  fish: 4,
+  crab: 5,
+  shark: 10,
+};
+
 const weapons = [
   { name: "小剑", cost: 0, damage: 12, range: 70, cooldown: 28, kind: "melee" },
   { name: "狼牙棒", cost: 10, damage: 22, range: 88, cooldown: 30, kind: "melee" },
@@ -51,6 +65,7 @@ const shopGoods = [
   { type: "weapon", index: 2, name: "步枪", cost: 30 },
   { type: "horse", name: "马", cost: 60 },
   { type: "weapon", index: 3, name: "火箭筒", cost: 100 },
+  { type: "skin", item: "diverSkin", name: "潜水员皮肤", cost: 60 },
   { type: "weapon", index: 4, name: "魔法棒", cost: 80 },
   { type: "weapon", index: 5, name: "火焰剑", cost: 120 },
   { type: "item", item: "powerPotion", name: "力量药水", cost: 45 },
@@ -74,6 +89,7 @@ let heroLevel = 1;
 let playCount = 0;
 let weaponLevel = 0;
 let hasHorse = false;
+let diverSkinOwned = false;
 let selectedProfession = "doctor";
 let speedPotionOwned = false;
 let powerBoostTimer = 0;
@@ -88,64 +104,11 @@ let currentLevel = 1;
 let cameraX = 0;
 let gameState = "menu";
 let animationFrame;
-let audioContext;
-let musicTimer;
-let musicStarted = false;
-
-function ensureAudio() {
-  if (!audioContext) {
-    audioContext = new (window.AudioContext || window.webkitAudioContext)();
-  }
-  if (audioContext.state === "suspended") {
-    audioContext.resume();
-  }
-}
-
-function playTone(frequency, duration, type = "square", volume = 0.035, when = 0) {
-  if (!audioContext) return;
-  const start = audioContext.currentTime + when;
-  const oscillator = audioContext.createOscillator();
-  const gain = audioContext.createGain();
-  oscillator.type = type;
-  oscillator.frequency.setValueAtTime(frequency, start);
-  gain.gain.setValueAtTime(0.0001, start);
-  gain.gain.exponentialRampToValueAtTime(volume, start + 0.02);
-  gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
-  oscillator.connect(gain).connect(audioContext.destination);
-  oscillator.start(start);
-  oscillator.stop(start + duration + 0.03);
-}
-
 function playSound() {
-  // Sound effects are intentionally disabled; only background music plays.
-}
-
-function startMusic() {
-  ensureAudio();
-  if (musicStarted) return;
-  musicStarted = true;
-  scheduleMusicPhrase();
-}
-
-function scheduleMusicPhrase() {
-  const melody = [
-    [659, 0.11], [659, 0.11, 0.14], [784, 0.13, 0.31],
-    [523, 0.12, 0.52], [659, 0.12, 0.68], [784, 0.16, 0.86],
-    [392, 0.14, 1.14], [523, 0.11, 1.48], [587, 0.11, 1.62],
-    [494, 0.12, 1.78], [523, 0.14, 1.95],
-  ];
-  const bass = [
-    [196, 0.08], [262, 0.08, 0.28], [196, 0.08, 0.56],
-    [262, 0.08, 0.84], [196, 0.08, 1.12], [262, 0.08, 1.4],
-  ];
-
-  melody.forEach(([frequency, duration, when = 0]) => playTone(frequency, duration, "square", 0.026, when));
-  bass.forEach(([frequency, duration, when = 0]) => playTone(frequency, duration, "triangle", 0.016, when));
-  musicTimer = window.setTimeout(scheduleMusicPhrase, 2600);
+  // Sound is intentionally disabled.
 }
 
 function startGame() {
-  startMusic();
   playCount += 1;
   gameState = "playing";
   mainMenu.classList.add("is-hidden");
@@ -180,10 +143,72 @@ function startGame() {
   update();
 }
 
+function getTheme(number) {
+  return worldThemes[(number - 1) % worldThemes.length];
+}
+
+function enemyKindsForTheme(themeId) {
+  if (themeId === "ocean") return ["fish", "crab", "fish", "shark", "harpooner"];
+  if (themeId === "desert") return ["mummy", "scorpion", "sandGolem", "scarab"];
+  if (themeId === "swamp") return ["swampFrog", "swampWitch", "mudBeast", "swampBoss"];
+  return ["slime", "bat", "guard", "brute"];
+}
+
+function enemySize(kind, number, index) {
+  const sizeBonus = Math.min(34, number * 3 + index * 2);
+  const table = {
+    bat: [58, 42],
+    brute: [78, 70],
+    fish: [58, 34],
+    crab: [60, 38],
+    shark: [112, 48],
+    harpooner: [64, 72],
+    mummy: [58, 70],
+    scorpion: [76, 36],
+    sandGolem: [88, 82],
+    scarab: [54, 34],
+    swampFrog: [70, 48],
+    swampWitch: [66, 76],
+    mudBeast: [86, 70],
+    swampBoss: [142, 126],
+  };
+  const [baseWidth, baseHeight] = table[kind] || [58, 58];
+  return [baseWidth + sizeBonus, baseHeight + sizeBonus];
+}
+
+function buildEnemy(kind, x, number, index, themeId) {
+  const [width, height] = enemySize(kind, number, index);
+  const flying = ["bat", "fish", "shark", "harpooner"].includes(kind);
+  const deepSea = themeId === "ocean" && ["crab", "shark", "harpooner"].includes(kind);
+  const y = flying ? floorY - (deepSea ? 250 : 150) + (index % 2) * 34 : floorY - height;
+  const hpBonus = kind === "swampBoss" ? 260 : kind === "shark" || kind === "sandGolem" ? 70 : 0;
+  const maxHp = 42 + number * 20 + index * 13 + hpBonus;
+  return {
+    kind,
+    x,
+    y,
+    baseY: y,
+    width,
+    height,
+    vx: 0,
+    facing: -1,
+    maxHp,
+    hp: maxHp,
+    alive: true,
+    hurtFlash: 0,
+    attackTimer: 0,
+    patrolLeft: x - 180,
+    patrolRight: x + 190,
+    phase: index * 18,
+    cagedTimer: 0,
+  };
+}
+
 function buildLevel(number) {
-  const worldWidth = 2200 + number * 520;
-  const enemyCount = 2 + number;
-  const platforms = [
+  const theme = getTheme(number);
+  const worldWidth = 2600 + number * 560;
+  const enemyCount = theme.id === "swamp" ? 4 + number : 3 + number;
+  const platforms = theme.id === "ocean" ? [] : [
     { x: 210, y: 378, width: 150, height: 20 },
     { x: 520, y: 320, width: 160, height: 20 },
     { x: 900, y: 370, width: 160, height: 20 },
@@ -192,109 +217,68 @@ function buildLevel(number) {
     { x: worldWidth - 560, y: 318, width: 180, height: 20 },
   ];
 
-  for (let x = 2050; x < worldWidth - 620; x += 430) {
+  for (let x = 2050; x < worldWidth - 620 && theme.id !== "ocean"; x += 430) {
     platforms.push({ x, y: 318 + ((x / 430) % 2) * 52, width: 170, height: 20 });
   }
 
   const stars = [];
   for (let i = 0; i < 5 + number; i += 1) {
-    stars.push({ x: 260 + i * 360, y: i % 2 === 0 ? 332 : 254, size: 24, collected: false });
+    stars.push({ x: 260 + i * 360, y: theme.id === "ocean" ? 160 + (i % 3) * 72 : i % 2 === 0 ? 332 : 254, size: 24, collected: false });
   }
 
   const enemies = [];
-  const enemyKinds = ["slime", "bat", "guard", "brute"];
+  const enemyKinds = enemyKindsForTheme(theme.id);
   for (let i = 0; i < enemyCount; i += 1) {
-    const kind = enemyKinds[i % enemyKinds.length];
-    const sizeBonus = number * 4 + i * 3;
-    const width = kind === "brute" ? 72 + sizeBonus : 54 + sizeBonus;
-    const height = kind === "bat" ? 42 + sizeBonus : 52 + sizeBonus;
+    const kind = theme.id === "swamp" && i === enemyCount - 1 ? "swampBoss" : enemyKinds[i % enemyKinds.length];
     const x = 620 + i * Math.max(320, (worldWidth - 1000) / enemyCount);
-    enemies.push({
-      kind,
-      x,
-      y: kind === "bat" ? floorY - 170 : floorY - height,
-      baseY: kind === "bat" ? floorY - 170 : floorY - height,
-      width,
-      height,
-      vx: 0,
-      facing: -1,
-      maxHp: 42 + number * 22 + i * 12,
-      hp: 42 + number * 22 + i * 12,
-      alive: true,
-      hurtFlash: 0,
-      attackTimer: 0,
-      patrolLeft: x - 160,
-      patrolRight: x + 160,
-      phase: i * 18,
-      cagedTimer: 0,
-    });
+    enemies.push(buildEnemy(kind, x, number, i, theme.id));
   }
 
-  const river = {
-    x: Math.floor(worldWidth * 0.48),
-    y: floorY - 36,
-    width: 270 + number * 35,
-    height: 78,
-  };
+  const river = theme.id === "ocean"
+    ? { x: 0, y: 74, width: worldWidth, height: floorY + 100 }
+    : { x: Math.floor(worldWidth * 0.48), y: floorY - 36, width: 270 + number * 35, height: 78 };
 
-  enemies.push({
-    kind: "drowned",
-    x: river.x + river.width / 2,
-    y: floorY - 70,
-    baseY: floorY - 70,
-    width: 58 + number * 5,
-    height: 64 + number * 5,
-    vx: 0,
-    facing: -1,
-    maxHp: 58 + number * 24,
-    hp: 58 + number * 24,
-    alive: true,
-    hurtFlash: 0,
-    attackTimer: 0,
-    patrolLeft: river.x + 10,
-    patrolRight: river.x + river.width - 70,
-    phase: 44,
-    cagedTimer: 0,
-  });
+  if (theme.id === "gravel") {
+    enemies.push(buildEnemy("drowned", river.x + river.width / 2, number, enemyCount + 1, theme.id));
+  }
 
   const spikeTraps = [];
-  for (let i = 0; i < 3 + number; i += 1) {
-    spikeTraps.push({
-      x: 760 + i * 430,
-      y: 78,
-      width: 76,
-      height: 38,
-      state: "idle",
-      timer: 0,
-      vy: 0,
-      originalY: 78,
-    });
+  for (let i = 0; i < (theme.id === "ocean" ? 0 : 3 + number); i += 1) {
+    spikeTraps.push({ x: 760 + i * 430, y: 78, width: 76, height: 38, state: "idle", timer: 0, vy: 0, originalY: 78 });
   }
 
   const lavaTraps = [];
-  for (let i = 0; i < 2 + number; i += 1) {
-    lavaTraps.push({
-      x: 1110 + i * 520,
-      y: floorY - 10,
-      width: 132,
-      height: 18,
-      state: "safe",
-      timer: 0,
-      shake: 0,
-    });
+  for (let i = 0; i < (theme.id === "gravel" ? 2 + number : 0); i += 1) {
+    lavaTraps.push({ x: 1110 + i * 520, y: floorY - 10, width: 132, height: 18, state: "safe", timer: 0, shake: 0 });
   }
 
-  const animals = [
+  const quicksandTraps = [];
+  for (let i = 0; i < (theme.id === "desert" ? 3 + Math.floor(number / 2) : 0); i += 1) {
+    quicksandTraps.push({ x: 820 + i * 620, y: floorY - 4, width: 150, height: 20, state: "quiet", timer: 0, shake: 0 });
+  }
+
+  const bogTraps = [];
+  for (let i = 0; i < (theme.id === "swamp" ? 3 + Math.floor(number / 2) : 0); i += 1) {
+    bogTraps.push({ x: 760 + i * 570, y: floorY - 5, width: 164, height: 22, state: "quiet", timer: 0, fog: 0 });
+  }
+
+  const coral = [];
+  for (let i = 0; i < (theme.id === "ocean" ? 10 + number : 0); i += 1) {
+    coral.push({ x: 330 + i * 250, y: floorY - 66 + (i % 3) * 14, color: i % 3 });
+  }
+
+  const animals = theme.id === "gravel" ? [
     { kind: "cow", x: 360, y: floorY - 46, width: 62, height: 46, alive: true, vx: 0.45, left: 300, right: 520, phase: 0 },
     { kind: "chicken", x: 720, y: floorY - 30, width: 34, height: 30, alive: true, vx: 0.55, left: 650, right: 860, phase: 20 },
     { kind: "pig", x: 1500, y: floorY - 38, width: 54, height: 38, alive: true, vx: 0.5, left: 1420, right: 1660, phase: 40 },
     { kind: "cow", x: Math.floor(worldWidth * 0.72), y: floorY - 46, width: 62, height: 46, alive: true, vx: 0.48, left: Math.floor(worldWidth * 0.72) - 90, right: Math.floor(worldWidth * 0.72) + 150, phase: 60 },
-  ];
+  ] : [];
 
   return {
     number,
+    theme,
     worldWidth,
-    reward: 40 + number * 40,
+    reward: 50 + number * 45,
     platforms,
     stars,
     enemies,
@@ -302,11 +286,14 @@ function buildLevel(number) {
     river,
     spikeTraps,
     lavaTraps,
+    quicksandTraps,
+    bogTraps,
+    coral,
     chest: {
       x: worldWidth - 150,
-      y: floorY - 52,
-      width: 62,
-      height: 52,
+      y: floorY - 62,
+      width: theme.id === "desert" ? 96 : theme.id === "swamp" ? 104 : 62,
+      height: theme.id === "desert" ? 72 : theme.id === "swamp" ? 72 : 52,
       opened: false,
       locked: true,
     },
@@ -318,14 +305,16 @@ function showMenu(reason) {
   cancelAnimationFrame(animationFrame);
 
   if (reason === "win") {
+    const nextTheme = getTheme(currentLevel);
     resultLabel.textContent = `第 ${currentLevel - 1} 关胜利！`;
-    menuText.textContent = "奖励到手。下一关地图更长、怪更多、奖励也更丰富。";
+    menuText.textContent = `奖励到手。下一站是${nextTheme.name}，路会一直向前延伸。`;
   } else if (reason === "death") {
     resultLabel.textContent = "挑战失败";
     menuText.textContent = "回商店升级一下，再去试试更聪明的怪物和陷阱。";
   } else {
+    const nextTheme = getTheme(currentLevel);
     resultLabel.textContent = "准备冒险";
-    menuText.textContent = "长地图里有怪物、尖刺、岩浆陷阱和宝箱。小星星每个值 60 金币。";
+    menuText.textContent = `当前世界：${nextTheme.name}。砾石草原、海洋、沙漠、沼泽会不断循环，小星星每个值 60 金币。`;
   }
 
   level = buildLevel(currentLevel);
@@ -384,6 +373,7 @@ function handleInput() {
 
 function isPlayerInRiver() {
   if (!level || !level.river) return false;
+  if (level.theme.id === "ocean") return player.y + player.height > level.river.y;
   return touches(player, level.river);
 }
 
@@ -394,7 +384,10 @@ function movePlayer() {
   player.y += player.vy;
   player.vy += gravity;
   if (isPlayerInRiver()) {
-    player.vy *= 0.72;
+    player.vy *= level.theme.id === "ocean" ? 0.64 : 0.72;
+    if (level.theme.id === "ocean" && !diverSkinOwned) {
+      player.vx *= 0.72;
+    }
   }
   player.onGround = false;
 
@@ -432,12 +425,17 @@ function moveEnemies() {
     const inSight = absDistance < 430;
     enemy.facing = distance > 0 ? 1 : -1;
 
-    if (enemy.kind === "bat" || enemy.kind === "drowned") {
-      enemy.y = enemy.baseY + Math.sin((Date.now() / 160 + enemy.phase) % 80) * 22;
+    if (["bat", "drowned", "fish", "shark", "harpooner", "swampWitch"].includes(enemy.kind)) {
+      enemy.y = enemy.baseY + Math.sin((Date.now() / 160 + enemy.phase) % 80) * (enemy.kind === "shark" ? 16 : 22);
     }
 
     if (inSight && absDistance > 82) {
-      enemy.x += Math.sign(distance) * (enemy.kind === "brute" ? 1.45 : 2.05);
+      const speed =
+        enemy.kind === "brute" || enemy.kind === "sandGolem" || enemy.kind === "swampBoss" ? 1.35 :
+        enemy.kind === "shark" || enemy.kind === "fish" ? 2.55 :
+        enemy.kind === "crab" || enemy.kind === "scorpion" ? 1.8 :
+        2.05;
+      enemy.x += Math.sign(distance) * speed;
     } else if (!inSight) {
       enemy.x += Math.sin((Date.now() / 550 + enemy.phase) % 20) * 0.85;
     }
@@ -445,8 +443,8 @@ function moveEnemies() {
     enemy.x = Math.max(enemy.patrolLeft, Math.min(enemy.patrolRight, enemy.x));
 
     if (absDistance >= 48 && absDistance <= 110 && Math.abs(player.y - enemy.y) < 96 && enemy.attackTimer === 0) {
-      enemy.attackTimer = enemy.kind === "brute" ? 92 : 70;
-      hurtPlayer(enemy.kind === "brute" ? 2 : 1);
+      enemy.attackTimer = enemy.kind === "brute" || enemy.kind === "swampBoss" ? 92 : 70;
+      hurtPlayer(enemy.kind === "brute" || enemy.kind === "swampBoss" || enemy.kind === "shark" ? 2 : 1);
       effects.push({ x: enemy.x, y: enemy.y + 8, width: enemy.width, height: enemy.height, life: 12, kind: "claw" });
     }
   }
@@ -511,6 +509,61 @@ function moveTraps() {
       if (trap.timer <= 0) {
         trap.state = "safe";
       }
+    }
+  }
+
+  for (const trap of level.quicksandTraps) {
+    const onTrap = player.x + player.width > trap.x && player.x < trap.x + trap.width && player.y + player.height >= floorY - 8;
+    if (trap.state === "quiet" && onTrap) {
+      trap.state = "sinking";
+      trap.timer = 180;
+    } else if (trap.state === "sinking") {
+      trap.shake = trap.timer % 14 < 7 ? -3 : 3;
+      if (onTrap) {
+        trap.timer -= 1;
+        player.vx *= 0.35;
+        player.y += 0.45;
+        if (trap.timer <= 0) {
+          trap.state = "swallowed";
+          trap.timer = 140;
+          hurtPlayer(2);
+        }
+      } else {
+        trap.state = "quiet";
+        trap.timer = 0;
+        trap.shake = 0;
+      }
+    } else if (trap.state === "swallowed") {
+      trap.timer -= 1;
+      if (trap.timer <= 0) trap.state = "quiet";
+    }
+  }
+
+  for (const trap of level.bogTraps) {
+    const onTrap = player.x + player.width > trap.x && player.x < trap.x + trap.width && player.y + player.height >= floorY - 8;
+    if (trap.state === "quiet" && onTrap) {
+      trap.state = "blinding";
+      trap.timer = 180;
+      trap.fog = 0;
+    } else if (trap.state === "blinding") {
+      trap.fog = Math.min(1, trap.fog + 0.01);
+      if (onTrap) {
+        trap.timer -= 1;
+        player.vx *= 0.42;
+        if (trap.timer <= 0) {
+          trap.state = "swallowed";
+          trap.timer = 140;
+          hurtPlayer(2);
+        }
+      } else {
+        trap.state = "quiet";
+        trap.timer = 0;
+        trap.fog = 0;
+      }
+    } else if (trap.state === "swallowed") {
+      trap.timer -= 1;
+      trap.fog = Math.max(0, trap.fog - 0.015);
+      if (trap.timer <= 0) trap.state = "quiet";
     }
   }
 }
@@ -727,6 +780,9 @@ function damageEnemy(enemy, damage) {
 
   if (enemy.hp === 0) {
     enemy.alive = false;
+    if (monsterXp[enemy.kind]) {
+      addExperience(monsterXp[enemy.kind], enemy.x, enemy.y);
+    }
     effects.push({ x: enemy.x, y: enemy.y, width: enemy.width, height: enemy.height, life: 24, kind: "poof" });
     if (level.enemies.every((monster) => !monster.alive)) {
       level.chest.locked = false;
@@ -803,6 +859,14 @@ function checkDangerHits() {
       hurtPlayer(1);
     }
   }
+
+  for (const trap of level.quicksandTraps) {
+    if (trap.state === "swallowed" && touches(player, trap)) hurtPlayer(1);
+  }
+
+  for (const trap of level.bogTraps) {
+    if (trap.state === "swallowed" && touches(player, trap)) hurtPlayer(1);
+  }
 }
 
 function hurtPlayer(amount) {
@@ -825,7 +889,11 @@ function renderShop() {
 
   for (const item of shopGoods) {
     const button = document.createElement("button");
-    const owned = item.type === "horse" ? hasHorse : item.type === "item" && item.item === "speedPotion" ? speedPotionOwned : item.type === "weapon" && item.index <= weaponLevel;
+    const owned =
+      item.type === "horse" ? hasHorse :
+      item.type === "skin" && item.item === "diverSkin" ? diverSkinOwned :
+      item.type === "item" && item.item === "speedPotion" ? speedPotionOwned :
+      item.type === "weapon" && item.index <= weaponLevel;
     const lockedByOrder = item.type === "weapon" && item.index !== weaponLevel + 1 && !owned;
     button.type = "button";
     button.className = owned ? "shop-item is-owned" : "shop-item";
@@ -887,13 +955,19 @@ function sellTreasure(key, value) {
 }
 
 function buyItem(item) {
-  const owned = item.type === "horse" ? hasHorse : item.type === "item" && item.item === "speedPotion" ? speedPotionOwned : item.type === "weapon" && item.index <= weaponLevel;
+  const owned =
+    item.type === "horse" ? hasHorse :
+    item.type === "skin" && item.item === "diverSkin" ? diverSkinOwned :
+    item.type === "item" && item.item === "speedPotion" ? speedPotionOwned :
+    item.type === "weapon" && item.index <= weaponLevel;
   if (owned || coins < item.cost) return;
   if (item.type === "weapon" && item.index !== weaponLevel + 1) return;
 
   coins -= item.cost;
   if (item.type === "horse") {
     hasHorse = true;
+  } else if (item.type === "skin" && item.item === "diverSkin") {
+    diverSkinOwned = true;
   } else if (item.type === "item" && item.item === "speedPotion") {
     speedPotionOwned = true;
   } else if (item.type === "item") {
@@ -937,6 +1011,9 @@ function updateCamera() {
 function updateHud() {
   const remainingMonsters = level ? level.enemies.filter((enemy) => enemy.alive).length : 0;
   levelNumberElement.textContent = currentLevel;
+  if (themeNameElement) {
+    themeNameElement.textContent = level ? level.theme.name : getTheme(currentLevel).name;
+  }
   playCountElement.textContent = playCount;
   coinsElement.textContent = coins;
   heroLevelElement.textContent = heroLevel;
@@ -1011,17 +1088,27 @@ function drawWorld() {
   drawSky();
   drawGround();
   drawRiver();
+  drawThemeDecor();
   drawPlatforms();
   ctx.restore();
 }
 
 function drawSky() {
-  ctx.fillStyle = "#6dcff6";
+  const themeId = level.theme.id;
+  ctx.fillStyle =
+    themeId === "ocean" ? "#2387c8" :
+    themeId === "desert" ? "#f2b866" :
+    themeId === "swamp" ? "#7c8a67" :
+    "#6dcff6";
   ctx.fillRect(cameraX, 0, canvas.width, canvas.height);
-  ctx.fillStyle = "#4db4e6";
+  ctx.fillStyle =
+    themeId === "ocean" ? "#126aa6" :
+    themeId === "desert" ? "#d89047" :
+    themeId === "swamp" ? "#536247" :
+    "#4db4e6";
   ctx.fillRect(cameraX, 284, canvas.width, 170);
 
-  for (let x = 80; x < level.worldWidth; x += 470) {
+  for (let x = 80; x < level.worldWidth && themeId !== "ocean"; x += 470) {
     drawBlockCloud(x, 78 + (x % 3) * 18, x % 2 === 0 ? 3 : 4);
   }
 
@@ -1040,11 +1127,24 @@ function drawBlockCloud(x, y, scale) {
 }
 
 function drawGround() {
-  ctx.fillStyle = "#42c96d";
+  const themeId = level.theme.id;
+  ctx.fillStyle =
+    themeId === "ocean" ? "#135b87" :
+    themeId === "desert" ? "#e4b757" :
+    themeId === "swamp" ? "#48613e" :
+    "#42c96d";
   ctx.fillRect(0, floorY, level.worldWidth, canvas.height - floorY);
-  ctx.fillStyle = "#2aa654";
+  ctx.fillStyle =
+    themeId === "ocean" ? "#0d4161" :
+    themeId === "desert" ? "#b98a38" :
+    themeId === "swamp" ? "#2f442d" :
+    "#2aa654";
   ctx.fillRect(0, floorY, level.worldWidth, 16);
-  ctx.fillStyle = "#7d4a2b";
+  ctx.fillStyle =
+    themeId === "ocean" ? "#0a324a" :
+    themeId === "desert" ? "#8f6631" :
+    themeId === "swamp" ? "#203022" :
+    "#7d4a2b";
   ctx.fillRect(0, floorY + 42, level.worldWidth, canvas.height - floorY - 42);
 
   for (let x = 0; x < level.worldWidth; x += 32) {
@@ -1055,18 +1155,19 @@ function drawGround() {
 
 function drawPlatforms() {
   for (const platform of level.platforms) {
-    ctx.fillStyle = "#6a3d24";
+    const themeId = level.theme.id;
+    ctx.fillStyle = themeId === "desert" ? "#8f6631" : themeId === "swamp" ? "#3b3024" : "#6a3d24";
     ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
-    ctx.fillStyle = "#45d06f";
+    ctx.fillStyle = themeId === "desert" ? "#f0cc72" : themeId === "swamp" ? "#5d7e45" : "#45d06f";
     ctx.fillRect(platform.x, platform.y - 12, platform.width, 14);
-    ctx.fillStyle = "#2b9a54";
+    ctx.fillStyle = themeId === "desert" ? "#c99b44" : themeId === "swamp" ? "#324c33" : "#2b9a54";
     ctx.fillRect(platform.x, platform.y, platform.width, 5);
   }
 }
 
 function drawRiver() {
   const river = level.river;
-  ctx.fillStyle = "#1d8fd8";
+  ctx.fillStyle = level.theme.id === "ocean" ? "#1a8ed0" : "#1d8fd8";
   ctx.fillRect(river.x, river.y, river.width, river.height);
   ctx.fillStyle = "#65d7ff";
   for (let x = river.x + 12; x < river.x + river.width; x += 46) {
@@ -1075,6 +1176,40 @@ function drawRiver() {
   }
   ctx.fillStyle = "#0f5f9f";
   ctx.fillRect(river.x, river.y + river.height - 12, river.width, 12);
+}
+
+function drawThemeDecor() {
+  if (level.theme.id === "ocean") {
+    for (const reef of level.coral) {
+      const colors = ["#ff6b8a", "#ffd34d", "#7fffd4"];
+      ctx.fillStyle = colors[reef.color];
+      ctx.fillRect(reef.x, reef.y, 12, 46);
+      ctx.fillRect(reef.x - 10, reef.y + 14, 22, 10);
+      ctx.fillRect(reef.x + 8, reef.y + 24, 18, 10);
+      ctx.fillStyle = "#2f6b3f";
+      ctx.fillRect(reef.x - 22, floorY - 18, 18, 18);
+    }
+  }
+
+  if (level.theme.id === "desert") {
+    for (let x = 120; x < level.worldWidth; x += 520) {
+      ctx.fillStyle = "#d39a45";
+      ctx.fillRect(x, floorY - 34, 76, 10);
+      ctx.fillRect(x + 10, floorY - 48, 42, 14);
+      ctx.fillStyle = "#b98235";
+      ctx.fillRect(x + 52, floorY - 44, 28, 10);
+    }
+  }
+
+  if (level.theme.id === "swamp") {
+    for (let x = 160; x < level.worldWidth; x += 420) {
+      ctx.fillStyle = "#1f3d2b";
+      ctx.fillRect(x, floorY - 76, 18, 76);
+      ctx.fillStyle = "#385b35";
+      ctx.fillRect(x - 22, floorY - 90, 62, 22);
+      ctx.fillRect(x + 6, floorY - 116, 48, 22);
+    }
+  }
 }
 
 function drawStars() {
@@ -1115,6 +1250,32 @@ function drawTraps() {
     ctx.fillStyle = trap.state === "lava" ? "#ffd34d" : "#45d06f";
     ctx.fillRect(x, trap.y - 8, trap.width, 8);
   }
+
+  for (const trap of level.quicksandTraps) {
+    const x = trap.x + trap.shake;
+    ctx.fillStyle = trap.state === "swallowed" ? "#8f6631" : trap.state === "sinking" ? "#d6a94d" : "#e8c86b";
+    ctx.fillRect(x, trap.y, trap.width, trap.height);
+    ctx.fillStyle = "#f4dc8a";
+    for (let dot = x + 10; dot < x + trap.width; dot += 24) {
+      ctx.fillRect(dot, trap.y + (trap.state === "sinking" ? 4 : 8), 12, 4);
+    }
+    if (trap.state === "sinking") {
+      ctx.fillStyle = "#c08d3d";
+      ctx.fillRect(x + trap.width / 2 - 28, trap.y - 10, 56, 12);
+    }
+  }
+
+  for (const trap of level.bogTraps) {
+    ctx.fillStyle = trap.state === "swallowed" ? "#142319" : trap.state === "blinding" ? "#31462f" : "#496b35";
+    ctx.fillRect(trap.x, trap.y, trap.width, trap.height);
+    ctx.fillStyle = "#89b35c";
+    ctx.fillRect(trap.x + 12, trap.y - 8, 38, 8);
+    ctx.fillRect(trap.x + 88, trap.y - 6, 48, 7);
+    if (trap.state === "blinding") {
+      ctx.fillStyle = `rgba(70, 90, 62, ${Math.min(0.65, trap.fog)})`;
+      ctx.fillRect(trap.x - 60, 150, trap.width + 120, 260);
+    }
+  }
   ctx.restore();
 }
 
@@ -1122,6 +1283,34 @@ function drawChest() {
   const chest = level.chest;
   ctx.save();
   ctx.translate(-cameraX, 0);
+  if (level.theme.id === "desert") {
+    ctx.fillStyle = "#d4a24a";
+    ctx.beginPath();
+    ctx.moveTo(chest.x - 12, chest.y + chest.height);
+    ctx.lineTo(chest.x + chest.width / 2, chest.y);
+    ctx.lineTo(chest.x + chest.width + 12, chest.y + chest.height);
+    ctx.fill();
+    ctx.fillStyle = "#8f6631";
+    ctx.fillRect(chest.x + 38, chest.y + 42, 22, 30);
+    ctx.fillStyle = chest.locked ? "#7d4a2b" : "#ffd34d";
+    ctx.fillRect(chest.x + 16, chest.y + 52, 66, 8);
+    drawTinyText(chest.locked ? `剩 ${level.enemies.filter((enemy) => enemy.alive).length} 只怪` : "进入金字塔", chest.x - 8, chest.y - 13, chest.locked ? "#211b2c" : "#ffd34d");
+    ctx.restore();
+    return;
+  }
+
+  if (level.theme.id === "swamp") {
+    ctx.fillStyle = chest.locked ? "#243225" : "#7fffd4";
+    ctx.fillRect(chest.x + 24, chest.y + 8, 56, 64);
+    ctx.fillStyle = chest.locked ? "#4a5d3d" : "#c8fff3";
+    ctx.fillRect(chest.x + 34, chest.y + 18, 36, 44);
+    ctx.fillStyle = "#162018";
+    ctx.fillRect(chest.x + 12, chest.y + 68, 82, 10);
+    drawTinyText(chest.locked ? `BOSS 剩 ${level.enemies.filter((enemy) => enemy.alive).length}` : "沼泽出口", chest.x - 2, chest.y - 13, chest.locked ? "#211b2c" : "#7fffd4");
+    ctx.restore();
+    return;
+  }
+
   ctx.fillStyle = chest.opened ? "#8e5a32" : "#d9903d";
   ctx.fillRect(chest.x, chest.y + (chest.opened ? 12 : 0), chest.width, chest.height - (chest.opened ? 12 : 0));
   ctx.fillStyle = "#5d351d";
@@ -1152,6 +1341,18 @@ function drawEnemies() {
     if (enemy.kind === "guard") drawGuard(enemy);
     if (enemy.kind === "brute") drawBrute(enemy);
     if (enemy.kind === "drowned") drawDrowned(enemy);
+    if (enemy.kind === "fish") drawFish(enemy);
+    if (enemy.kind === "crab") drawCrab(enemy);
+    if (enemy.kind === "shark") drawShark(enemy);
+    if (enemy.kind === "harpooner") drawHarpooner(enemy);
+    if (enemy.kind === "mummy") drawMummy(enemy);
+    if (enemy.kind === "scorpion") drawScorpion(enemy);
+    if (enemy.kind === "sandGolem") drawSandGolem(enemy);
+    if (enemy.kind === "scarab") drawScarab(enemy);
+    if (enemy.kind === "swampFrog") drawSwampFrog(enemy);
+    if (enemy.kind === "swampWitch") drawSwampWitch(enemy);
+    if (enemy.kind === "mudBeast") drawMudBeast(enemy);
+    if (enemy.kind === "swampBoss") drawSwampBoss(enemy);
     if (enemy.cagedTimer > 0) drawCage(enemy);
     drawEnemyHealthBar(enemy);
   }
@@ -1273,6 +1474,170 @@ function drawDrowned(enemy) {
   ctx.fillRect(enemy.x + enemy.width - 2, enemy.y + 28, 12, 30);
 }
 
+function enemyFill(enemy, color) {
+  return enemy.hurtFlash > 0 ? "#ffffff" : color;
+}
+
+function drawFish(enemy) {
+  ctx.fillStyle = enemyFill(enemy, "#ff9f43");
+  ctx.fillRect(enemy.x + 12, enemy.y + 8, enemy.width - 22, enemy.height - 14);
+  ctx.fillRect(enemy.x + enemy.width - 16, enemy.y + 14, 18, 10);
+  ctx.fillStyle = "#ffd34d";
+  ctx.fillRect(enemy.x + 18, enemy.y + 3, 28, 8);
+  ctx.fillStyle = "#211b2c";
+  ctx.fillRect(enemy.x + 22, enemy.y + 16, 5, 5);
+  ctx.fillStyle = "#f36b3d";
+  ctx.fillRect(enemy.x - 2, enemy.y + 12, 16, 16);
+}
+
+function drawCrab(enemy) {
+  ctx.fillStyle = enemyFill(enemy, "#e84c5f");
+  ctx.fillRect(enemy.x + 12, enemy.y + 12, enemy.width - 24, enemy.height - 12);
+  ctx.fillStyle = "#ff8a76";
+  ctx.fillRect(enemy.x + 8, enemy.y + 4, 16, 14);
+  ctx.fillRect(enemy.x + enemy.width - 24, enemy.y + 4, 16, 14);
+  ctx.fillStyle = "#211b2c";
+  ctx.fillRect(enemy.x + 22, enemy.y + 18, 5, 5);
+  ctx.fillRect(enemy.x + enemy.width - 28, enemy.y + 18, 5, 5);
+  ctx.fillStyle = "#8e2440";
+  for (let leg = 0; leg < 3; leg += 1) {
+    ctx.fillRect(enemy.x + 8 + leg * 16, enemy.y + enemy.height - 4, 10, 8);
+    ctx.fillRect(enemy.x + enemy.width - 18 - leg * 16, enemy.y + enemy.height - 4, 10, 8);
+  }
+}
+
+function drawShark(enemy) {
+  ctx.fillStyle = enemyFill(enemy, "#6d8291");
+  ctx.fillRect(enemy.x + 12, enemy.y + 14, enemy.width - 24, enemy.height - 18);
+  ctx.fillRect(enemy.x + enemy.width - 24, enemy.y + 22, 26, 14);
+  ctx.fillStyle = "#465966";
+  ctx.fillRect(enemy.x + 38, enemy.y + 2, 28, 16);
+  ctx.fillStyle = "#f4f1df";
+  ctx.fillRect(enemy.x + 18, enemy.y + enemy.height - 12, enemy.width - 50, 9);
+  ctx.fillStyle = "#211b2c";
+  ctx.fillRect(enemy.x + 26, enemy.y + 24, 6, 6);
+  ctx.fillStyle = "#ffffff";
+  for (let tooth = 0; tooth < 5; tooth += 1) {
+    ctx.fillRect(enemy.x + 48 + tooth * 8, enemy.y + enemy.height - 12, 4, 6);
+  }
+}
+
+function drawHarpooner(enemy) {
+  ctx.fillStyle = enemyFill(enemy, "#16877b");
+  ctx.fillRect(enemy.x + 12, enemy.y + 18, enemy.width - 24, enemy.height - 18);
+  ctx.fillStyle = "#65d7ff";
+  ctx.fillRect(enemy.x + 18, enemy.y + 4, enemy.width - 36, 22);
+  ctx.fillStyle = "#211b2c";
+  ctx.fillRect(enemy.x + 24, enemy.y + 12, 6, 6);
+  ctx.fillRect(enemy.x + enemy.width - 30, enemy.y + 12, 6, 6);
+  ctx.fillStyle = "#8f95a3";
+  ctx.fillRect(enemy.x - 16, enemy.y + 28, enemy.width + 32, 5);
+  ctx.fillStyle = "#d9dde5";
+  ctx.fillRect(enemy.x + enemy.width + 8, enemy.y + 23, 12, 15);
+}
+
+function drawMummy(enemy) {
+  ctx.fillStyle = enemyFill(enemy, "#d8c7a1");
+  ctx.fillRect(enemy.x + 10, enemy.y + 8, enemy.width - 20, enemy.height - 8);
+  ctx.fillStyle = "#f1e2bd";
+  for (let band = enemy.y + 12; band < enemy.y + enemy.height; band += 14) {
+    ctx.fillRect(enemy.x + 8, band, enemy.width - 16, 5);
+  }
+  ctx.fillStyle = "#211b2c";
+  ctx.fillRect(enemy.x + 22, enemy.y + 28, 7, 7);
+  ctx.fillRect(enemy.x + enemy.width - 30, enemy.y + 28, 7, 7);
+}
+
+function drawScorpion(enemy) {
+  ctx.fillStyle = enemyFill(enemy, "#6a3d24");
+  ctx.fillRect(enemy.x + 18, enemy.y + 12, enemy.width - 36, enemy.height - 12);
+  ctx.fillRect(enemy.x + enemy.width - 26, enemy.y - 10, 16, 28);
+  ctx.fillStyle = "#d9903d";
+  ctx.fillRect(enemy.x + 8, enemy.y + 6, 18, 12);
+  ctx.fillRect(enemy.x + enemy.width - 22, enemy.y + 6, 18, 12);
+  for (let leg = 0; leg < 4; leg += 1) {
+    ctx.fillRect(enemy.x + 10 + leg * 14, enemy.y + enemy.height - 4, 10, 8);
+  }
+}
+
+function drawSandGolem(enemy) {
+  ctx.fillStyle = enemyFill(enemy, "#b98235");
+  ctx.fillRect(enemy.x + 10, enemy.y + 18, enemy.width - 20, enemy.height - 18);
+  ctx.fillStyle = "#e4b757";
+  ctx.fillRect(enemy.x + 20, enemy.y, enemy.width - 40, 28);
+  ctx.fillRect(enemy.x - 6, enemy.y + 34, 20, 28);
+  ctx.fillRect(enemy.x + enemy.width - 14, enemy.y + 34, 20, 28);
+  ctx.fillStyle = "#211b2c";
+  ctx.fillRect(enemy.x + 30, enemy.y + 12, 8, 8);
+  ctx.fillRect(enemy.x + enemy.width - 38, enemy.y + 12, 8, 8);
+}
+
+function drawScarab(enemy) {
+  ctx.fillStyle = enemyFill(enemy, "#17445f");
+  ctx.fillRect(enemy.x + 10, enemy.y + 8, enemy.width - 20, enemy.height - 8);
+  ctx.fillStyle = "#31c6d4";
+  ctx.fillRect(enemy.x + 18, enemy.y + 12, enemy.width - 36, 8);
+  ctx.fillStyle = "#211b2c";
+  ctx.fillRect(enemy.x + 18, enemy.y + 24, 5, 5);
+  ctx.fillRect(enemy.x + enemy.width - 24, enemy.y + 24, 5, 5);
+}
+
+function drawSwampFrog(enemy) {
+  ctx.fillStyle = enemyFill(enemy, "#62a64f");
+  ctx.fillRect(enemy.x + 8, enemy.y + 16, enemy.width - 16, enemy.height - 16);
+  ctx.fillStyle = "#b2e36f";
+  ctx.fillRect(enemy.x + 14, enemy.y + 4, 18, 18);
+  ctx.fillRect(enemy.x + enemy.width - 32, enemy.y + 4, 18, 18);
+  ctx.fillStyle = "#211b2c";
+  ctx.fillRect(enemy.x + 20, enemy.y + 10, 6, 6);
+  ctx.fillRect(enemy.x + enemy.width - 26, enemy.y + 10, 6, 6);
+  ctx.fillStyle = "#d94f66";
+  ctx.fillRect(enemy.x + 28, enemy.y + enemy.height - 16, enemy.width - 56, 6);
+}
+
+function drawSwampWitch(enemy) {
+  ctx.fillStyle = enemyFill(enemy, "#5a3a82");
+  ctx.fillRect(enemy.x + 12, enemy.y + 24, enemy.width - 24, enemy.height - 24);
+  ctx.fillStyle = "#243225";
+  ctx.beginPath();
+  ctx.moveTo(enemy.x + 8, enemy.y + 26);
+  ctx.lineTo(enemy.x + enemy.width / 2, enemy.y - 14);
+  ctx.lineTo(enemy.x + enemy.width - 8, enemy.y + 26);
+  ctx.fill();
+  ctx.fillStyle = "#7fffd4";
+  ctx.fillRect(enemy.x + 24, enemy.y + 34, 6, 6);
+  ctx.fillRect(enemy.x + enemy.width - 30, enemy.y + 34, 6, 6);
+  ctx.fillStyle = "#8f95a3";
+  ctx.fillRect(enemy.x - 12, enemy.y + 54, enemy.width + 24, 5);
+}
+
+function drawMudBeast(enemy) {
+  ctx.fillStyle = enemyFill(enemy, "#5b4a32");
+  ctx.fillRect(enemy.x + 8, enemy.y + 18, enemy.width - 16, enemy.height - 18);
+  ctx.fillStyle = "#35562f";
+  ctx.fillRect(enemy.x + 20, enemy.y + 4, enemy.width - 40, 18);
+  ctx.fillStyle = "#b2e36f";
+  ctx.fillRect(enemy.x + 26, enemy.y + 30, 8, 8);
+  ctx.fillRect(enemy.x + enemy.width - 34, enemy.y + 30, 8, 8);
+  ctx.fillStyle = "#243225";
+  ctx.fillRect(enemy.x + 28, enemy.y + enemy.height - 20, enemy.width - 56, 9);
+}
+
+function drawSwampBoss(enemy) {
+  ctx.fillStyle = enemyFill(enemy, "#2f442d");
+  ctx.fillRect(enemy.x + 12, enemy.y + 28, enemy.width - 24, enemy.height - 28);
+  ctx.fillStyle = "#496b35";
+  ctx.fillRect(enemy.x + 24, enemy.y + 6, enemy.width - 48, 36);
+  ctx.fillStyle = "#8b5cf6";
+  ctx.fillRect(enemy.x + 34, enemy.y + 22, 14, 14);
+  ctx.fillRect(enemy.x + enemy.width - 48, enemy.y + 22, 14, 14);
+  ctx.fillStyle = "#7fffd4";
+  ctx.fillRect(enemy.x - 12, enemy.y + 54, 24, 42);
+  ctx.fillRect(enemy.x + enemy.width - 12, enemy.y + 54, 24, 42);
+  ctx.fillStyle = "#162018";
+  ctx.fillRect(enemy.x + 46, enemy.y + enemy.height - 30, enemy.width - 92, 12);
+}
+
 function drawCage(enemy) {
   ctx.strokeStyle = "#fff29a";
   ctx.lineWidth = 4;
@@ -1323,6 +1688,28 @@ function drawPlayer() {
   ctx.translate(-cameraX, 0);
   const x = player.x;
   const y = player.y;
+
+  if (level && level.theme.id === "ocean" && diverSkinOwned) {
+    ctx.fillStyle = "#ffd08a";
+    ctx.fillRect(x + 14, y + 8, 28, 24);
+    ctx.fillStyle = "#1b3958";
+    ctx.fillRect(x + 8, y + 28, 40, 36);
+    ctx.fillStyle = "#65d7ff";
+    ctx.fillRect(x + 16, y + 12, 20, 10);
+    ctx.fillStyle = "#211b2c";
+    ctx.fillRect(x + 18, y + 14, 16, 5);
+    ctx.fillStyle = "#f0c24d";
+    ctx.fillRect(x + 5, y + 34, 7, 30);
+    ctx.fillRect(x + 44, y + 34, 7, 30);
+    ctx.fillStyle = "#0e2236";
+    ctx.fillRect(x + 7, y + 62, 16, 10);
+    ctx.fillRect(x + 31, y + 62, 16, 10);
+    ctx.fillStyle = "#8f95a3";
+    ctx.fillRect(x + 39, y + 8, 6, 26);
+    drawWeapon(y);
+    ctx.restore();
+    return;
+  }
 
   if (hasHorse) {
     ctx.fillStyle = "#8b5a36";
