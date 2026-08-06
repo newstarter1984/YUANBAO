@@ -42,7 +42,8 @@ const worldThemes = [
   { id: "gravel", name: "砾石草原", next: "海洋" },
   { id: "ocean", name: "海洋", next: "沙漠" },
   { id: "desert", name: "沙漠", next: "沼泽" },
-  { id: "swamp", name: "沼泽", next: "砾石草原" },
+  { id: "swamp", name: "沼泽", next: "岩浆世界" },
+  { id: "lava", name: "岩浆世界", next: "砾石草原" },
 ];
 
 const monsterXp = {
@@ -150,7 +151,8 @@ function getTheme(number) {
 function enemyKindsForTheme(themeId) {
   if (themeId === "ocean") return ["fish", "crab", "fish", "shark", "harpooner"];
   if (themeId === "desert") return ["mummy", "scorpion", "sandGolem", "scarab"];
-  if (themeId === "swamp") return ["swampFrog", "swampWitch", "mudBeast", "swampBoss"];
+  if (themeId === "swamp") return ["swampFrog", "swampWitch", "mudBeast"];
+  if (themeId === "lava") return ["lavaMage", "lavaKnight", "lavaBlade", "lavaSoldier", "lavaBeast", "lavaSlime"];
   return ["slime", "bat", "guard", "brute"];
 }
 
@@ -170,7 +172,14 @@ function enemySize(kind, number, index) {
     swampFrog: [70, 48],
     swampWitch: [66, 76],
     mudBeast: [86, 70],
-    swampBoss: [142, 126],
+    lavaMage: [66, 76],
+    lavaKnight: [72, 82],
+    lavaBlade: [70, 72],
+    lavaSoldier: [64, 70],
+    lavaBeast: [90, 76],
+    lavaSlime: [66, 44],
+    lavaAxeGuard: [86, 86],
+    lavaBoss: [156, 138],
   };
   const [baseWidth, baseHeight] = table[kind] || [58, 58];
   return [baseWidth + sizeBonus, baseHeight + sizeBonus];
@@ -181,8 +190,12 @@ function buildEnemy(kind, x, number, index, themeId) {
   const flying = ["bat", "fish", "shark", "harpooner"].includes(kind);
   const deepSea = themeId === "ocean" && ["crab", "shark", "harpooner"].includes(kind);
   const y = flying ? floorY - (deepSea ? 250 : 150) + (index % 2) * 34 : floorY - height;
-  const hpBonus = kind === "swampBoss" ? 260 : kind === "shark" || kind === "sandGolem" ? 70 : 0;
-  const maxHp = 42 + number * 20 + index * 13 + hpBonus;
+  const hpBonus =
+    kind === "lavaBoss" ? 0 :
+    kind === "shark" || kind === "sandGolem" || kind === "lavaAxeGuard" ? 70 :
+    kind.startsWith("lava") ? 44 :
+    0;
+  const maxHp = kind === "lavaBoss" ? getBossHp() : 42 + number * 20 + index * 13 + hpBonus;
   return {
     kind,
     x,
@@ -201,13 +214,21 @@ function buildEnemy(kind, x, number, index, themeId) {
     patrolRight: x + 190,
     phase: index * 18,
     cagedTimer: 0,
+    bossMode: kind === "lavaBoss" ? "armor" : "",
+    bossTimer: kind === "lavaBoss" ? 120 : 0,
+    summonTimer: kind === "lavaBoss" ? 210 : 0,
   };
+}
+
+function getBossHp() {
+  const weapon = weapons[weaponLevel] || weapons[0];
+  return getAttackDamage(weapon.damage) * 60;
 }
 
 function buildLevel(number) {
   const theme = getTheme(number);
   const worldWidth = 2600 + number * 560;
-  const enemyCount = theme.id === "swamp" ? 4 + number : 3 + number;
+  const enemyCount = theme.id === "lava" ? 6 + number : theme.id === "swamp" ? 4 + number : 3 + number;
   const platforms = theme.id === "ocean" ? [] : [
     { x: 210, y: 378, width: 150, height: 20 },
     { x: 520, y: 320, width: 160, height: 20 },
@@ -221,6 +242,19 @@ function buildLevel(number) {
     platforms.push({ x, y: 318 + ((x / 430) % 2) * 52, width: 170, height: 20 });
   }
 
+  if (theme.id === "lava") {
+    platforms.length = 0;
+    for (let x = 160; x < worldWidth - 280; x += 250) {
+      platforms.push({
+        x,
+        y: 342 + ((x / 250) % 3) * 34,
+        width: x % 500 === 0 ? 190 : 150,
+        height: 20,
+      });
+    }
+    platforms.push({ x: worldWidth - 520, y: 306, width: 220, height: 20 });
+  }
+
   const stars = [];
   for (let i = 0; i < 5 + number; i += 1) {
     stars.push({ x: 260 + i * 360, y: theme.id === "ocean" ? 160 + (i % 3) * 72 : i % 2 === 0 ? 332 : 254, size: 24, collected: false });
@@ -229,9 +263,18 @@ function buildLevel(number) {
   const enemies = [];
   const enemyKinds = enemyKindsForTheme(theme.id);
   for (let i = 0; i < enemyCount; i += 1) {
-    const kind = theme.id === "swamp" && i === enemyCount - 1 ? "swampBoss" : enemyKinds[i % enemyKinds.length];
+    const kind = enemyKinds[i % enemyKinds.length];
     const x = 620 + i * Math.max(320, (worldWidth - 1000) / enemyCount);
     enemies.push(buildEnemy(kind, x, number, i, theme.id));
+  }
+
+  if (theme.id === "lava") {
+    const boss = buildEnemy("lavaBoss", worldWidth - 620, number, enemyCount + 2, theme.id);
+    boss.patrolLeft = worldWidth - 980;
+    boss.patrolRight = worldWidth - 230;
+    boss.y = floorY - boss.height;
+    boss.baseY = boss.y;
+    enemies.push(boss);
   }
 
   const river = theme.id === "ocean"
@@ -249,7 +292,10 @@ function buildLevel(number) {
 
   const lavaTraps = [];
   for (let i = 0; i < (theme.id === "gravel" ? 2 + number : 0); i += 1) {
-    lavaTraps.push({ x: 1110 + i * 520, y: floorY - 10, width: 132, height: 18, state: "safe", timer: 0, shake: 0 });
+    lavaTraps.push({ x: 1110 + i * 520, y: floorY - 10, width: 132, height: 18, state: "safe", timer: 0, shake: 0, permanent: false });
+  }
+  for (let i = 0; i < (theme.id === "lava" ? 8 + number : 0); i += 1) {
+    lavaTraps.push({ x: 390 + i * 360, y: floorY - 6, width: 210, height: 30, state: "lava", timer: 999999, shake: 0, permanent: true });
   }
 
   const quicksandTraps = [];
@@ -292,8 +338,8 @@ function buildLevel(number) {
     chest: {
       x: worldWidth - 150,
       y: floorY - 62,
-      width: theme.id === "desert" ? 96 : theme.id === "swamp" ? 104 : 62,
-      height: theme.id === "desert" ? 72 : theme.id === "swamp" ? 72 : 52,
+      width: theme.id === "desert" ? 96 : theme.id === "swamp" ? 104 : theme.id === "lava" ? 118 : 62,
+      height: theme.id === "desert" ? 72 : theme.id === "swamp" ? 72 : theme.id === "lava" ? 84 : 52,
       opened: false,
       locked: true,
     },
@@ -421,18 +467,25 @@ function moveEnemies() {
       continue;
     }
 
+    if (enemy.kind === "lavaBoss") {
+      moveLavaBoss(enemy);
+      continue;
+    }
+
     const distance = player.x + player.width / 2 - (enemy.x + enemy.width / 2);
     const absDistance = Math.abs(distance);
     const inSight = absDistance < 430;
     enemy.facing = distance > 0 ? 1 : -1;
 
-    if (["bat", "drowned", "fish", "shark", "harpooner", "swampWitch"].includes(enemy.kind)) {
+    if (["bat", "drowned", "fish", "shark", "harpooner", "swampWitch", "lavaMage"].includes(enemy.kind)) {
       enemy.y = enemy.baseY + Math.sin((Date.now() / 160 + enemy.phase) % 80) * (enemy.kind === "shark" ? 16 : 22);
     }
 
     if (inSight && absDistance > 82) {
       const speed =
-        enemy.kind === "brute" || enemy.kind === "sandGolem" || enemy.kind === "swampBoss" ? 1.35 :
+        enemy.kind === "brute" || enemy.kind === "sandGolem" ? 1.35 :
+        enemy.kind === "lavaKnight" || enemy.kind === "lavaBeast" || enemy.kind === "lavaAxeGuard" ? 1.45 :
+        enemy.kind === "lavaBlade" || enemy.kind === "lavaSoldier" ? 2.25 :
         enemy.kind === "shark" || enemy.kind === "fish" ? 2.55 :
         enemy.kind === "crab" || enemy.kind === "scorpion" ? 1.8 :
         2.05;
@@ -444,11 +497,81 @@ function moveEnemies() {
     enemy.x = Math.max(enemy.patrolLeft, Math.min(enemy.patrolRight, enemy.x));
 
     if (absDistance >= 48 && absDistance <= 110 && Math.abs(player.y - enemy.y) < 96 && enemy.attackTimer === 0) {
-      enemy.attackTimer = enemy.kind === "brute" || enemy.kind === "swampBoss" ? 92 : 70;
-      hurtPlayer(enemy.kind === "brute" || enemy.kind === "swampBoss" || enemy.kind === "shark" ? 2 : 1);
+      enemy.attackTimer = enemy.kind === "brute" || enemy.kind === "lavaAxeGuard" ? 92 : 70;
+      hurtPlayer(enemy.kind === "brute" || enemy.kind === "shark" || enemy.kind === "lavaAxeGuard" ? 2 : 1);
       effects.push({ x: enemy.x, y: enemy.y + 8, width: enemy.width, height: enemy.height, life: 12, kind: "claw" });
     }
   }
+}
+
+function moveLavaBoss(enemy) {
+  enemy.bossTimer = Math.max(0, enemy.bossTimer - 1);
+  enemy.summonTimer = Math.max(0, enemy.summonTimer - 1);
+
+  if (enemy.bossMode === "hidden") {
+    enemy.y = floorY + 18;
+    if (enemy.bossTimer <= 0) {
+      enemy.bossMode = "emerge";
+      enemy.bossTimer = 54;
+      enemy.y = floorY - enemy.height;
+      effects.push({ x: enemy.x - 20, y: floorY - 90, width: enemy.width + 40, height: 80, life: 38, kind: "boom" });
+    }
+    return;
+  }
+
+  const distance = player.x + player.width / 2 - (enemy.x + enemy.width / 2);
+  const absDistance = Math.abs(distance);
+  enemy.facing = distance > 0 ? 1 : -1;
+
+  if (enemy.bossMode === "emerge") {
+    if (absDistance < 145 && Math.abs(player.y - enemy.y) < 130 && enemy.attackTimer === 0) {
+      enemy.attackTimer = 110;
+      hurtPlayer(2);
+      effects.push({ x: enemy.x + (enemy.facing > 0 ? 92 : -26), y: enemy.y + 44, width: 88, height: 28, life: 18, kind: "claw" });
+      if (Math.random() < 0.45) {
+        enemy.bossMode = "axeStuck";
+        enemy.bossTimer = 120;
+      }
+    }
+    if (enemy.bossTimer <= 0) {
+      enemy.bossMode = "armor";
+      enemy.bossTimer = 160;
+    }
+    return;
+  }
+
+  if (enemy.bossMode === "axeStuck") {
+    if (enemy.bossTimer <= 0) {
+      enemy.bossMode = "armor";
+      enemy.bossTimer = 150;
+    }
+    return;
+  }
+
+  if (absDistance > 110) {
+    enemy.x += Math.sign(distance) * 1.25;
+    enemy.x = Math.max(enemy.patrolLeft, Math.min(enemy.patrolRight, enemy.x));
+  }
+
+  if (enemy.summonTimer <= 0) {
+    summonLavaAxeGuard(enemy);
+    enemy.summonTimer = 260;
+  }
+
+  if (absDistance < 170 && enemy.attackTimer === 0) {
+    enemy.bossMode = "emerge";
+    enemy.bossTimer = 58;
+  }
+}
+
+function summonLavaAxeGuard(boss) {
+  const aliveSummons = level.enemies.filter((enemy) => enemy.alive && enemy.kind === "lavaAxeGuard").length;
+  if (aliveSummons >= 3) return;
+  const guard = buildEnemy("lavaAxeGuard", boss.x - boss.facing * 150, level.number, aliveSummons + 1, "lava");
+  guard.patrolLeft = Math.max(260, guard.x - 180);
+  guard.patrolRight = Math.min(level.worldWidth - 140, guard.x + 180);
+  level.enemies.push(guard);
+  effects.push({ x: guard.x - 10, y: guard.y - 28, width: guard.width + 20, height: 40, life: 46, kind: "boom" });
 }
 
 function moveAnimals() {
@@ -505,9 +628,9 @@ function moveTraps() {
         trap.shake = 0;
       }
     } else if (trap.state === "lava") {
-      trap.timer -= 1;
+      if (!trap.permanent) trap.timer -= 1;
       if (onTrap) hurtPlayer(1);
-      if (trap.timer <= 0) {
+      if (!trap.permanent && trap.timer <= 0) {
         trap.state = "safe";
       }
     }
@@ -776,6 +899,23 @@ function damageEnemiesIfHit(hitBox, damage) {
 }
 
 function damageEnemy(enemy, damage) {
+  if (enemy.kind === "lavaBoss") {
+    if (enemy.bossMode === "hidden") {
+      effects.push({ x: enemy.x, y: floorY - 44, width: 120, height: 28, life: 32, kind: "miss" });
+      return;
+    }
+    if (enemy.bossMode === "armor" && Math.random() < 0.32) {
+      enemy.bossMode = "hidden";
+      enemy.bossTimer = 92;
+      effects.push({ x: enemy.x - 18, y: floorY - 78, width: enemy.width + 36, height: 64, life: 42, kind: "boom" });
+      updateHud();
+      return;
+    }
+    if (enemy.bossMode === "axeStuck") {
+      damage *= 1.5;
+    }
+  }
+
   enemy.hp = Math.max(0, enemy.hp - damage);
   enemy.hurtFlash = 10;
 
@@ -1099,12 +1239,14 @@ function drawSky() {
   ctx.fillStyle =
     themeId === "ocean" ? "#2387c8" :
     themeId === "desert" ? "#f2b866" :
+    themeId === "lava" ? "#3a1620" :
     themeId === "swamp" ? "#7c8a67" :
     "#6dcff6";
   ctx.fillRect(cameraX, 0, canvas.width, canvas.height);
   ctx.fillStyle =
     themeId === "ocean" ? "#126aa6" :
     themeId === "desert" ? "#d89047" :
+    themeId === "lava" ? "#5c1d22" :
     themeId === "swamp" ? "#536247" :
     "#4db4e6";
   ctx.fillRect(cameraX, 284, canvas.width, 170);
@@ -1132,24 +1274,27 @@ function drawGround() {
   ctx.fillStyle =
     themeId === "ocean" ? "#135b87" :
     themeId === "desert" ? "#e4b757" :
+    themeId === "lava" ? "#21161b" :
     themeId === "swamp" ? "#48613e" :
     "#42c96d";
   ctx.fillRect(0, floorY, level.worldWidth, canvas.height - floorY);
   ctx.fillStyle =
     themeId === "ocean" ? "#0d4161" :
     themeId === "desert" ? "#b98a38" :
+    themeId === "lava" ? "#ff5a2e" :
     themeId === "swamp" ? "#2f442d" :
     "#2aa654";
   ctx.fillRect(0, floorY, level.worldWidth, 16);
   ctx.fillStyle =
     themeId === "ocean" ? "#0a324a" :
     themeId === "desert" ? "#8f6631" :
+    themeId === "lava" ? "#3b1513" :
     themeId === "swamp" ? "#203022" :
     "#7d4a2b";
   ctx.fillRect(0, floorY + 42, level.worldWidth, canvas.height - floorY - 42);
 
   for (let x = 0; x < level.worldWidth; x += 32) {
-    ctx.fillStyle = x % 64 === 0 ? "#216f3e" : "#2d8c4a";
+    ctx.fillStyle = themeId === "lava" ? (x % 64 === 0 ? "#ff8a2d" : "#cc3c21") : x % 64 === 0 ? "#216f3e" : "#2d8c4a";
     ctx.fillRect(x, floorY + 16, 16, 10);
   }
 }
@@ -1157,11 +1302,11 @@ function drawGround() {
 function drawPlatforms() {
   for (const platform of level.platforms) {
     const themeId = level.theme.id;
-    ctx.fillStyle = themeId === "desert" ? "#8f6631" : themeId === "swamp" ? "#3b3024" : "#6a3d24";
+    ctx.fillStyle = themeId === "lava" ? "#2b2229" : themeId === "desert" ? "#8f6631" : themeId === "swamp" ? "#3b3024" : "#6a3d24";
     ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
-    ctx.fillStyle = themeId === "desert" ? "#f0cc72" : themeId === "swamp" ? "#5d7e45" : "#45d06f";
+    ctx.fillStyle = themeId === "lava" ? "#ff7a2e" : themeId === "desert" ? "#f0cc72" : themeId === "swamp" ? "#5d7e45" : "#45d06f";
     ctx.fillRect(platform.x, platform.y - 12, platform.width, 14);
-    ctx.fillStyle = themeId === "desert" ? "#c99b44" : themeId === "swamp" ? "#324c33" : "#2b9a54";
+    ctx.fillStyle = themeId === "lava" ? "#ffd34d" : themeId === "desert" ? "#c99b44" : themeId === "swamp" ? "#324c33" : "#2b9a54";
     ctx.fillRect(platform.x, platform.y, platform.width, 5);
   }
 }
@@ -1209,6 +1354,19 @@ function drawThemeDecor() {
       ctx.fillStyle = "#385b35";
       ctx.fillRect(x - 22, floorY - 90, 62, 22);
       ctx.fillRect(x + 6, floorY - 116, 48, 22);
+    }
+  }
+
+  if (level.theme.id === "lava") {
+    for (let x = 90; x < level.worldWidth; x += 470) {
+      ctx.fillStyle = "#1b1116";
+      ctx.fillRect(x, floorY - 112, 64, 112);
+      ctx.fillStyle = "#ff5a2e";
+      ctx.fillRect(x + 12, floorY - 90, 14, 74);
+      ctx.fillStyle = "#ffd34d";
+      ctx.fillRect(x + 34, floorY - 62, 10, 42);
+      ctx.fillStyle = "#4a2028";
+      ctx.fillRect(x - 22, floorY - 18, 112, 18);
     }
   }
 }
@@ -1312,6 +1470,20 @@ function drawChest() {
     return;
   }
 
+  if (level.theme.id === "lava") {
+    ctx.fillStyle = chest.locked ? "#3b1513" : "#ff5a2e";
+    ctx.fillRect(chest.x + 12, chest.y + 16, 94, 62);
+    ctx.fillStyle = chest.locked ? "#7a2e22" : "#ffd34d";
+    ctx.fillRect(chest.x + 26, chest.y + 26, 66, 42);
+    ctx.fillStyle = "#21161b";
+    ctx.fillRect(chest.x + 8, chest.y + 72, 102, 12);
+    ctx.fillStyle = "#ff8a2d";
+    ctx.fillRect(chest.x + 42, chest.y - 8, 34, 30);
+    drawTinyText(chest.locked ? `剩 ${level.enemies.filter((enemy) => enemy.alive).length} 只岩浆怪` : "离开岩浆世界", chest.x - 20, chest.y - 13, chest.locked ? "#211b2c" : "#ffd34d");
+    ctx.restore();
+    return;
+  }
+
   ctx.fillStyle = chest.opened ? "#8e5a32" : "#d9903d";
   ctx.fillRect(chest.x, chest.y + (chest.opened ? 12 : 0), chest.width, chest.height - (chest.opened ? 12 : 0));
   ctx.fillStyle = "#5d351d";
@@ -1353,7 +1525,14 @@ function drawEnemies() {
     if (enemy.kind === "swampFrog") drawSwampFrog(enemy);
     if (enemy.kind === "swampWitch") drawSwampWitch(enemy);
     if (enemy.kind === "mudBeast") drawMudBeast(enemy);
-    if (enemy.kind === "swampBoss") drawSwampBoss(enemy);
+    if (enemy.kind === "lavaMage") drawLavaMage(enemy);
+    if (enemy.kind === "lavaKnight") drawLavaKnight(enemy);
+    if (enemy.kind === "lavaBlade") drawLavaBlade(enemy);
+    if (enemy.kind === "lavaSoldier") drawLavaSoldier(enemy);
+    if (enemy.kind === "lavaBeast") drawLavaBeast(enemy);
+    if (enemy.kind === "lavaSlime") drawLavaSlime(enemy);
+    if (enemy.kind === "lavaAxeGuard") drawLavaAxeGuard(enemy);
+    if (enemy.kind === "lavaBoss") drawLavaBoss(enemy);
     if (enemy.cagedTimer > 0) drawCage(enemy);
     drawEnemyHealthBar(enemy);
   }
@@ -1624,19 +1803,119 @@ function drawMudBeast(enemy) {
   ctx.fillRect(enemy.x + 28, enemy.y + enemy.height - 20, enemy.width - 56, 9);
 }
 
-function drawSwampBoss(enemy) {
-  ctx.fillStyle = enemyFill(enemy, "#2f442d");
-  ctx.fillRect(enemy.x + 12, enemy.y + 28, enemy.width - 24, enemy.height - 28);
-  ctx.fillStyle = "#496b35";
-  ctx.fillRect(enemy.x + 24, enemy.y + 6, enemy.width - 48, 36);
-  ctx.fillStyle = "#8b5cf6";
-  ctx.fillRect(enemy.x + 34, enemy.y + 22, 14, 14);
-  ctx.fillRect(enemy.x + enemy.width - 48, enemy.y + 22, 14, 14);
-  ctx.fillStyle = "#7fffd4";
-  ctx.fillRect(enemy.x - 12, enemy.y + 54, 24, 42);
-  ctx.fillRect(enemy.x + enemy.width - 12, enemy.y + 54, 24, 42);
-  ctx.fillStyle = "#162018";
-  ctx.fillRect(enemy.x + 46, enemy.y + enemy.height - 30, enemy.width - 92, 12);
+function drawLavaMage(enemy) {
+  ctx.fillStyle = enemyFill(enemy, "#6b1d2a");
+  ctx.fillRect(enemy.x + 12, enemy.y + 22, enemy.width - 24, enemy.height - 22);
+  ctx.fillStyle = "#ff5a2e";
+  ctx.beginPath();
+  ctx.moveTo(enemy.x + 10, enemy.y + 26);
+  ctx.lineTo(enemy.x + enemy.width / 2, enemy.y - 10);
+  ctx.lineTo(enemy.x + enemy.width - 10, enemy.y + 26);
+  ctx.fill();
+  ctx.fillStyle = "#ffd34d";
+  ctx.fillRect(enemy.x + 22, enemy.y + 34, 7, 7);
+  ctx.fillRect(enemy.x + enemy.width - 29, enemy.y + 34, 7, 7);
+  ctx.fillRect(enemy.x + enemy.width - 4, enemy.y + 42, 10, 34);
+}
+
+function drawLavaKnight(enemy) {
+  drawLavaArmor(enemy, "#4a2028", "#ff5a2e");
+  ctx.fillStyle = "#d9dde5";
+  ctx.fillRect(enemy.x + enemy.width - 6, enemy.y + 34, 12, 54);
+}
+
+function drawLavaBlade(enemy) {
+  drawLavaArmor(enemy, "#72232c", "#ff8a2d");
+  ctx.fillStyle = "#d9dde5";
+  ctx.fillRect(enemy.x - 12, enemy.y + 36, enemy.width + 24, 8);
+  ctx.fillStyle = "#ffd34d";
+  ctx.fillRect(enemy.x + enemy.width - 4, enemy.y + 32, 18, 16);
+}
+
+function drawLavaSoldier(enemy) {
+  drawLavaArmor(enemy, "#3b2f36", "#ff5a2e");
+  ctx.fillStyle = "#8f95a3";
+  ctx.fillRect(enemy.x + 8, enemy.y + 42, 12, 30);
+}
+
+function drawLavaBeast(enemy) {
+  ctx.fillStyle = enemyFill(enemy, "#8b2c24");
+  ctx.fillRect(enemy.x + 8, enemy.y + 20, enemy.width - 16, enemy.height - 20);
+  ctx.fillStyle = "#ff8a2d";
+  ctx.fillRect(enemy.x + 18, enemy.y + 4, enemy.width - 36, 24);
+  ctx.fillStyle = "#ffd34d";
+  ctx.fillRect(enemy.x + 28, enemy.y + 30, 9, 9);
+  ctx.fillRect(enemy.x + enemy.width - 37, enemy.y + 30, 9, 9);
+  ctx.fillStyle = "#21161b";
+  ctx.fillRect(enemy.x + 26, enemy.y + enemy.height - 22, enemy.width - 52, 10);
+}
+
+function drawLavaSlime(enemy) {
+  ctx.fillStyle = enemyFill(enemy, "#ff5a2e");
+  ctx.fillRect(enemy.x, enemy.y + 14, enemy.width, enemy.height - 14);
+  ctx.fillRect(enemy.x + 12, enemy.y + 4, enemy.width - 24, 18);
+  ctx.fillStyle = "#ffd34d";
+  ctx.fillRect(enemy.x + 16, enemy.y + 24, 8, 8);
+  ctx.fillRect(enemy.x + enemy.width - 24, enemy.y + 24, 8, 8);
+  ctx.fillStyle = "#8b1e18";
+  ctx.fillRect(enemy.x + 20, enemy.y + enemy.height - 12, enemy.width - 40, 7);
+}
+
+function drawLavaAxeGuard(enemy) {
+  drawLavaArmor(enemy, "#2f252b", "#ff5a2e");
+  drawHugeAxe(enemy, enemy.facing, enemy.x + (enemy.facing > 0 ? enemy.width - 6 : 6), enemy.y + 42, false);
+}
+
+function drawLavaBoss(enemy) {
+  if (enemy.bossMode === "hidden") {
+    ctx.fillStyle = "#ff5a2e";
+    ctx.fillRect(enemy.x + 18, floorY - 16, enemy.width - 36, 16);
+    ctx.fillStyle = "#ffd34d";
+    ctx.fillRect(enemy.x + 44, floorY - 28, enemy.width - 88, 12);
+    return;
+  }
+
+  ctx.fillStyle = enemyFill(enemy, enemy.bossMode === "axeStuck" ? "#6a2d25" : "#21161b");
+  ctx.fillRect(enemy.x + 14, enemy.y + 34, enemy.width - 28, enemy.height - 34);
+  ctx.fillStyle = "#ff5a2e";
+  ctx.fillRect(enemy.x + 30, enemy.y + 10, enemy.width - 60, 42);
+  ctx.fillStyle = "#ffd34d";
+  ctx.fillRect(enemy.x + 44, enemy.y + 28, 16, 16);
+  ctx.fillRect(enemy.x + enemy.width - 60, enemy.y + 28, 16, 16);
+  ctx.fillStyle = "#7a2e22";
+  ctx.fillRect(enemy.x - 10, enemy.y + 62, 30, 50);
+  ctx.fillRect(enemy.x + enemy.width - 20, enemy.y + 62, 30, 50);
+  drawHugeAxe(enemy, enemy.facing, enemy.x + (enemy.facing > 0 ? enemy.width - 14 : 14), enemy.y + 62, enemy.bossMode === "axeStuck");
+  if (enemy.bossMode === "axeStuck") {
+    drawTinyText("斧头卡住了！", enemy.x + 28, enemy.y - 12, "#ffd34d");
+  }
+}
+
+function drawLavaArmor(enemy, armorColor, glowColor) {
+  ctx.fillStyle = enemyFill(enemy, armorColor);
+  ctx.fillRect(enemy.x + 10, enemy.y + 18, enemy.width - 20, enemy.height - 18);
+  ctx.fillStyle = glowColor;
+  ctx.fillRect(enemy.x + 18, enemy.y + 2, enemy.width - 36, 28);
+  ctx.fillRect(enemy.x + 22, enemy.y + 42, enemy.width - 44, 8);
+  ctx.fillStyle = "#ffd34d";
+  ctx.fillRect(enemy.x + 24, enemy.y + 14, 7, 7);
+  ctx.fillRect(enemy.x + enemy.width - 31, enemy.y + 14, 7, 7);
+  ctx.fillStyle = "#21161b";
+  ctx.fillRect(enemy.x + 22, enemy.y + enemy.height - 18, enemy.width - 44, 8);
+}
+
+function drawHugeAxe(enemy, facing, handX, handY, stuck) {
+  ctx.save();
+  ctx.translate(handX, handY);
+  ctx.scale(facing, 1);
+  ctx.rotate(stuck ? 0.75 : -0.35);
+  ctx.fillStyle = "#6a3d24";
+  ctx.fillRect(0, -8, 72, 10);
+  ctx.fillStyle = "#d9dde5";
+  ctx.fillRect(52, -24, 24, 34);
+  ctx.fillStyle = "#ff5a2e";
+  ctx.fillRect(58, -16, 12, 12);
+  ctx.restore();
 }
 
 function drawCage(enemy) {
