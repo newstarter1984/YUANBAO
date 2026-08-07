@@ -182,7 +182,8 @@ canvas {
   margin-top: 14px;
 }
 
-.profession-panel h3 {
+.profession-panel h3,
+.test-panel h3 {
   margin: 0 0 8px;
   font-size: 22px;
 }
@@ -208,6 +209,28 @@ canvas {
   padding: 8px 10px;
   border: 3px solid var(--line);
   background: #fffdf0;
+}
+
+.test-panel {
+  margin-top: 14px;
+}
+
+.world-test-buttons {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.world-test-buttons button {
+  min-height: 44px;
+  padding: 6px 8px;
+  font-size: 14px;
+  background: #8ee8ff;
+}
+
+.world-test-buttons button.is-current {
+  background: #ff6b50;
+  color: #fff8db;
 }
 
 .menu-stats {
@@ -442,6 +465,10 @@ button:disabled {
   }
 
   .profession-choices {
+    grid-template-columns: 1fr;
+  }
+
+  .world-test-buttons {
     grid-template-columns: 1fr;
   }
 

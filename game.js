@@ -21,6 +21,7 @@ const shopItems = document.querySelector("#shopItems");
 const startButton = document.querySelector("#startButton");
 const professionChoices = document.querySelector("#professionChoices");
 const professionHint = document.querySelector("#professionHint");
+const worldTestButtons = document.querySelector("#worldTestButtons");
 const gameActions = document.querySelector(".game-actions");
 const healButton = document.querySelector("#healButton");
 const cageButton = document.querySelector("#cageButton");
@@ -368,6 +369,7 @@ function showMenu(reason) {
   drawMenuBackdrop();
   updateHud();
   renderShop();
+  renderWorldTestButtons();
   gameActions.classList.add("is-hidden");
   backpackButton.classList.add("is-hidden");
   backpackPanel.classList.add("is-hidden");
@@ -1239,6 +1241,30 @@ function drawWorld() {
   drawThemeDecor();
   drawPlatforms();
   ctx.restore();
+}
+
+function renderWorldTestButtons() {
+  if (!worldTestButtons) return;
+  worldTestButtons.innerHTML = "";
+
+  worldThemes.forEach((theme, index) => {
+    const levelNumber = index + 1;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = getTheme(currentLevel).id === theme.id ? "is-current" : "";
+    button.textContent = `测试${theme.name}`;
+    button.addEventListener("click", () => {
+      currentLevel = levelNumber;
+      level = buildLevel(currentLevel);
+      resultLabel.textContent = `测试：${theme.name}`;
+      menuText.textContent = `已切换到第 ${currentLevel} 关：${theme.name}。点击右下角按钮开始测试。`;
+      startButton.textContent = `开始第 ${currentLevel} 关：${level.theme.name}`;
+      updateHud();
+      drawMenuBackdrop();
+      renderWorldTestButtons();
+    });
+    worldTestButtons.append(button);
+  });
 }
 
 function drawSky() {
