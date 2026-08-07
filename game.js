@@ -71,6 +71,7 @@ const shopGoods = [
   { type: "weapon", index: 4, name: "魔法棒", cost: 80 },
   { type: "weapon", index: 5, name: "火焰剑", cost: 120 },
   { type: "item", item: "powerPotion", name: "力量药水", cost: 45 },
+  { type: "item", item: "fireResistPotion", name: "抗火药水", cost: 2 },
   { type: "item", item: "speedPotion", name: "速度药水", cost: 90 },
   { type: "item", item: "medkit", name: "医疗包", cost: 25 },
 ];
@@ -95,10 +96,12 @@ let diverSkinOwned = false;
 let selectedProfession = "doctor";
 let speedPotionOwned = false;
 let powerBoostTimer = 0;
+let fireResistTimer = 0;
 let blackFistTimer = 0;
 let inventory = {
   medkit: 0,
   powerPotion: 0,
+  fireResistPotion: 0,
   painting: 0,
   watch: 0,
 };
@@ -631,7 +634,7 @@ function moveTraps() {
       }
     } else if (trap.state === "lava") {
       if (!trap.permanent) trap.timer -= 1;
-      if (onTrap) hurtPlayer(1);
+      if (onTrap && !isFireResistant()) hurtPlayer(1);
       if (!trap.permanent && trap.timer <= 0) {
         trap.state = "safe";
       }
@@ -783,6 +786,16 @@ function usePowerPotion() {
   inventory.powerPotion -= 1;
   powerBoostTimer = 900;
   effects.push({ x: player ? player.x : cameraX + 360, y: player ? player.y - 28 : 250, width: 130, height: 30, life: 70, kind: "power" });
+  updateHud();
+  renderBackpack();
+}
+
+function useFireResistPotion() {
+  if (inventory.fireResistPotion <= 0) return;
+  inventory.fireResistPotion -= 1;
+  fireResistTimer = 3600;
+  effects.push({ x: player ? player.x - 12 : cameraX + 340, y: player ? player.y - 34 : 250, width: 150, height: 30, life: 90, kind: "fireResist" });
+  updateHud();
   renderBackpack();
 }
 
@@ -1006,7 +1019,7 @@ function checkDangerHits() {
 
   for (const trap of level.spikeTraps) {
     if (trap.state === "falling" && touches(player, trap)) {
-      hurtPlayer(1);
+      if (!isFireResistant()) hurtPlayer(1);
     }
   }
 
@@ -1078,6 +1091,7 @@ function renderBackpack() {
     { key: "painting", name: "家人是一幅画", count: inventory.painting, action: "卖 300", onClick: () => sellTreasure("painting", 300) },
     { key: "watch", name: "黄金手表", count: inventory.watch, action: "卖 100", onClick: () => sellTreasure("watch", 100) },
     { key: "powerPotion", name: "力量药水", count: inventory.powerPotion, action: "使用", onClick: usePowerPotion },
+    { key: "fireResistPotion", name: "抗火药水", count: inventory.fireResistPotion, action: "使用", onClick: useFireResistPotion },
     { key: "medkit", name: "医疗包", count: inventory.medkit, action: "使用", onClick: useMedkit },
   ];
 
@@ -1137,6 +1151,7 @@ function tickTimers() {
   player.attacking = Math.max(0, player.attacking - 1);
   player.invincible = Math.max(0, player.invincible - 1);
   powerBoostTimer = Math.max(0, powerBoostTimer - 1);
+  fireResistTimer = Math.max(0, fireResistTimer - 1);
   blackFistTimer = Math.max(0, blackFistTimer - 1);
 
   for (const enemy of level.enemies) {
@@ -1171,7 +1186,8 @@ function updateHud() {
   heartsElement.textContent = player ? `${Math.max(0, player.hearts)}/${getMaxHearts()}` : getMaxHearts();
   monsterCountElement.textContent = remainingMonsters;
   professionNameElement.textContent = professions[selectedProfession].name;
-  weaponNameElement.textContent = hasHorse ? `${weapons[weaponLevel].name}+马` : weapons[weaponLevel].name;
+  const fireText = fireResistTimer > 0 ? ` 抗火${Math.ceil(fireResistTimer / 60)}秒` : "";
+  weaponNameElement.textContent = `${hasHorse ? `${weapons[weaponLevel].name}+马` : weapons[weaponLevel].name}${fireText}`;
   menuPlayCount.textContent = playCount;
   menuCoins.textContent = coins;
   updateActionButtons();
@@ -1241,6 +1257,10 @@ function drawWorld() {
   drawThemeDecor();
   drawPlatforms();
   ctx.restore();
+}
+
+function isFireResistant() {
+  return fireResistTimer > 0;
 }
 
 function renderWorldTestButtons() {
@@ -2133,6 +2153,7 @@ function drawEffects() {
     if (effect.kind === "unlock") drawTinyText("宝箱已解锁！", effect.x, effect.y, "#ffd34d");
     if (effect.kind === "heal") drawTinyText("生命回满", effect.x, effect.y, "#45d06f");
     if (effect.kind === "power") drawTinyText("力量 x3", effect.x, effect.y, "#ff6b50");
+    if (effect.kind === "fireResist") drawTinyText("抗火 60 秒", effect.x, effect.y, "#ff8a2d");
     if (effect.kind === "blackFist") drawTinyText("黑拳无敌", effect.x, effect.y, "#fff29a");
     if (effect.kind === "cageHit") drawTinyText("困住 10 秒", effect.x, effect.y - 8, "#fff29a");
     if (effect.kind === "painting") drawTinyText("获得：家人是一幅画", effect.x, effect.y, "#ffd34d");
