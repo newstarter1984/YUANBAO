@@ -36,7 +36,7 @@ const inventoryItems = document.querySelector("#inventoryItems");
 const keys = new Set();
 const gravity = 0.75;
 const floorY = 454;
-const starValue = 60;
+const starValue = 6;
 const experienceNeeded = 10;
 
 const worldThemes = [
@@ -91,7 +91,13 @@ let experience = 0;
 let heroLevel = 1;
 let playCount = 0;
 let weaponLevel = 0;
+let ownedWeapons = [true, false, false, false, false, false];
+let specialWeaponIndexes = {};
 let hasHorse = false;
+let hasDragonAdult = false;
+let dragonFeedCount = 0;
+let dragonAttackTimer = 0;
+let lightningBootsEquipped = false;
 let diverSkinOwned = false;
 let selectedProfession = "doctor";
 let speedPotionOwned = false;
@@ -102,8 +108,19 @@ let inventory = {
   medkit: 0,
   powerPotion: 0,
   fireResistPotion: 0,
-  painting: 0,
-  watch: 0,
+  stinkSock: 0,
+  lightningSword: 0,
+  fireSwordLoot: 0,
+  lightningBoots: 0,
+  skyAxe: 0,
+  dragonEgg: 0,
+  dragonWand: 0,
+  dragonNest: 0,
+  beef: 0,
+  chestCoins10: 0,
+  chestCoins20: 0,
+  chestCoins30: 0,
+  chestCoins50: 0,
 };
 let currentLevel = 1;
 let cameraX = 0;
@@ -124,12 +141,12 @@ function startGame() {
   player = {
     x: 80,
     y: floorY - 72,
-    width: hasHorse ? 70 : 48,
-    height: hasHorse ? 84 : 72,
+    width: hasDragonAdult ? 78 : hasHorse ? 70 : 48,
+    height: hasDragonAdult ? 88 : hasHorse ? 84 : 72,
     vx: 0,
     vy: 0,
-    speed: (hasHorse ? 7.4 : 5.8) * (speedPotionOwned ? 3 : 1),
-    jumpPower: hasHorse ? -17.2 : -16,
+    speed: (hasDragonAdult ? 5.6 : hasHorse ? 4.8 : 3.6) * (speedPotionOwned ? 2 : 1) * (lightningBootsEquipped ? 1.25 : 1),
+    jumpPower: hasDragonAdult ? -15.5 : hasHorse ? -16.2 : -14.8,
     onGround: true,
     facing: 1,
     hearts: getMaxHearts(),
@@ -299,7 +316,7 @@ function buildLevel(number) {
     lavaTraps.push({ x: 1110 + i * 520, y: floorY - 10, width: 132, height: 18, state: "safe", timer: 0, shake: 0, permanent: false });
   }
   for (let i = 0; i < (theme.id === "lava" ? 8 + number : 0); i += 1) {
-    lavaTraps.push({ x: 390 + i * 360, y: floorY - 6, width: 210, height: 30, state: "lava", timer: 999999, shake: 0, permanent: true });
+    lavaTraps.push({ x: 410 + i * 360, y: floorY - 6, width: 138, height: 30, state: "lava", timer: 999999, shake: 0, permanent: true });
   }
 
   const quicksandTraps = [];
@@ -316,6 +333,10 @@ function buildLevel(number) {
   for (let i = 0; i < (theme.id === "ocean" ? 10 + number : 0); i += 1) {
     coral.push({ x: 330 + i * 250, y: floorY - 66 + (i % 3) * 14, color: i % 3 });
   }
+
+  const waveHazard = theme.id === "ocean"
+    ? { timer: 600, active: false, activeTimer: 0, lane: 1, x: 0, width: 190, height: 74 }
+    : null;
 
   const animals = theme.id === "gravel" ? [
     { kind: "cow", x: 360, y: floorY - 46, width: 62, height: 46, alive: true, vx: 0.45, left: 300, right: 520, phase: 0 },
@@ -339,6 +360,7 @@ function buildLevel(number) {
     quicksandTraps,
     bogTraps,
     coral,
+    waveHazard,
     chest: {
       x: worldWidth - 150,
       y: floorY - 62,
@@ -364,7 +386,7 @@ function showMenu(reason) {
   } else {
     const nextTheme = getTheme(currentLevel);
     resultLabel.textContent = "准备冒险";
-    menuText.textContent = `当前世界：${nextTheme.name}。砾石草原、海洋、沙漠、沼泽会不断循环，小星星每个值 60 金币。`;
+    menuText.textContent = `当前世界：${nextTheme.name}。砾石草原、海洋、沙漠、沼泽、岩浆世界会不断循环，小星星每个值 6 金币。`;
   }
 
   level = buildLevel(currentLevel);
@@ -387,7 +409,9 @@ function update() {
   moveEnemies();
   moveAnimals();
   moveTraps();
+  moveWaveHazard();
   moveProjectiles();
+  dragonAssistAttack();
   collectStars();
   handleChest();
   checkDangerHits();
@@ -419,6 +443,10 @@ function handleInput() {
     player.vy = -5.8;
   }
 
+  if (hasDragonAdult && (keys.has("Space") || keys.has("ArrowUp") || keys.has("KeyW")) && !player.onGround) {
+    player.vy = Math.max(player.vy - 0.42, -7.2);
+  }
+
   if (keys.has("KeyJ")) attack();
   if (keys.has("KeyK")) throwGrenade();
 }
@@ -427,6 +455,38 @@ function isPlayerInRiver() {
   if (!level || !level.river) return false;
   if (level.theme.id === "ocean") return player.y + player.height > level.river.y;
   return touches(player, level.river);
+}
+
+function moveWaveHazard() {
+  if (!level.waveHazard || !player) return;
+  const wave = level.waveHazard;
+  if (!wave.active) {
+    wave.timer -= 1;
+    if (wave.timer <= 0) {
+      wave.active = true;
+      wave.activeTimer = 150;
+      wave.lane = Math.floor(Math.random() * 3);
+      wave.x = cameraX + canvas.width + 60;
+    }
+    return;
+  }
+
+  wave.activeTimer -= 1;
+  wave.x -= 8;
+  const laneY = [110, 235, 350][wave.lane];
+  const waveBox = { x: wave.x, y: laneY, width: wave.width, height: wave.height };
+  if (touches(player, waveBox)) {
+    player.x = 80;
+    player.y = floorY - player.height;
+    player.vx = 0;
+    player.vy = 0;
+    effects.push({ x: player.x, y: player.y - 28, width: 130, height: 30, life: 60, kind: "loot", text: "被海浪冲回起点" });
+  }
+
+  if (wave.activeTimer <= 0 || wave.x + wave.width < cameraX - 80) {
+    wave.active = false;
+    wave.timer = 600;
+  }
 }
 
 function movePlayer() {
@@ -479,14 +539,19 @@ function moveEnemies() {
 
     const distance = player.x + player.width / 2 - (enemy.x + enemy.width / 2);
     const absDistance = Math.abs(distance);
-    const inSight = absDistance < 430;
+    const inSight = absDistance < 620;
     enemy.facing = distance > 0 ? 1 : -1;
 
     if (["bat", "drowned", "fish", "shark", "harpooner", "swampWitch", "lavaMage"].includes(enemy.kind)) {
       enemy.y = enemy.baseY + Math.sin((Date.now() / 160 + enemy.phase) % 80) * (enemy.kind === "shark" ? 16 : 22);
     }
 
-    if (inSight && absDistance > 82) {
+    const attackRange =
+      enemy.kind === "shark" || enemy.kind === "harpooner" ? 150 :
+      enemy.kind === "crab" || enemy.kind === "scorpion" ? 104 :
+      122;
+
+    if (inSight && absDistance > attackRange * 0.55) {
       const speed =
         enemy.kind === "brute" || enemy.kind === "sandGolem" ? 1.35 :
         enemy.kind === "lavaKnight" || enemy.kind === "lavaBeast" || enemy.kind === "lavaAxeGuard" ? 1.45 :
@@ -503,7 +568,7 @@ function moveEnemies() {
       ? Math.max(18, Math.min(level.worldWidth - enemy.width - 18, enemy.x))
       : Math.max(enemy.patrolLeft, Math.min(enemy.patrolRight, enemy.x));
 
-    if (absDistance >= 48 && absDistance <= 110 && Math.abs(player.y - enemy.y) < 96 && enemy.attackTimer === 0) {
+    if (absDistance <= attackRange && Math.abs(player.y - enemy.y) < 118 && enemy.attackTimer === 0) {
       enemy.attackTimer = enemy.kind === "brute" || enemy.kind === "lavaAxeGuard" ? 92 : 70;
       hurtPlayer(enemy.kind === "brute" || enemy.kind === "shark" || enemy.kind === "lavaAxeGuard" ? 2 : 1);
       effects.push({ x: enemy.x, y: enemy.y + 8, width: enemy.width, height: enemy.height, life: 12, kind: "claw" });
@@ -588,11 +653,43 @@ function summonLavaAxeGuard(boss) {
 function moveAnimals() {
   for (const animal of level.animals) {
     if (!animal.alive) continue;
+    animal.phase = (animal.phase || 0) + 0.08;
     animal.x += animal.vx;
     if (animal.x < animal.left || animal.x + animal.width > animal.right) {
       animal.vx *= -1;
     }
   }
+}
+
+function dragonAssistAttack() {
+  if (!hasDragonAdult || !player || dragonAttackTimer > 0) return;
+  const dragonReady = inventory.dragonNest > 0 && inventory.dragonWand > 0;
+  if (!dragonReady) return;
+
+  const playerCenter = player.x + player.width / 2;
+  let target = null;
+  let bestDistance = Infinity;
+  for (const enemy of level.enemies) {
+    if (!enemy.alive || enemy.kind === "lavaBoss" && enemy.bossMode === "hidden") continue;
+    const enemyCenter = enemy.x + enemy.width / 2;
+    const distance = Math.abs(enemyCenter - playerCenter);
+    if (distance < 430 && Math.abs(enemy.y - player.y) < 190 && distance < bestDistance) {
+      target = enemy;
+      bestDistance = distance;
+    }
+  }
+
+  if (!target) return;
+  dragonAttackTimer = 84;
+  effects.push({
+    x: Math.min(player.x, target.x),
+    y: Math.min(player.y, target.y) + 18,
+    width: Math.abs(target.x - player.x) + target.width,
+    height: 22,
+    life: 18,
+    kind: "dragonFire",
+  });
+  damageEnemy(target, getAttackDamage(18));
 }
 
 function moveTraps() {
@@ -1000,20 +1097,69 @@ function handleChest() {
   const chest = level.chest;
   if (!chest.opened && !chest.locked && touches(player, chest)) {
     chest.opened = true;
-    coins += level.reward;
-    const gotPainting = Math.random() < 0.9;
-    const gotWatch = Math.random() < 0.65;
-    if (gotPainting) inventory.painting += 1;
-    if (gotWatch) inventory.watch += 1;
+    const drops = rollChestDrops(level.number);
+    coins += drops.coins;
     currentLevel += 1;
     updateHud();
     renderBackpack();
-    effects.push({ x: chest.x - 4, y: chest.y - 36, width: 96, height: 36, life: 42, kind: "coins" });
-    if (gotPainting) effects.push({ x: chest.x - 18, y: chest.y - 76, width: 150, height: 30, life: 88, kind: "painting" });
-    if (gotWatch) effects.push({ x: chest.x - 10, y: chest.y - 104, width: 130, height: 30, life: 88, kind: "watch" });
+    effects.push({ x: chest.x - 4, y: chest.y - 36, width: 150, height: 36, life: 70, kind: "coins", amount: drops.coins });
+    if (drops.message) effects.push({ x: chest.x - 18, y: chest.y - 76, width: 190, height: 30, life: 100, kind: "loot", text: drops.message });
     draw();
     setTimeout(() => showMenu("win"), 450);
   }
+}
+
+function rollChestDrops(levelNumber) {
+  const maxCoins = Math.min(60, 50 + Math.max(0, levelNumber - 1) * 5);
+  const coinChoices = [10, 20, 30, maxCoins];
+  const chestCoins = coinChoices[Math.floor(Math.random() * coinChoices.length)];
+  const drops = [];
+
+  if (Math.random() < 0.96) {
+    inventory.stinkSock += 1;
+    drops.push("臭袜子");
+  }
+
+  if (Math.random() < (levelNumber >= 2 ? 0.35 : 0.3)) {
+    if (Math.random() < 0.5) {
+      inventory.lightningSword += 1;
+      drops.push("闪电剑");
+    } else {
+      inventory.fireSwordLoot = (inventory.fireSwordLoot || 0) + 1;
+      ownedWeapons[5] = true;
+      drops.push("火焰剑");
+    }
+  }
+
+  if (Math.random() < 0.006) {
+    if (Math.random() < 0.5) {
+      inventory.lightningBoots += 1;
+      drops.push("闪电靴子");
+    } else {
+      inventory.skyAxe += 1;
+      drops.push("轰天斧");
+    }
+  }
+
+  if (Math.random() < 0.001) {
+    inventory.dragonEgg += 1;
+    drops.push("龙蛋");
+  }
+  if (Math.random() < 0.003) {
+    if (Math.random() < 0.5) {
+      inventory.dragonWand += 1;
+      drops.push("驯龙杖");
+    } else {
+      inventory.dragonNest += 1;
+      drops.push("驯龙巢");
+    }
+  }
+  if (Math.random() < 0.1) {
+    inventory.beef += 1;
+    drops.push("牛肉");
+  }
+
+  return { coins: chestCoins, message: drops.length ? drops.join("、") : "" };
 }
 
 function checkDangerHits() {
@@ -1062,8 +1208,8 @@ function renderShop() {
       item.type === "horse" ? hasHorse :
       item.type === "skin" && item.item === "diverSkin" ? diverSkinOwned :
       item.type === "item" && item.item === "speedPotion" ? speedPotionOwned :
-      item.type === "weapon" && item.index <= weaponLevel;
-    const lockedByOrder = item.type === "weapon" && item.index !== weaponLevel + 1 && !owned;
+      item.type === "weapon" && ownedWeapons[item.index];
+    const lockedByOrder = item.type === "weapon" && item.index > 0 && !ownedWeapons[item.index - 1] && !owned;
     button.type = "button";
     button.className = owned ? "shop-item is-owned" : "shop-item";
     button.disabled = owned || lockedByOrder || coins < item.cost;
@@ -1094,21 +1240,35 @@ function renderProfessions() {
 function renderBackpack() {
   inventoryItems.innerHTML = "";
   const rows = [
-    { key: "painting", name: "家人是一幅画", count: inventory.painting, action: "卖 300", onClick: () => sellTreasure("painting", 300) },
-    { key: "watch", name: "黄金手表", count: inventory.watch, action: "卖 100", onClick: () => sellTreasure("watch", 100) },
+    { key: "slots", name: `物品栏 6格：${getQuickSlotsText()}`, count: 1, action: "整理", onClick: renderBackpack },
+    { key: "stinkSock", name: "臭袜子", count: inventory.stinkSock, action: "卖 1", onClick: () => sellTreasure("stinkSock", 1) },
     { key: "powerPotion", name: "力量药水", count: inventory.powerPotion, action: "使用", onClick: usePowerPotion },
     { key: "fireResistPotion", name: "抗火药水", count: inventory.fireResistPotion, action: "使用", onClick: useFireResistPotion },
     { key: "medkit", name: "医疗包", count: inventory.medkit, action: "使用", onClick: useMedkit },
+    { key: "lightningSword", name: "闪电剑", count: inventory.lightningSword, action: "装备", onClick: () => equipLootWeapon("lightningSword") },
+    { key: "fireSwordLoot", name: "火焰剑", count: inventory.fireSwordLoot || 0, action: "装备", onClick: () => equipWeapon(5) },
+    { key: "lightningBoots", name: "闪电靴子", count: inventory.lightningBoots, action: "装备", onClick: () => useLightningBoots() },
+    { key: "skyAxe", name: "轰天斧", count: inventory.skyAxe, action: "装备", onClick: () => equipLootWeapon("skyAxe") },
+    { key: "dragonEgg", name: `龙蛋/幼龙 喂养${dragonFeedCount}/10`, count: inventory.dragonEgg, action: "喂牛肉", onClick: feedDragon },
+    { key: "dragonWand", name: "驯龙杖", count: inventory.dragonWand, action: "查看", onClick: renderBackpack },
+    { key: "dragonNest", name: "驯龙巢", count: inventory.dragonNest, action: "查看", onClick: renderBackpack },
+    { key: "beef", name: "牛肉", count: inventory.beef, action: "喂龙", onClick: feedDragon },
   ];
+
+  weapons.forEach((weapon, index) => {
+    if (ownedWeapons[index]) {
+      rows.push({ key: `weapon${index}`, name: weapon.name, count: 1, action: index === weaponLevel ? "已装备" : "装备", onClick: () => equipWeapon(index) });
+    }
+  });
 
   for (const row of rows) {
     const item = document.createElement("div");
-    item.className = "inventory-item";
+    item.className = row.key === "slots" ? "inventory-item inventory-item--slots" : row.key.startsWith("weapon") ? "inventory-item inventory-item--equipped" : "inventory-item";
     item.innerHTML = `<span>${row.name} x${row.count}</span>`;
     const button = document.createElement("button");
     button.type = "button";
     button.textContent = row.action;
-    button.disabled = row.count <= 0;
+    button.disabled = row.count <= 0 || row.action === "已装备";
     button.addEventListener("click", row.onClick);
     item.append(button);
     inventoryItems.append(item);
@@ -1128,10 +1288,10 @@ function buyItem(item) {
   const owned =
     item.type === "horse" ? hasHorse :
     item.type === "skin" && item.item === "diverSkin" ? diverSkinOwned :
-    item.type === "item" && item.item === "speedPotion" ? speedPotionOwned :
-    item.type === "weapon" && item.index <= weaponLevel;
+      item.type === "item" && item.item === "speedPotion" ? speedPotionOwned :
+      item.type === "weapon" && ownedWeapons[item.index];
   if (owned || coins < item.cost) return;
-  if (item.type === "weapon" && item.index !== weaponLevel + 1) return;
+  if (item.type === "weapon" && item.index > 0 && !ownedWeapons[item.index - 1]) return;
 
   coins -= item.cost;
   if (item.type === "horse") {
@@ -1143,6 +1303,7 @@ function buyItem(item) {
   } else if (item.type === "item") {
     inventory[item.item] += 1;
   } else {
+    ownedWeapons[item.index] = true;
     weaponLevel = item.index;
   }
   updateHud();
@@ -1159,6 +1320,7 @@ function tickTimers() {
   powerBoostTimer = Math.max(0, powerBoostTimer - 1);
   fireResistTimer = Math.max(0, fireResistTimer - 1);
   blackFistTimer = Math.max(0, blackFistTimer - 1);
+  dragonAttackTimer = Math.max(0, dragonAttackTimer - 1);
 
   for (const enemy of level.enemies) {
     enemy.hurtFlash = Math.max(0, enemy.hurtFlash - 1);
@@ -1238,6 +1400,7 @@ function starBox(star) {
 function draw() {
   drawWorld();
   drawStars();
+  drawWaveHazard();
   drawTraps();
   drawChest();
   drawAnimals();
@@ -1245,6 +1408,7 @@ function draw() {
   drawProjectiles();
   drawPlayer();
   drawEffects();
+  drawQuickSlots();
 }
 
 function drawMenuBackdrop() {
@@ -1263,6 +1427,83 @@ function drawWorld() {
   drawThemeDecor();
   drawPlatforms();
   ctx.restore();
+}
+
+function getQuickSlotsText() {
+  return ["武器", "药水", "抗火", "医疗", "龙", "金币"].join(" / ");
+}
+
+function drawQuickSlots() {
+  if (gameState !== "playing") return;
+  const slots = [
+    weapons[weaponLevel].name,
+    `力${inventory.powerPotion}`,
+    `抗${inventory.fireResistPotion}`,
+    `医${inventory.medkit}`,
+    hasDragonAdult ? "成年龙" : `龙${dragonFeedCount}`,
+    `${coins}`,
+  ];
+  ctx.save();
+  const startX = canvas.width / 2 - 174;
+  const y = canvas.height - 58;
+  for (let i = 0; i < 6; i += 1) {
+    ctx.fillStyle = i === 0 ? "rgba(255, 211, 77, 0.95)" : "rgba(33, 27, 44, 0.82)";
+    ctx.fillRect(startX + i * 58, y, 50, 46);
+    ctx.fillStyle = i === 0 ? "#211b2c" : "#fff4c7";
+    ctx.font = "900 13px Microsoft YaHei, sans-serif";
+    ctx.fillText(String(slots[i]).slice(0, 4), startX + i * 58 + 7, y + 27);
+  }
+  ctx.restore();
+}
+
+function equipWeapon(index) {
+  if (!ownedWeapons[index]) return;
+  weaponLevel = index;
+  updateHud();
+  renderBackpack();
+  renderShop();
+}
+
+function equipLootWeapon(key) {
+  if ((inventory[key] || 0) <= 0) return;
+  if (specialWeaponIndexes[key] === undefined) {
+    const weapon = key === "lightningSword"
+      ? { name: "闪电剑", cost: 0, damage: 66, range: 104, cooldown: 18, kind: "magic" }
+      : { name: "轰天斧", cost: 0, damage: 90, range: 116, cooldown: 32, kind: "melee" };
+    weapons.push(weapon);
+    ownedWeapons.push(true);
+    specialWeaponIndexes[key] = weapons.length - 1;
+  }
+  weaponLevel = specialWeaponIndexes[key];
+  updateHud();
+  renderBackpack();
+}
+
+function useLightningBoots() {
+  if (inventory.lightningBoots <= 0 || lightningBootsEquipped) return;
+  lightningBootsEquipped = true;
+  if (player) {
+    player.speed *= 1.25;
+    effects.push({ x: player.x - 10, y: player.y - 28, width: 120, height: 30, life: 70, kind: "loot", text: "闪电靴加速" });
+  }
+  updateHud();
+  renderBackpack();
+}
+
+function feedDragon() {
+  if (inventory.beef <= 0 || inventory.dragonEgg <= 0 || inventory.dragonNest <= 0) return;
+  inventory.beef -= 1;
+  dragonFeedCount += 1;
+  if (dragonFeedCount >= 10) {
+    hasDragonAdult = true;
+    if (player) {
+      player.speed = Math.max(player.speed, 5.6 * (speedPotionOwned ? 2 : 1) * (lightningBootsEquipped ? 1.25 : 1));
+      player.jumpPower = Math.min(player.jumpPower, -15.5);
+    }
+    effects.push({ x: player ? player.x - 20 : cameraX + 320, y: player ? player.y - 38 : 230, width: 170, height: 30, life: 110, kind: "loot", text: "龙成年了！" });
+  }
+  updateHud();
+  renderBackpack();
 }
 
 function isFireResistant() {
@@ -1372,15 +1613,35 @@ function drawPlatforms() {
 
 function drawRiver() {
   const river = level.river;
-  ctx.fillStyle = level.theme.id === "ocean" ? "#1a8ed0" : "#1d8fd8";
+  const isOcean = level.theme.id === "ocean";
+  ctx.fillStyle = isOcean ? "#126aa6" : "#1d8fd8";
   ctx.fillRect(river.x, river.y, river.width, river.height);
-  ctx.fillStyle = "#65d7ff";
-  for (let x = river.x + 12; x < river.x + river.width; x += 46) {
-    ctx.fillRect(x, river.y + 14, 24, 6);
-    ctx.fillRect(x + 18, river.y + 42, 30, 6);
+  ctx.fillStyle = isOcean ? "rgba(101, 215, 255, 0.45)" : "#65d7ff";
+  const drift = Math.floor(Date.now() / 90) % 46;
+  for (let x = river.x + 12 - drift; x < river.x + river.width; x += 46) {
+    ctx.fillRect(x, river.y + 14, 24, 5);
+    ctx.fillRect(x + 18, river.y + 42, 30, 5);
+    if (isOcean) ctx.fillRect(x + 8, river.y + 118, 36, 4);
   }
-  ctx.fillStyle = "#0f5f9f";
+  ctx.fillStyle = isOcean ? "rgba(6, 45, 82, 0.55)" : "#0f5f9f";
   ctx.fillRect(river.x, river.y + river.height - 12, river.width, 12);
+}
+
+function drawWaveHazard() {
+  if (!level.waveHazard || !level.waveHazard.active) return;
+  const wave = level.waveHazard;
+  const y = [110, 235, 350][wave.lane];
+  ctx.save();
+  ctx.translate(-cameraX, 0);
+  ctx.fillStyle = "#d7fbff";
+  ctx.fillRect(wave.x, y + 24, wave.width, 24);
+  ctx.fillStyle = "#65d7ff";
+  for (let i = 0; i < 5; i += 1) {
+    ctx.fillRect(wave.x + i * 38, y + (i % 2) * 18, 34, 28);
+  }
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(wave.x + 18, y + 10, wave.width - 44, 8);
+  ctx.restore();
 }
 
 function drawThemeDecor() {
@@ -1463,10 +1724,27 @@ function drawTraps() {
 
   for (const trap of level.lavaTraps) {
     const x = trap.x + trap.shake;
-    ctx.fillStyle = trap.state === "lava" ? "#ff4d2e" : trap.state === "shaking" ? "#d9903d" : "#6a3d24";
-    ctx.fillRect(x, trap.y, trap.width, trap.height);
-    ctx.fillStyle = trap.state === "lava" ? "#ffd34d" : "#45d06f";
-    ctx.fillRect(x, trap.y - 8, trap.width, 8);
+    if (trap.state === "lava") {
+      ctx.fillStyle = "#7a1d19";
+      ctx.fillRect(x, trap.y, trap.width, trap.height);
+      ctx.fillStyle = "#ff4d2e";
+      ctx.fillRect(x + 4, trap.y + 5, trap.width - 8, trap.height - 8);
+      ctx.fillStyle = "#ffd34d";
+      const lavaDrift = Math.floor(Date.now() / 80) % 34;
+      for (let line = x - lavaDrift; line < x + trap.width; line += 34) {
+        ctx.fillRect(line, trap.y + 10, 22, 5);
+        ctx.fillRect(line + 12, trap.y + 22, 16, 4);
+      }
+      ctx.fillStyle = "#fff29a";
+      for (let bubble = x + 12; bubble < x + trap.width; bubble += 46) {
+        ctx.fillRect(bubble, trap.y - 4 + (bubble % 2) * 6, 8, 8);
+      }
+    } else {
+      ctx.fillStyle = trap.state === "shaking" ? "#d9903d" : "#6a3d24";
+      ctx.fillRect(x, trap.y, trap.width, trap.height);
+      ctx.fillStyle = "#45d06f";
+      ctx.fillRect(x, trap.y - 8, trap.width, 8);
+    }
   }
 
   for (const trap of level.quicksandTraps) {
@@ -1611,6 +1889,7 @@ function drawAnimals() {
 }
 
 function drawCow(animal) {
+  const step = Math.sin(animal.phase || Date.now() / 150) * 3;
   ctx.fillStyle = "#f4f1df";
   ctx.fillRect(animal.x, animal.y + 12, animal.width, animal.height - 12);
   ctx.fillStyle = "#4a342a";
@@ -1623,13 +1902,14 @@ function drawCow(animal) {
   ctx.fillStyle = "#f6c2a9";
   ctx.fillRect(animal.x + 56, animal.y + 14, 12, 8);
   ctx.fillStyle = "#4a342a";
-  ctx.fillRect(animal.x + 10, animal.y + animal.height - 4, 9, 12);
-  ctx.fillRect(animal.x + 42, animal.y + animal.height - 4, 9, 12);
+  ctx.fillRect(animal.x + 10, animal.y + animal.height - 4 + Math.max(0, step), 9, 12);
+  ctx.fillRect(animal.x + 42, animal.y + animal.height - 4 + Math.max(0, -step), 9, 12);
 }
 
 function drawChicken(animal) {
+  const bob = Math.sin(animal.phase || Date.now() / 120) * 2;
   ctx.fillStyle = "#fffdf0";
-  ctx.fillRect(animal.x + 6, animal.y + 8, 24, 20);
+  ctx.fillRect(animal.x + 6, animal.y + 8 + bob, 24, 20);
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(animal.x + 14, animal.y, 20, 18);
   ctx.fillStyle = "#ffcf4a";
@@ -1644,6 +1924,7 @@ function drawChicken(animal) {
 }
 
 function drawPig(animal) {
+  const step = Math.sin(animal.phase || Date.now() / 150) * 3;
   ctx.fillStyle = "#f4a0b7";
   ctx.fillRect(animal.x, animal.y + 10, animal.width, animal.height - 10);
   ctx.fillStyle = "#ffc0d0";
@@ -1653,8 +1934,8 @@ function drawPig(animal) {
   ctx.fillStyle = "#e77796";
   ctx.fillRect(animal.x + 48, animal.y + 12, 10, 8);
   ctx.fillStyle = "#b85c7a";
-  ctx.fillRect(animal.x + 8, animal.y + animal.height - 3, 8, 10);
-  ctx.fillRect(animal.x + 34, animal.y + animal.height - 3, 8, 10);
+  ctx.fillRect(animal.x + 8, animal.y + animal.height - 3 + Math.max(0, step), 8, 10);
+  ctx.fillRect(animal.x + 34, animal.y + animal.height - 3 + Math.max(0, -step), 8, 10);
 }
 
 function drawSlime(enemy) {
@@ -1718,15 +1999,18 @@ function enemyFill(enemy, color) {
 }
 
 function drawFish(enemy) {
+  const swim = Math.sin(Date.now() / 120 + enemy.phase) * 5;
+  const tailX = enemy.facing > 0 ? enemy.x - 4 : enemy.x + enemy.width - 12;
+  const faceX = enemy.facing > 0 ? enemy.x + 22 : enemy.x + enemy.width - 28;
   ctx.fillStyle = enemyFill(enemy, "#ff9f43");
   ctx.fillRect(enemy.x + 12, enemy.y + 8, enemy.width - 22, enemy.height - 14);
   ctx.fillRect(enemy.x + enemy.width - 16, enemy.y + 14, 18, 10);
   ctx.fillStyle = "#ffd34d";
   ctx.fillRect(enemy.x + 18, enemy.y + 3, 28, 8);
   ctx.fillStyle = "#211b2c";
-  ctx.fillRect(enemy.x + 22, enemy.y + 16, 5, 5);
+  ctx.fillRect(faceX, enemy.y + 16, 5, 5);
   ctx.fillStyle = "#f36b3d";
-  ctx.fillRect(enemy.x - 2, enemy.y + 12, 16, 16);
+  ctx.fillRect(tailX, enemy.y + 12 + swim, 16, 16);
 }
 
 function drawCrab(enemy) {
@@ -2049,6 +2333,9 @@ function drawPlayer() {
   ctx.translate(-cameraX, 0);
   const x = player.x;
   const y = player.y;
+  const moving = Math.abs(player.vx) > 0.15 || Math.abs(player.vy) > 0.5;
+  const gait = moving ? Math.sin(Date.now() / 85) * 5 : 0;
+  const swimKick = isPlayerInRiver() ? Math.sin(Date.now() / 90) * 6 : gait;
 
   if (level && level.theme.id === "ocean" && diverSkinOwned) {
     ctx.fillStyle = "#ffd08a";
@@ -2063,8 +2350,8 @@ function drawPlayer() {
     ctx.fillRect(x + 5, y + 34, 7, 30);
     ctx.fillRect(x + 44, y + 34, 7, 30);
     ctx.fillStyle = "#0e2236";
-    ctx.fillRect(x + 7, y + 62, 16, 10);
-    ctx.fillRect(x + 31, y + 62, 16, 10);
+    ctx.fillRect(x + 7, y + 62 + Math.max(0, swimKick), 16, 10);
+    ctx.fillRect(x + 31, y + 62 + Math.max(0, -swimKick), 16, 10);
     ctx.fillStyle = "#8f95a3";
     ctx.fillRect(x + 39, y + 8, 6, 26);
     drawWeapon(y);
@@ -2072,23 +2359,29 @@ function drawPlayer() {
     return;
   }
 
+  if (hasDragonAdult) {
+    drawDragonMount(x, y, gait);
+  }
+
   if (hasHorse) {
     ctx.fillStyle = "#8b5a36";
     ctx.fillRect(x - 6, y + 44, 72, 30);
     ctx.fillRect(x + 44, y + 24, 26, 28);
     ctx.fillStyle = "#211b2c";
-    ctx.fillRect(x + 6, y + 70, 10, 14);
-    ctx.fillRect(x + 48, y + 70, 10, 14);
+    ctx.fillRect(x + 6, y + 70 + Math.max(0, gait), 10, 14);
+    ctx.fillRect(x + 24, y + 70 + Math.max(0, -gait), 9, 13);
+    ctx.fillRect(x + 48, y + 70 + Math.max(0, -gait), 10, 14);
+    ctx.fillRect(x + 60, y + 70 + Math.max(0, gait), 8, 13);
     ctx.fillStyle = "#fff4c7";
     ctx.fillRect(x + 58, y + 34, 5, 5);
   }
 
-  const knightY = hasHorse ? y + 4 : y;
+  const knightY = hasDragonAdult ? y - 4 : hasHorse ? y + 4 : y;
   ctx.fillStyle = "#d9dde5";
   ctx.fillRect(x + 10, knightY + 30, 30, 36);
   ctx.fillStyle = "#8f95a3";
-  ctx.fillRect(x + 10, knightY + 56, 12, 12);
-  ctx.fillRect(x + 28, knightY + 56, 12, 12);
+  ctx.fillRect(x + 10, knightY + 56 + Math.max(0, gait), 12, 12);
+  ctx.fillRect(x + 28, knightY + 56 + Math.max(0, -gait), 12, 12);
   ctx.fillStyle = "#c7d4e8";
   ctx.fillRect(x + 8, knightY + 8, 36, 30);
   ctx.fillStyle = "#211b2c";
@@ -2098,6 +2391,21 @@ function drawPlayer() {
   ctx.fillRect(x + 22, knightY - 16, 8, 8);
   drawWeapon(knightY);
   ctx.restore();
+}
+
+function drawDragonMount(x, y, gait) {
+  const wing = Math.sin(Date.now() / 95) * 10;
+  ctx.fillStyle = "#2f9c5a";
+  ctx.fillRect(x - 12, y + 42, 90, 30);
+  ctx.fillRect(x + 44, y + 20, 32, 30);
+  ctx.fillStyle = "#1d6d43";
+  ctx.fillRect(x + 10, y + 28 + wing, 34, 14);
+  ctx.fillRect(x + 8, y + 70 + Math.max(0, gait), 12, 16);
+  ctx.fillRect(x + 54, y + 70 + Math.max(0, -gait), 12, 16);
+  ctx.fillStyle = "#ffd34d";
+  ctx.fillRect(x + 68, y + 28, 8, 8);
+  ctx.fillStyle = "#ff6b2e";
+  ctx.fillRect(x + 78, y + 34, 16, 8);
 }
 
 function drawWeapon(knightY) {
@@ -2152,8 +2460,15 @@ function drawEffects() {
       ctx.fillRect(effect.x + effect.width / 2 - 10, effect.y + effect.height / 2 - 20, 20, 12);
     }
 
-    if (effect.kind === "coins") drawTinyText(`+${level.reward} 金币`, effect.x, effect.y - (42 - effect.life), "#ffd34d");
-    if (effect.kind === "starCoins") drawTinyText("+60 金币", effect.x, effect.y - (42 - effect.life), "#ffd34d");
+    if (effect.kind === "coins") drawTinyText(`+${effect.amount || level.reward} 金币`, effect.x, effect.y - (42 - effect.life), "#ffd34d");
+    if (effect.kind === "starCoins") drawTinyText(`+${starValue} 金币`, effect.x, effect.y - (42 - effect.life), "#ffd34d");
+    if (effect.kind === "loot") drawTinyText(effect.text, effect.x, effect.y - Math.max(0, 42 - effect.life), "#fff29a");
+    if (effect.kind === "dragonFire") {
+      ctx.fillStyle = "#ff6b2e";
+      ctx.fillRect(effect.x, effect.y, effect.width, effect.height);
+      ctx.fillStyle = "#ffd34d";
+      ctx.fillRect(effect.x + 16, effect.y + 5, Math.max(20, effect.width - 32), 7);
+    }
     if (effect.kind === "xp") drawTinyText(`+${effect.amount} 经验`, effect.x, effect.y, "#8ee8ff");
     if (effect.kind === "levelUp") drawTinyText(`升级！攻击 x${2 ** (heroLevel - 1)} 生命+1`, effect.x, effect.y, "#ffd34d");
     if (effect.kind === "unlock") drawTinyText("宝箱已解锁！", effect.x, effect.y, "#ffd34d");
@@ -2162,8 +2477,6 @@ function drawEffects() {
     if (effect.kind === "fireResist") drawTinyText("抗火 60 秒", effect.x, effect.y, "#ff8a2d");
     if (effect.kind === "blackFist") drawTinyText("黑拳无敌", effect.x, effect.y, "#fff29a");
     if (effect.kind === "cageHit") drawTinyText("困住 10 秒", effect.x, effect.y - 8, "#fff29a");
-    if (effect.kind === "painting") drawTinyText("获得：家人是一幅画", effect.x, effect.y, "#ffd34d");
-    if (effect.kind === "watch") drawTinyText("获得：黄金手表", effect.x, effect.y, "#ffd34d");
   }
   ctx.restore();
 }

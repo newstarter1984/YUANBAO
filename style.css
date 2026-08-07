@@ -385,6 +385,7 @@ button:disabled {
 
 .inventory-items {
   display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 8px;
   margin-top: 12px;
 }
@@ -398,6 +399,15 @@ button:disabled {
   background: #fffdf0;
   padding: 8px;
   font-weight: 900;
+}
+
+.inventory-item--slots {
+  grid-column: 1 / -1;
+  background: #d8edf5;
+}
+
+.inventory-item--equipped {
+  background: #fff4c7;
 }
 
 .inventory-item button {
