@@ -499,7 +499,9 @@ function moveEnemies() {
       enemy.x += Math.sin((Date.now() / 550 + enemy.phase) % 20) * 0.85;
     }
 
-    enemy.x = Math.max(enemy.patrolLeft, Math.min(enemy.patrolRight, enemy.x));
+    enemy.x = inSight
+      ? Math.max(18, Math.min(level.worldWidth - enemy.width - 18, enemy.x))
+      : Math.max(enemy.patrolLeft, Math.min(enemy.patrolRight, enemy.x));
 
     if (absDistance >= 48 && absDistance <= 110 && Math.abs(player.y - enemy.y) < 96 && enemy.attackTimer === 0) {
       enemy.attackTimer = enemy.kind === "brute" || enemy.kind === "lavaAxeGuard" ? 92 : 70;
@@ -526,6 +528,7 @@ function moveLavaBoss(enemy) {
 
   const distance = player.x + player.width / 2 - (enemy.x + enemy.width / 2);
   const absDistance = Math.abs(distance);
+  const inSight = absDistance < 760;
   enemy.facing = distance > 0 ? 1 : -1;
 
   if (enemy.bossMode === "emerge") {
@@ -553,8 +556,11 @@ function moveLavaBoss(enemy) {
     return;
   }
 
-  if (absDistance > 110) {
+  if (inSight && absDistance > 110) {
     enemy.x += Math.sign(distance) * 1.25;
+    enemy.x = Math.max(18, Math.min(level.worldWidth - enemy.width - 18, enemy.x));
+  } else if (!inSight) {
+    enemy.x += Math.sin((Date.now() / 620 + enemy.phase) % 20) * 0.8;
     enemy.x = Math.max(enemy.patrolLeft, Math.min(enemy.patrolRight, enemy.x));
   }
 
