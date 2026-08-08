@@ -55,21 +55,32 @@ const monsterXp = {
 
 const weapons = [
   { name: "小剑", cost: 0, damage: 12, range: 70, cooldown: 28, kind: "melee" },
-  { name: "狼牙棒", cost: 10, damage: 22, range: 88, cooldown: 30, kind: "melee" },
-  { name: "步枪", cost: 30, damage: 28, range: 560, cooldown: 24, kind: "rifle" },
-  { name: "火箭筒", cost: 100, damage: 54, range: 620, cooldown: 48, kind: "rocket" },
-  { name: "魔法棒", cost: 80, damage: 42, range: 620, cooldown: 32, kind: "magic" },
-  { name: "火焰剑", cost: 120, damage: 46, range: 96, cooldown: 26, kind: "fireSword" },
+  { name: "短剑", cost: 10, damage: 16, range: 64, cooldown: 20, kind: "melee" },
+  { name: "长剑", cost: 30, damage: 20, range: 92, cooldown: 30, kind: "melee" },
+  { name: "普通弓", cost: 25, damage: 24, range: 560, cooldown: 30, kind: "bow" },
+  { name: "火焰弓", cost: 60, damage: 30, range: 600, cooldown: 34, kind: "fireBow" },
+  { name: "闪电弓", cost: 75, damage: 34, range: 620, cooldown: 24, kind: "lightningBow" },
+  { name: "冷却弓", cost: 70, damage: 28, range: 590, cooldown: 32, kind: "frostBow" },
+  { name: "缓慢弓", cost: 65, damage: 26, range: 590, cooldown: 32, kind: "slowBow" },
+  { name: "闪电剑", cost: 90, damage: 42, range: 98, cooldown: 22, kind: "lightningSword" },
+  { name: "火焰剑", cost: 120, damage: 46, range: 100, cooldown: 26, kind: "fireSword" },
 ];
 
 const shopGoods = [
-  { type: "weapon", index: 1, name: "狼牙棒", cost: 10 },
-  { type: "weapon", index: 2, name: "步枪", cost: 30 },
+  { type: "weapon", index: 1, name: "短剑", cost: 10 },
+  { type: "weapon", index: 2, name: "长剑", cost: 30 },
+  { type: "weapon", index: 3, name: "普通弓", cost: 25 },
   { type: "horse", name: "马", cost: 60 },
-  { type: "weapon", index: 3, name: "火箭筒", cost: 100 },
   { type: "skin", item: "diverSkin", name: "潜水员皮肤", cost: 60 },
-  { type: "weapon", index: 4, name: "魔法棒", cost: 80 },
-  { type: "weapon", index: 5, name: "火焰剑", cost: 120 },
+  { type: "weapon", index: 4, name: "火焰弓", cost: 60 },
+  { type: "weapon", index: 5, name: "闪电弓", cost: 75 },
+  { type: "weapon", index: 6, name: "冷却弓", cost: 70 },
+  { type: "weapon", index: 7, name: "缓慢弓", cost: 65 },
+  { type: "weapon", index: 8, name: "闪电剑", cost: 90 },
+  { type: "weapon", index: 9, name: "火焰剑", cost: 120 },
+  { type: "item", item: "normalArrow", name: "普通箭 x10", cost: 4, amount: 10 },
+  { type: "item", item: "poisonArrow", name: "剧毒箭 x5", cost: 8, amount: 5 },
+  { type: "item", item: "fireArrow", name: "火焰箭 x5", cost: 10, amount: 5 },
   { type: "item", item: "powerPotion", name: "力量药水", cost: 45 },
   { type: "item", item: "fireResistPotion", name: "抗火药水", cost: 2 },
   { type: "item", item: "speedPotion", name: "速度药水", cost: 90 },
@@ -91,7 +102,7 @@ let experience = 0;
 let heroLevel = 1;
 let playCount = 0;
 let weaponLevel = 0;
-let ownedWeapons = [true, false, false, false, false, false];
+let ownedWeapons = [true, false, false, false, false, false, false, false, false, false];
 let specialWeaponIndexes = {};
 let hasHorse = false;
 let hasDragonAdult = false;
@@ -108,6 +119,9 @@ let inventory = {
   medkit: 0,
   powerPotion: 0,
   fireResistPotion: 0,
+  normalArrow: 30,
+  poisonArrow: 8,
+  fireArrow: 6,
   stinkSock: 0,
   lightningSword: 0,
   fireSwordLoot: 0,
@@ -549,6 +563,11 @@ function moveEnemies() {
       enemy.y = enemy.baseY + Math.sin((Date.now() / 160 + enemy.phase) % 80) * (enemy.kind === "shark" ? 16 : 22);
     }
 
+    if (enemy.kind === "swampWitch" && inSight && enemy.attackTimer === 0) {
+      enemy.attackTimer = 96;
+      castWitchMagic(enemy);
+    }
+
     const attackRange =
       enemy.kind === "shark" || enemy.kind === "harpooner" ? 150 :
       enemy.kind === "crab" || enemy.kind === "scorpion" ? 104 :
@@ -577,6 +596,25 @@ function moveEnemies() {
       effects.push({ x: enemy.x, y: enemy.y + 8, width: enemy.width, height: enemy.height, life: 12, kind: "claw" });
     }
   }
+}
+
+function castWitchMagic(enemy) {
+  const dx = player.x + player.width / 2 - (enemy.x + enemy.width / 2);
+  const dy = player.y + player.height / 2 - (enemy.y + enemy.height / 2);
+  const distance = Math.max(1, Math.hypot(dx, dy));
+  projectiles.push({
+    x: enemy.x + enemy.width / 2 - 9,
+    y: enemy.y + 34,
+    width: 18,
+    height: 18,
+    vx: (dx / distance) * 5.2,
+    vy: (dy / distance) * 5.2,
+    damage: 1,
+    rangeLeft: 720,
+    kind: "witchMagic",
+    owner: "enemy",
+  });
+  effects.push({ x: enemy.x - 8, y: enemy.y + 22, width: enemy.width + 16, height: 24, life: 18, kind: "magicCast" });
 }
 
 function moveLavaBoss(enemy) {
@@ -830,11 +868,13 @@ function attack() {
   const weapon = weapons[weaponLevel];
   if (player.attackTimer > 0) return;
 
+  if (isBowWeapon(weapon) && !prepareArrow(weapon)) return;
+
   playSound("attack");
   player.attackTimer = weapon.cooldown;
   player.attacking = 12;
 
-  if (weapon.kind === "melee" || weapon.kind === "fireSword") {
+  if (isSwordWeapon(weapon)) {
     const hitBox = {
       x: player.facing > 0 ? player.x + player.width - 6 : player.x - weapon.range + 6,
       y: player.y + 18,
@@ -847,6 +887,31 @@ function attack() {
   }
 
   spawnBullet(weapon);
+}
+
+function isSwordWeapon(weapon) {
+  return ["melee", "fireSword", "lightningSword"].includes(weapon.kind);
+}
+
+function isBowWeapon(weapon) {
+  return ["bow", "fireBow", "lightningBow", "frostBow", "slowBow"].includes(weapon.kind);
+}
+
+function prepareArrow(weapon) {
+  const arrowKey = weapon.kind === "fireBow"
+    ? "fireArrow"
+    : weapon.kind === "bow" && inventory.poisonArrow > 0
+      ? "poisonArrow"
+      : "normalArrow";
+  if ((inventory[arrowKey] || 0) <= 0) {
+    effects.push({ x: player.x - 20, y: player.y - 32, width: 130, height: 28, life: 48, kind: "loot", text: "没有箭了！" });
+    return false;
+  }
+  inventory[arrowKey] -= 1;
+  player.loadedArrow = arrowKey;
+  updateHud();
+  renderBackpack();
+  return true;
 }
 
 function getAttackDamage(baseDamage) {
@@ -939,25 +1004,42 @@ function useMedkit() {
 }
 
 function spawnBullet(weapon) {
-  const speed = weapon.kind === "rocket" ? 8 : 12;
+  const arrowKind =
+    weapon.kind === "fireBow" ? "fireArrow" :
+    weapon.kind === "lightningBow" ? "lightningArrow" :
+    weapon.kind === "frostBow" ? "frostArrow" :
+    weapon.kind === "slowBow" ? "slowArrow" :
+    player.loadedArrow === "poisonArrow" ? "poisonArrow" :
+    "arrow";
+  const speed = weapon.kind === "lightningBow" ? 15 : 12;
   projectiles.push({
     x: player.facing > 0 ? player.x + player.width : player.x - 12,
     y: player.y + 34,
-    width: weapon.kind === "rocket" ? 24 : 12,
-    height: weapon.kind === "rocket" ? 12 : 6,
+    width: 26,
+    height: 6,
     vx: speed * player.facing,
     vy: 0,
     damage: getAttackDamage(weapon.damage),
     rangeLeft: weapon.range,
-    kind: weapon.kind,
+    kind: arrowKind,
   });
+  player.loadedArrow = "";
 }
 
 function moveProjectiles() {
   for (const projectile of projectiles) {
     projectile.x += projectile.vx;
     projectile.y += projectile.vy || 0;
-    projectile.rangeLeft -= Math.abs(projectile.vx);
+    projectile.rangeLeft -= Math.hypot(projectile.vx, projectile.vy || 0);
+
+    if (projectile.owner === "enemy") {
+      if (touches(projectile, player)) {
+        hurtPlayer(projectile.damage);
+        effects.push({ x: projectile.x - 12, y: projectile.y - 12, width: 42, height: 42, life: 18, kind: "magicHit" });
+        projectile.rangeLeft = 0;
+      }
+      continue;
+    }
 
     if (projectile.kind === "grenade") {
       projectile.vy += 0.34;
@@ -996,10 +1078,15 @@ function moveProjectiles() {
           enemy.cagedTimer = 600;
           effects.push({ x: enemy.x - 8, y: enemy.y - 12, width: enemy.width + 16, height: enemy.height + 22, life: 60, kind: "cageHit" });
         } else {
+          if (projectile.kind === "slowArrow" || projectile.kind === "frostArrow") {
+            enemy.cagedTimer = Math.max(enemy.cagedTimer, projectile.kind === "frostArrow" ? 90 : 50);
+          }
+          if (projectile.kind === "fireArrow") {
+            effects.push({ x: enemy.x - 6, y: enemy.y - 8, width: enemy.width + 12, height: enemy.height + 12, life: 18, kind: "boom" });
+          }
           damageEnemy(enemy, projectile.damage);
         }
         projectile.rangeLeft = 0;
-        if (projectile.kind === "rocket") explode(projectile.x, projectile.y, projectile.damage, 86);
         break;
       }
     }
@@ -1177,10 +1264,11 @@ function rollChestDrops(levelNumber) {
   if (Math.random() < (levelNumber >= 2 ? 0.35 : 0.3)) {
     if (Math.random() < 0.5) {
       inventory.lightningSword += 1;
+      ownedWeapons[8] = true;
       drops.push("闪电剑");
     } else {
       inventory.fireSwordLoot = (inventory.fireSwordLoot || 0) + 1;
-      ownedWeapons[5] = true;
+      ownedWeapons[9] = true;
       drops.push("火焰剑");
     }
   }
@@ -1263,7 +1351,7 @@ function renderShop() {
       item.type === "skin" && item.item === "diverSkin" ? diverSkinOwned :
       item.type === "item" && item.item === "speedPotion" ? speedPotionOwned :
       item.type === "weapon" && ownedWeapons[item.index];
-    const lockedByOrder = item.type === "weapon" && item.index > 0 && !ownedWeapons[item.index - 1] && !owned;
+    const lockedByOrder = false;
     button.type = "button";
     button.className = owned ? "shop-item is-owned" : "shop-item";
     button.disabled = owned || lockedByOrder || coins < item.cost;
@@ -1299,8 +1387,11 @@ function renderBackpack() {
     { key: "powerPotion", name: "力量药水", count: inventory.powerPotion, action: "使用", onClick: usePowerPotion },
     { key: "fireResistPotion", name: "抗火药水", count: inventory.fireResistPotion, action: "使用", onClick: useFireResistPotion },
     { key: "medkit", name: "医疗包", count: inventory.medkit, action: "使用", onClick: useMedkit },
+    { key: "normalArrow", name: "普通箭", count: inventory.normalArrow, action: "查看", onClick: renderBackpack },
+    { key: "poisonArrow", name: "剧毒箭", count: inventory.poisonArrow, action: "查看", onClick: renderBackpack },
+    { key: "fireArrow", name: "火焰箭", count: inventory.fireArrow, action: "查看", onClick: renderBackpack },
     { key: "lightningSword", name: "闪电剑", count: inventory.lightningSword, action: "装备", onClick: () => equipLootWeapon("lightningSword") },
-    { key: "fireSwordLoot", name: "火焰剑", count: inventory.fireSwordLoot || 0, action: "装备", onClick: () => equipWeapon(5) },
+    { key: "fireSwordLoot", name: "火焰剑", count: inventory.fireSwordLoot || 0, action: "装备", onClick: () => equipWeapon(9) },
     { key: "lightningBoots", name: "闪电靴子", count: inventory.lightningBoots, action: "装备", onClick: () => useLightningBoots() },
     { key: "skyAxe", name: "轰天斧", count: inventory.skyAxe, action: "装备", onClick: () => equipLootWeapon("skyAxe") },
     { key: "dragonEgg", name: `龙蛋/幼龙 喂养${dragonFeedCount}/10`, count: inventory.dragonEgg, action: "喂牛肉", onClick: feedDragon },
@@ -1345,7 +1436,6 @@ function buyItem(item) {
       item.type === "item" && item.item === "speedPotion" ? speedPotionOwned :
       item.type === "weapon" && ownedWeapons[item.index];
   if (owned || coins < item.cost) return;
-  if (item.type === "weapon" && item.index > 0 && !ownedWeapons[item.index - 1]) return;
 
   coins -= item.cost;
   if (item.type === "horse") {
@@ -1355,7 +1445,7 @@ function buyItem(item) {
   } else if (item.type === "item" && item.item === "speedPotion") {
     speedPotionOwned = true;
   } else if (item.type === "item") {
-    inventory[item.item] += 1;
+    inventory[item.item] += item.amount || 1;
   } else {
     ownedWeapons[item.index] = true;
     weaponLevel = item.index;
@@ -1520,10 +1610,16 @@ function equipWeapon(index) {
 
 function equipLootWeapon(key) {
   if ((inventory[key] || 0) <= 0) return;
+  if (key === "lightningSword") {
+    ownedWeapons[8] = true;
+    weaponLevel = 8;
+    updateHud();
+    renderBackpack();
+    renderShop();
+    return;
+  }
   if (specialWeaponIndexes[key] === undefined) {
-    const weapon = key === "lightningSword"
-      ? { name: "闪电剑", cost: 0, damage: 66, range: 104, cooldown: 18, kind: "magic" }
-      : { name: "轰天斧", cost: 0, damage: 90, range: 116, cooldown: 32, kind: "melee" };
+    const weapon = { name: "轰天斧", cost: 0, damage: 90, range: 116, cooldown: 32, kind: "melee" };
     weapons.push(weapon);
     ownedWeapons.push(true);
     specialWeaponIndexes[key] = weapons.length - 1;
@@ -2210,8 +2306,12 @@ function drawSwampWitch(enemy) {
   ctx.fillStyle = "#7fffd4";
   ctx.fillRect(enemy.x + 24, enemy.y + 34, 6, 6);
   ctx.fillRect(enemy.x + enemy.width - 30, enemy.y + 34, 6, 6);
-  ctx.fillStyle = "#8f95a3";
-  ctx.fillRect(enemy.x - 12, enemy.y + 54, enemy.width + 24, 5);
+  ctx.fillStyle = "#8b5a36";
+  ctx.fillRect(enemy.x + enemy.width - 4, enemy.y + 18, 7, 62);
+  ctx.fillStyle = "#9b5cff";
+  ctx.fillRect(enemy.x + enemy.width - 10, enemy.y + 10, 18, 18);
+  ctx.fillStyle = "#d7b8ff";
+  ctx.fillRect(enemy.x + enemy.width - 4, enemy.y + 15, 8, 8);
 }
 
 function drawMudBeast(enemy) {
@@ -2409,15 +2509,22 @@ function drawProjectiles() {
   ctx.translate(-cameraX, 0);
   for (const projectile of projectiles) {
     ctx.fillStyle =
-      projectile.kind === "rocket" ? "#ff6b50" :
       projectile.kind === "grenade" ? "#2f6b3f" :
       projectile.kind === "cage" ? "#fff29a" :
-      projectile.kind === "magic" ? "#9b5cff" :
+      projectile.kind === "witchMagic" ? "#9b5cff" :
+      projectile.kind === "fireArrow" ? "#ff6b2e" :
+      projectile.kind === "lightningArrow" ? "#ffd34d" :
+      projectile.kind === "frostArrow" ? "#8ee8ff" :
+      projectile.kind === "slowArrow" ? "#7fffd4" :
+      projectile.kind === "poisonArrow" ? "#45d06f" :
       "#211b2c";
     ctx.fillRect(projectile.x, projectile.y, projectile.width, projectile.height);
-    if (projectile.kind === "rocket") {
-      ctx.fillStyle = "#ffd34d";
-      ctx.fillRect(projectile.x - Math.sign(projectile.vx) * 10, projectile.y + 3, 10, 6);
+    if (projectile.kind === "witchMagic") {
+      ctx.fillStyle = "#d7b8ff";
+      ctx.fillRect(projectile.x + 5, projectile.y + 5, 8, 8);
+    } else if (projectile.kind.includes("Arrow") || projectile.kind === "arrow") {
+      ctx.fillStyle = "#f4f1df";
+      ctx.fillRect(projectile.x - Math.sign(projectile.vx) * 8, projectile.y + 1, 8, 4);
     }
   }
   ctx.restore();
@@ -2515,20 +2622,41 @@ function drawWeapon(knightY) {
   ctx.translate(handX, handY);
   ctx.scale(player.facing, 1);
 
-  if (weapon.kind === "melee" || weapon.kind === "fireSword") {
-    ctx.fillStyle = weapon.kind === "fireSword" ? "#ff6b50" : weaponLevel === 0 ? "#d9dde5" : "#5e5b62";
+  if (isSwordWeapon(weapon)) {
+    ctx.fillStyle =
+      weapon.kind === "fireSword" ? "#ff6b50" :
+      weapon.kind === "lightningSword" ? "#ffd34d" :
+      weaponLevel === 0 ? "#d9dde5" : "#5e5b62";
     ctx.fillRect(0, player.attacking > 0 ? -18 : -8, weaponLevel === 0 ? 44 : 54, weaponLevel === 0 ? 7 : 14);
     if (weapon.kind === "fireSword") {
       ctx.fillStyle = "#ffd34d";
       ctx.fillRect(12, player.attacking > 0 ? -25 : -15, 28, 7);
     }
+    if (weapon.kind === "lightningSword") {
+      ctx.fillStyle = "#8ee8ff";
+      ctx.fillRect(14, player.attacking > 0 ? -25 : -15, 24, 6);
+    }
     ctx.fillStyle = "#8b5a36";
     ctx.fillRect(-8, -3, 12, 8);
   } else {
-    ctx.fillStyle = weapon.kind === "rocket" ? "#595461" : weapon.kind === "magic" ? "#8b5cf6" : "#2d3142";
-    ctx.fillRect(0, -10, weapon.kind === "rocket" ? 68 : 60, weapon.kind === "rocket" ? 20 : 14);
-    ctx.fillStyle = "#8f95a3";
-    ctx.fillRect(weapon.kind === "rocket" ? 52 : 46, -6, 18, 8);
+    ctx.strokeStyle =
+      weapon.kind === "fireBow" ? "#ff6b2e" :
+      weapon.kind === "lightningBow" ? "#ffd34d" :
+      weapon.kind === "frostBow" ? "#8ee8ff" :
+      weapon.kind === "slowBow" ? "#7fffd4" :
+      "#8b5a36";
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.arc(26, 0, 28, -1.15, 1.15);
+    ctx.stroke();
+    ctx.strokeStyle = "#f4f1df";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(38, -25);
+    ctx.lineTo(38, 25);
+    ctx.stroke();
+    ctx.fillStyle = "#d9dde5";
+    ctx.fillRect(4, -2, 42, 4);
   }
 
   ctx.restore();
@@ -2566,6 +2694,12 @@ function drawEffects() {
       ctx.fillRect(effect.x, effect.y, effect.width, effect.height);
       ctx.fillStyle = "#ffd34d";
       ctx.fillRect(effect.x + 16, effect.y + 5, Math.max(20, effect.width - 32), 7);
+    }
+    if (effect.kind === "magicCast" || effect.kind === "magicHit") {
+      ctx.fillStyle = "#9b5cff";
+      ctx.fillRect(effect.x + effect.width / 2 - 14, effect.y + effect.height / 2 - 14, 28, 28);
+      ctx.fillStyle = "#d7b8ff";
+      ctx.fillRect(effect.x + effect.width / 2 - 6, effect.y + effect.height / 2 - 6, 12, 12);
     }
     if (effect.kind === "xp") drawTinyText(`+${effect.amount} 经验`, effect.x, effect.y, "#8ee8ff");
     if (effect.kind === "levelUp") drawTinyText(`升级！战斗力 +1`, effect.x, effect.y, "#ffd34d");
