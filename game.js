@@ -237,7 +237,10 @@ function buildEnemy(kind, x, number, index, themeId) {
     cagedTimer: 0,
     bossMode: kind === "lavaBoss" ? "armor" : "",
     bossTimer: kind === "lavaBoss" ? 120 : 0,
-    summonTimer: kind === "lavaBoss" ? 210 : 0,
+    summonTimer: 0,
+    bossSpin: 0,
+    attackChecked: false,
+    summonedOnMiss: false,
   };
 }
 
@@ -578,13 +581,25 @@ function moveEnemies() {
 
 function moveLavaBoss(enemy) {
   enemy.bossTimer = Math.max(0, enemy.bossTimer - 1);
-  enemy.summonTimer = Math.max(0, enemy.summonTimer - 1);
+
+  if (enemy.bossMode === "diving") {
+    enemy.bossSpin += 0.42;
+    enemy.y += 4.8;
+    if (enemy.bossTimer <= 0) {
+      enemy.bossMode = "hidden";
+      enemy.bossTimer = 70;
+      enemy.y = floorY + 18;
+    }
+    return;
+  }
 
   if (enemy.bossMode === "hidden") {
     enemy.y = floorY + 18;
     if (enemy.bossTimer <= 0) {
       enemy.bossMode = "emerge";
-      enemy.bossTimer = 54;
+      enemy.bossTimer = 82;
+      enemy.attackChecked = false;
+      enemy.summonedOnMiss = false;
       enemy.y = floorY - enemy.height;
       effects.push({ x: enemy.x - 20, y: floorY - 90, width: enemy.width + 40, height: 80, life: 38, kind: "boom" });
     }
@@ -597,13 +612,24 @@ function moveLavaBoss(enemy) {
   enemy.facing = distance > 0 ? 1 : -1;
 
   if (enemy.bossMode === "emerge") {
-    if (absDistance < 145 && Math.abs(player.y - enemy.y) < 130 && enemy.attackTimer === 0) {
+    if (!enemy.attackChecked && enemy.bossTimer <= 50) {
+      enemy.attackChecked = true;
       enemy.attackTimer = 110;
-      hurtPlayer(2);
-      effects.push({ x: enemy.x + (enemy.facing > 0 ? 92 : -26), y: enemy.y + 44, width: 88, height: 28, life: 18, kind: "claw" });
-      if (Math.random() < 0.45) {
+      const axeBox = {
+        x: enemy.facing > 0 ? enemy.x + enemy.width - 12 : enemy.x - 96,
+        y: enemy.y + 42,
+        width: 108,
+        height: 52,
+      };
+      effects.push({ x: axeBox.x, y: axeBox.y, width: axeBox.width, height: axeBox.height, life: 18, kind: "claw" });
+      if (touches(player, axeBox)) {
+        hurtPlayer(2);
+      } else {
         enemy.bossMode = "axeStuck";
-        enemy.bossTimer = 120;
+        enemy.bossTimer = 210;
+        enemy.summonedOnMiss = true;
+        summonLavaAxeGuard(enemy, 2);
+        effects.push({ x: enemy.x - 18, y: enemy.y - 28, width: enemy.width + 36, height: 30, life: 70, kind: "loot", text: "斧头砍空，召唤小弟！" });
       }
     }
     if (enemy.bossTimer <= 0) {
@@ -629,25 +655,25 @@ function moveLavaBoss(enemy) {
     enemy.x = Math.max(enemy.patrolLeft, Math.min(enemy.patrolRight, enemy.x));
   }
 
-  if (enemy.summonTimer <= 0) {
-    summonLavaAxeGuard(enemy);
-    enemy.summonTimer = 260;
-  }
-
   if (absDistance < 170 && enemy.attackTimer === 0) {
-    enemy.bossMode = "emerge";
-    enemy.bossTimer = 58;
+    enemy.bossMode = "diving";
+    enemy.bossTimer = 42;
+    enemy.bossSpin = 0;
   }
 }
 
-function summonLavaAxeGuard(boss) {
+function summonLavaAxeGuard(boss, count = 1) {
   const aliveSummons = level.enemies.filter((enemy) => enemy.alive && enemy.kind === "lavaAxeGuard").length;
-  if (aliveSummons >= 3) return;
-  const guard = buildEnemy("lavaAxeGuard", boss.x - boss.facing * 150, level.number, aliveSummons + 1, "lava");
-  guard.patrolLeft = Math.max(260, guard.x - 180);
-  guard.patrolRight = Math.min(level.worldWidth - 140, guard.x + 180);
-  level.enemies.push(guard);
-  effects.push({ x: guard.x - 10, y: guard.y - 28, width: guard.width + 20, height: 40, life: 46, kind: "boom" });
+  const slots = Math.max(0, 4 - aliveSummons);
+  for (let i = 0; i < Math.min(count, slots); i += 1) {
+    const side = i % 2 === 0 ? -1 : 1;
+    const guard = buildEnemy("lavaAxeGuard", boss.x + side * (112 + i * 46), level.number, aliveSummons + i + 1, "lava");
+    guard.x = Math.max(260, Math.min(level.worldWidth - 140, guard.x));
+    guard.patrolLeft = Math.max(260, guard.x - 180);
+    guard.patrolRight = Math.min(level.worldWidth - 140, guard.x + 180);
+    level.enemies.push(guard);
+    effects.push({ x: guard.x - 10, y: guard.y - 28, width: guard.width + 20, height: 40, life: 46, kind: "boom" });
+  }
 }
 
 function moveAnimals() {
@@ -824,11 +850,12 @@ function attack() {
 }
 
 function getAttackDamage(baseDamage) {
-  return baseDamage * (2 ** (heroLevel - 1)) * (powerBoostTimer > 0 ? 3 : 1);
+  const weaponPower = Math.max(1, Math.round(baseDamage / 6));
+  return (weaponPower + heroLevel) * (powerBoostTimer > 0 ? 3 : 1);
 }
 
 function getMaxHearts() {
-  return 2 + heroLevel - 1;
+  return 2;
 }
 
 function throwGrenade() {
@@ -1027,13 +1054,19 @@ function damageEnemy(enemy, damage) {
       return;
     }
     if (enemy.bossMode === "armor" && Math.random() < 0.32) {
-      enemy.bossMode = "hidden";
-      enemy.bossTimer = 92;
+      enemy.bossMode = "diving";
+      enemy.bossTimer = 42;
+      enemy.bossSpin = 0;
       effects.push({ x: enemy.x - 18, y: floorY - 78, width: enemy.width + 36, height: 64, life: 42, kind: "boom" });
       updateHud();
       return;
     }
     if (enemy.bossMode === "axeStuck") {
+      const aliveSummons = level.enemies.some((monster) => monster.alive && monster.kind === "lavaAxeGuard");
+      if (aliveSummons) {
+        effects.push({ x: enemy.x + 10, y: enemy.y - 20, width: 150, height: 28, life: 46, kind: "loot", text: "先打败小弟！" });
+        return;
+      }
       damage *= 1.5;
     }
   }
@@ -1073,9 +1106,6 @@ function addExperience(amount, x, y) {
   while (experience >= experienceNeeded) {
     experience -= experienceNeeded;
     heroLevel += 1;
-    if (player) {
-      player.hearts = Math.min(getMaxHearts(), player.hearts + 1);
-    }
     playSound("levelUp");
     effects.push({ x: player ? player.x - 18 : x, y: player ? player.y - 38 : y, width: 150, height: 30, life: 90, kind: "levelUp" });
   }
@@ -2260,6 +2290,24 @@ function drawLavaAxeGuard(enemy) {
 }
 
 function drawLavaBoss(enemy) {
+  if (enemy.bossMode === "diving") {
+    ctx.save();
+    ctx.translate(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2);
+    ctx.rotate(enemy.bossSpin);
+    ctx.fillStyle = enemyFill(enemy, "#21161b");
+    ctx.fillRect(-enemy.width / 2 + 14, -enemy.height / 2 + 34, enemy.width - 28, enemy.height - 34);
+    ctx.fillStyle = "#ff5a2e";
+    ctx.fillRect(-enemy.width / 2 + 30, -enemy.height / 2 + 10, enemy.width - 60, 42);
+    ctx.fillStyle = "#ffd34d";
+    ctx.fillRect(-18, -10, 36, 12);
+    ctx.restore();
+    ctx.fillStyle = "#ff5a2e";
+    ctx.fillRect(enemy.x + 18, floorY - 20, enemy.width - 36, 14);
+    ctx.fillStyle = "#ffd34d";
+    ctx.fillRect(enemy.x + 42, floorY - 28, enemy.width - 84, 8);
+    return;
+  }
+
   if (enemy.bossMode === "hidden") {
     ctx.fillStyle = "#ff5a2e";
     ctx.fillRect(enemy.x + 18, floorY - 16, enemy.width - 36, 16);
@@ -2520,7 +2568,7 @@ function drawEffects() {
       ctx.fillRect(effect.x + 16, effect.y + 5, Math.max(20, effect.width - 32), 7);
     }
     if (effect.kind === "xp") drawTinyText(`+${effect.amount} 经验`, effect.x, effect.y, "#8ee8ff");
-    if (effect.kind === "levelUp") drawTinyText(`升级！攻击 x${2 ** (heroLevel - 1)} 生命+1`, effect.x, effect.y, "#ffd34d");
+    if (effect.kind === "levelUp") drawTinyText(`升级！战斗力 +1`, effect.x, effect.y, "#ffd34d");
     if (effect.kind === "unlock") drawTinyText("宝箱已解锁！", effect.x, effect.y, "#ffd34d");
     if (effect.kind === "heal") drawTinyText("生命回满", effect.x, effect.y, "#45d06f");
     if (effect.kind === "power") drawTinyText("力量 x3", effect.x, effect.y, "#ff6b50");
