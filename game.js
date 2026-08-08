@@ -109,6 +109,8 @@ let hasDragonAdult = false;
 let dragonFeedCount = 0;
 let dragonAttackTimer = 0;
 let lightningBootsEquipped = false;
+let equippedArrow = "normalArrow";
+let equippedTool = "";
 let diverSkinOwned = false;
 let selectedProfession = "doctor";
 let speedPotionOwned = false;
@@ -898,13 +900,9 @@ function isBowWeapon(weapon) {
 }
 
 function prepareArrow(weapon) {
-  const arrowKey = weapon.kind === "fireBow"
-    ? "fireArrow"
-    : weapon.kind === "bow" && inventory.poisonArrow > 0
-      ? "poisonArrow"
-      : "normalArrow";
+  const arrowKey = equippedArrow || "normalArrow";
   if ((inventory[arrowKey] || 0) <= 0) {
-    effects.push({ x: player.x - 20, y: player.y - 32, width: 130, height: 28, life: 48, kind: "loot", text: "没有箭了！" });
+    effects.push({ x: player.x - 20, y: player.y - 32, width: 160, height: 28, life: 48, kind: "loot", text: `${getArrowName(arrowKey)}没有了！` });
     return false;
   }
   inventory[arrowKey] -= 1;
@@ -1005,11 +1003,11 @@ function useMedkit() {
 
 function spawnBullet(weapon) {
   const arrowKind =
-    weapon.kind === "fireBow" ? "fireArrow" :
+    player.loadedArrow === "fireArrow" ? "fireArrow" :
+    player.loadedArrow === "poisonArrow" ? "poisonArrow" :
     weapon.kind === "lightningBow" ? "lightningArrow" :
     weapon.kind === "frostBow" ? "frostArrow" :
     weapon.kind === "slowBow" ? "slowArrow" :
-    player.loadedArrow === "poisonArrow" ? "poisonArrow" :
     "arrow";
   const speed = weapon.kind === "lightningBow" ? 15 : 12;
   projectiles.push({
@@ -1387,22 +1385,22 @@ function renderBackpack() {
     { key: "powerPotion", name: "力量药水", count: inventory.powerPotion, action: "使用", onClick: usePowerPotion },
     { key: "fireResistPotion", name: "抗火药水", count: inventory.fireResistPotion, action: "使用", onClick: useFireResistPotion },
     { key: "medkit", name: "医疗包", count: inventory.medkit, action: "使用", onClick: useMedkit },
-    { key: "normalArrow", name: "普通箭", count: inventory.normalArrow, action: "查看", onClick: renderBackpack },
-    { key: "poisonArrow", name: "剧毒箭", count: inventory.poisonArrow, action: "查看", onClick: renderBackpack },
-    { key: "fireArrow", name: "火焰箭", count: inventory.fireArrow, action: "查看", onClick: renderBackpack },
-    { key: "lightningSword", name: "闪电剑", count: inventory.lightningSword, action: "装备", onClick: () => equipLootWeapon("lightningSword") },
-    { key: "fireSwordLoot", name: "火焰剑", count: inventory.fireSwordLoot || 0, action: "装备", onClick: () => equipWeapon(9) },
-    { key: "lightningBoots", name: "闪电靴子", count: inventory.lightningBoots, action: "装备", onClick: () => useLightningBoots() },
-    { key: "skyAxe", name: "轰天斧", count: inventory.skyAxe, action: "装备", onClick: () => equipLootWeapon("skyAxe") },
+    { key: "normalArrow", name: `普通箭${equippedArrow === "normalArrow" ? "（已佩戴）" : ""}`, count: inventory.normalArrow, action: equippedArrow === "normalArrow" ? "已佩戴" : "佩戴", onClick: () => equipArrow("normalArrow") },
+    { key: "poisonArrow", name: `剧毒箭${equippedArrow === "poisonArrow" ? "（已佩戴）" : ""}`, count: inventory.poisonArrow, action: equippedArrow === "poisonArrow" ? "已佩戴" : "佩戴", onClick: () => equipArrow("poisonArrow") },
+    { key: "fireArrow", name: `火焰箭${equippedArrow === "fireArrow" ? "（已佩戴）" : ""}`, count: inventory.fireArrow, action: equippedArrow === "fireArrow" ? "已佩戴" : "佩戴", onClick: () => equipArrow("fireArrow") },
+    { key: "lightningSword", name: "闪电剑", count: inventory.lightningSword, action: "佩戴", onClick: () => equipLootWeapon("lightningSword") },
+    { key: "fireSwordLoot", name: "火焰剑", count: inventory.fireSwordLoot || 0, action: "佩戴", onClick: () => equipWeapon(9) },
+    { key: "lightningBoots", name: "闪电靴子", count: inventory.lightningBoots, action: lightningBootsEquipped ? "已佩戴" : "佩戴", onClick: () => useLightningBoots() },
+    { key: "skyAxe", name: "轰天斧", count: inventory.skyAxe, action: "佩戴", onClick: () => equipLootWeapon("skyAxe") },
     { key: "dragonEgg", name: `龙蛋/幼龙 喂养${dragonFeedCount}/10`, count: inventory.dragonEgg, action: "喂牛肉", onClick: feedDragon },
-    { key: "dragonWand", name: "驯龙杖", count: inventory.dragonWand, action: "查看", onClick: renderBackpack },
-    { key: "dragonNest", name: "驯龙巢", count: inventory.dragonNest, action: "查看", onClick: renderBackpack },
+    { key: "dragonWand", name: `驯龙杖${equippedTool === "dragonWand" ? "（已佩戴）" : ""}`, count: inventory.dragonWand, action: equippedTool === "dragonWand" ? "已佩戴" : "佩戴", onClick: () => equipTool("dragonWand") },
+    { key: "dragonNest", name: `驯龙巢${equippedTool === "dragonNest" ? "（已佩戴）" : ""}`, count: inventory.dragonNest, action: equippedTool === "dragonNest" ? "已佩戴" : "佩戴", onClick: () => equipTool("dragonNest") },
     { key: "beef", name: "牛肉", count: inventory.beef, action: "喂龙", onClick: feedDragon },
   ];
 
   weapons.forEach((weapon, index) => {
     if (ownedWeapons[index]) {
-      rows.push({ key: `weapon${index}`, name: weapon.name, count: 1, action: index === weaponLevel ? "已装备" : "装备", onClick: () => equipWeapon(index) });
+      rows.push({ key: `weapon${index}`, name: weapon.name, count: 1, action: index === weaponLevel ? "已佩戴" : "佩戴", onClick: () => equipWeapon(index) });
     }
   });
 
@@ -1413,7 +1411,7 @@ function renderBackpack() {
     const button = document.createElement("button");
     button.type = "button";
     button.textContent = row.action;
-    button.disabled = row.count <= 0 || row.action === "已装备";
+    button.disabled = row.count <= 0 || row.action === "已佩戴";
     button.addEventListener("click", row.onClick);
     item.append(button);
     inventoryItems.append(item);
@@ -1427,6 +1425,31 @@ function sellTreasure(key, value) {
   updateHud();
   renderBackpack();
   renderShop();
+}
+
+function getArrowName(key) {
+  if (key === "poisonArrow") return "剧毒箭";
+  if (key === "fireArrow") return "火焰箭";
+  return "普通箭";
+}
+
+function equipArrow(key) {
+  if ((inventory[key] || 0) <= 0) return;
+  equippedArrow = key;
+  if (player) {
+    effects.push({ x: player.x - 16, y: player.y - 34, width: 140, height: 28, life: 54, kind: "loot", text: `佩戴${getArrowName(key)}` });
+  }
+  updateHud();
+  renderBackpack();
+}
+
+function equipTool(key) {
+  if ((inventory[key] || 0) <= 0) return;
+  equippedTool = key;
+  if (player) {
+    effects.push({ x: player.x - 16, y: player.y - 34, width: 140, height: 28, life: 54, kind: "loot", text: key === "dragonWand" ? "佩戴驯龙杖" : "佩戴驯龙巢" });
+  }
+  renderBackpack();
 }
 
 function buyItem(item) {
@@ -1609,17 +1632,17 @@ function addPixelHighlights(x, y, width, height) {
 }
 
 function getQuickSlotsText() {
-  return ["武器", "药水", "抗火", "医疗", "龙", "金币"].join(" / ");
+  return ["武器", "箭", "药水", "抗火", "医疗", "金币"].join(" / ");
 }
 
 function drawQuickSlots() {
   if (gameState !== "playing") return;
   const slots = [
     weapons[weaponLevel].name,
+    getArrowName(equippedArrow),
     `力${inventory.powerPotion}`,
     `抗${inventory.fireResistPotion}`,
     `医${inventory.medkit}`,
-    hasDragonAdult ? "成年龙" : `龙${dragonFeedCount}`,
     `${coins}`,
   ];
   ctx.save();
