@@ -1552,6 +1552,8 @@ function draw() {
   drawProjectiles();
   drawPlayer();
   drawEffects();
+  drawForegroundDepth();
+  drawScreenDepthOverlay();
   drawQuickSlots();
 }
 
@@ -1571,6 +1573,39 @@ function drawWorld() {
   drawThemeDecor();
   drawPlatforms();
   ctx.restore();
+}
+
+function drawBlock3D(x, y, width, height, front, top, side, depth = 12) {
+  ctx.fillStyle = side;
+  ctx.fillRect(x + depth, y + depth, width, height);
+  ctx.fillStyle = top;
+  ctx.fillRect(x, y - depth, width, depth);
+  ctx.fillRect(x + depth, y, width, Math.max(4, depth / 2));
+  ctx.fillStyle = front;
+  ctx.fillRect(x, y, width, height);
+  ctx.fillStyle = "rgba(255, 255, 255, 0.18)";
+  ctx.fillRect(x + 4, y + 4, Math.max(0, width - 8), 4);
+  ctx.fillStyle = "rgba(0, 0, 0, 0.22)";
+  ctx.fillRect(x + width - 7, y + 6, 7, Math.max(0, height - 8));
+  ctx.fillRect(x + 6, y + height - 6, Math.max(0, width - 12), 6);
+}
+
+function drawEntityShadow(entity, scale = 1) {
+  const width = Math.max(22, entity.width * 0.82 * scale);
+  const x = entity.x + entity.width / 2 - width / 2 + 7;
+  const y = Math.min(floorY + 2, entity.y + entity.height - 4);
+  ctx.fillStyle = "rgba(0, 0, 0, 0.28)";
+  ctx.fillRect(x, y, width, 8);
+  ctx.fillStyle = "rgba(0, 0, 0, 0.15)";
+  ctx.fillRect(x + 8, y - 4, width - 16, 4);
+}
+
+function addPixelHighlights(x, y, width, height) {
+  ctx.fillStyle = "rgba(255, 255, 255, 0.18)";
+  ctx.fillRect(x + 5, y + 5, Math.max(0, width - 14), 5);
+  ctx.fillStyle = "rgba(0, 0, 0, 0.22)";
+  ctx.fillRect(x + width - 8, y + 8, 8, Math.max(0, height - 12));
+  ctx.fillRect(x + 8, y + height - 7, Math.max(0, width - 16), 7);
 }
 
 function getQuickSlotsText() {
@@ -1597,6 +1632,50 @@ function drawQuickSlots() {
     ctx.font = "900 13px Microsoft YaHei, sans-serif";
     ctx.fillText(String(slots[i]).slice(0, 4), startX + i * 58 + 7, y + 27);
   }
+  ctx.restore();
+}
+
+function drawForegroundDepth() {
+  if (!level) return;
+  ctx.save();
+  ctx.translate(-(cameraX * 1.08), 0);
+  const themeId = level.theme.id;
+  for (let x = 36; x < level.worldWidth + canvas.width; x += 210) {
+    if (themeId === "lava") {
+      ctx.fillStyle = "rgba(255, 90, 46, 0.75)";
+      ctx.fillRect(x, floorY + 36, 20, 68);
+      ctx.fillStyle = "rgba(255, 211, 77, 0.82)";
+      ctx.fillRect(x + 6, floorY + 56, 8, 36);
+    } else if (themeId === "ocean") {
+      ctx.fillStyle = "rgba(5, 42, 78, 0.55)";
+      ctx.fillRect(x, floorY + 42, 28, 58);
+      ctx.fillRect(x + 22, floorY + 62, 18, 38);
+    } else if (themeId === "desert") {
+      ctx.fillStyle = "rgba(111, 73, 30, 0.55)";
+      ctx.fillRect(x, floorY + 48, 42, 24);
+      ctx.fillRect(x + 12, floorY + 34, 24, 18);
+    } else if (themeId === "swamp") {
+      ctx.fillStyle = "rgba(18, 36, 22, 0.6)";
+      ctx.fillRect(x, floorY + 30, 18, 72);
+      ctx.fillRect(x - 16, floorY + 34, 50, 18);
+    } else {
+      ctx.fillStyle = "rgba(20, 83, 45, 0.55)";
+      ctx.fillRect(x, floorY + 34, 14, 50);
+      ctx.fillRect(x + 16, floorY + 44, 12, 42);
+    }
+  }
+  ctx.restore();
+}
+
+function drawScreenDepthOverlay() {
+  ctx.save();
+  ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
+  ctx.fillRect(0, 0, canvas.width, 82);
+  ctx.fillStyle = "rgba(0, 0, 0, 0.16)";
+  ctx.fillRect(0, canvas.height - 92, canvas.width, 92);
+  ctx.fillStyle = "rgba(0, 0, 0, 0.12)";
+  ctx.fillRect(0, 0, 18, canvas.height);
+  ctx.fillRect(canvas.width - 18, 0, 18, canvas.height);
   ctx.restore();
 }
 
@@ -1701,6 +1780,22 @@ function drawSky() {
     "#4db4e6";
   ctx.fillRect(cameraX, 284, canvas.width, 170);
 
+  const ridgeColor =
+    themeId === "lava" ? "#21161b" :
+    themeId === "desert" ? "#c7833f" :
+    themeId === "swamp" ? "#40513d" :
+    themeId === "ocean" ? "#0e5a90" :
+    "#3996c8";
+  ctx.fillStyle = ridgeColor;
+  for (let x = cameraX - 120; x < cameraX + canvas.width + 220; x += 180) {
+    const px = x + (cameraX * 0.28) % 180;
+    ctx.beginPath();
+    ctx.moveTo(px, 284);
+    ctx.lineTo(px + 82, 196 + (x % 3) * 18);
+    ctx.lineTo(px + 178, 284);
+    ctx.fill();
+  }
+
   for (let x = 80; x < level.worldWidth && themeId !== "ocean"; x += 470) {
     drawBlockCloud(x, 78 + (x % 3) * 18, x % 2 === 0 ? 3 : 4);
   }
@@ -1721,51 +1816,60 @@ function drawBlockCloud(x, y, scale) {
 
 function drawGround() {
   const themeId = level.theme.id;
-  ctx.fillStyle =
+  const front =
     themeId === "ocean" ? "#135b87" :
     themeId === "desert" ? "#e4b757" :
     themeId === "lava" ? "#21161b" :
     themeId === "swamp" ? "#48613e" :
     "#42c96d";
-  ctx.fillRect(0, floorY, level.worldWidth, canvas.height - floorY);
-  ctx.fillStyle =
+  const top =
     themeId === "ocean" ? "#0d4161" :
     themeId === "desert" ? "#b98a38" :
     themeId === "lava" ? "#ff5a2e" :
     themeId === "swamp" ? "#2f442d" :
     "#2aa654";
-  ctx.fillRect(0, floorY, level.worldWidth, 16);
-  ctx.fillStyle =
+  const side =
     themeId === "ocean" ? "#0a324a" :
     themeId === "desert" ? "#8f6631" :
     themeId === "lava" ? "#3b1513" :
     themeId === "swamp" ? "#203022" :
     "#7d4a2b";
+  ctx.fillStyle = side;
   ctx.fillRect(0, floorY + 42, level.worldWidth, canvas.height - floorY - 42);
+  ctx.fillStyle = front;
+  ctx.fillRect(0, floorY, level.worldWidth, 54);
+  ctx.fillStyle = top;
+  ctx.fillRect(0, floorY - 14, level.worldWidth, 30);
+  ctx.fillStyle = "rgba(255, 255, 255, 0.18)";
+  ctx.fillRect(0, floorY - 10, level.worldWidth, 5);
+  ctx.fillStyle = "rgba(0, 0, 0, 0.26)";
+  ctx.fillRect(0, floorY + 34, level.worldWidth, 8);
 
   for (let x = 0; x < level.worldWidth; x += 32) {
     ctx.fillStyle = themeId === "lava" ? (x % 64 === 0 ? "#ff8a2d" : "#cc3c21") : x % 64 === 0 ? "#216f3e" : "#2d8c4a";
-    ctx.fillRect(x, floorY + 16, 16, 10);
+    ctx.fillRect(x, floorY + 16 + (x % 96 === 0 ? 4 : 0), 16, 10);
   }
 }
 
 function drawPlatforms() {
   for (const platform of level.platforms) {
     const themeId = level.theme.id;
-    ctx.fillStyle = themeId === "lava" ? "#2b2229" : themeId === "desert" ? "#8f6631" : themeId === "swamp" ? "#3b3024" : "#6a3d24";
-    ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
-    ctx.fillStyle = themeId === "lava" ? "#ff7a2e" : themeId === "desert" ? "#f0cc72" : themeId === "swamp" ? "#5d7e45" : "#45d06f";
-    ctx.fillRect(platform.x, platform.y - 12, platform.width, 14);
-    ctx.fillStyle = themeId === "lava" ? "#ffd34d" : themeId === "desert" ? "#c99b44" : themeId === "swamp" ? "#324c33" : "#2b9a54";
-    ctx.fillRect(platform.x, platform.y, platform.width, 5);
+    const front = themeId === "lava" ? "#2b2229" : themeId === "desert" ? "#8f6631" : themeId === "swamp" ? "#3b3024" : "#6a3d24";
+    const top = themeId === "lava" ? "#ff7a2e" : themeId === "desert" ? "#f0cc72" : themeId === "swamp" ? "#5d7e45" : "#45d06f";
+    const side = themeId === "lava" ? "#171116" : themeId === "desert" ? "#6c4d27" : themeId === "swamp" ? "#251f19" : "#4b2717";
+    drawBlock3D(platform.x, platform.y, platform.width, platform.height + 12, front, top, side, 12);
   }
 }
 
 function drawRiver() {
   const river = level.river;
   const isOcean = level.theme.id === "ocean";
+  ctx.fillStyle = isOcean ? "#062d52" : "#0b4c78";
+  ctx.fillRect(river.x + 12, river.y + 12, river.width, river.height);
   ctx.fillStyle = isOcean ? "#126aa6" : "#1d8fd8";
   ctx.fillRect(river.x, river.y, river.width, river.height);
+  ctx.fillStyle = isOcean ? "#65d7ff" : "#8ee8ff";
+  ctx.fillRect(river.x, river.y, river.width, 8);
   ctx.fillStyle = isOcean ? "rgba(101, 215, 255, 0.45)" : "#65d7ff";
   const drift = Math.floor(Date.now() / 90) % 46;
   for (let x = river.x + 12 - drift; x < river.x + river.width; x += 46) {
@@ -1865,12 +1969,16 @@ function drawStars() {
   ctx.translate(-cameraX, 0);
   for (const star of level.stars) {
     if (star.collected) continue;
+    ctx.fillStyle = "rgba(0, 0, 0, 0.24)";
+    ctx.fillRect(star.x - 14, star.y + 17, 32, 6);
     ctx.fillStyle = "#ffd34d";
     ctx.fillRect(star.x - 4, star.y - 16, 8, 32);
     ctx.fillRect(star.x - 16, star.y - 4, 32, 8);
     ctx.fillRect(star.x - 10, star.y - 10, 20, 20);
     ctx.fillStyle = "#fff29a";
     ctx.fillRect(star.x - 4, star.y - 4, 8, 8);
+    ctx.fillStyle = "#c98f18";
+    ctx.fillRect(star.x + 10, star.y + 2, 5, 12);
   }
   ctx.restore();
 }
@@ -1948,6 +2056,7 @@ function drawChest() {
   const chest = level.chest;
   ctx.save();
   ctx.translate(-cameraX, 0);
+  drawEntityShadow(chest, 1);
   if (level.theme.id === "desert") {
     ctx.fillStyle = "#d4a24a";
     ctx.beginPath();
@@ -1999,6 +2108,7 @@ function drawChest() {
 
   ctx.fillStyle = chest.opened ? "#8e5a32" : "#d9903d";
   ctx.fillRect(chest.x, chest.y + (chest.opened ? 12 : 0), chest.width, chest.height - (chest.opened ? 12 : 0));
+  addPixelHighlights(chest.x, chest.y + (chest.opened ? 12 : 0), chest.width, chest.height - (chest.opened ? 12 : 0));
   ctx.fillStyle = "#5d351d";
   ctx.fillRect(chest.x, chest.y + 18, chest.width, 6);
   ctx.fillRect(chest.x + 6, chest.y + 6, 8, chest.height - 10);
@@ -2022,6 +2132,7 @@ function drawEnemies() {
       continue;
     }
 
+    drawEntityShadow(enemy, enemy.kind === "lavaBoss" ? 1.15 : 0.95);
     if (enemy.kind === "slime") drawSlime(enemy);
     if (enemy.kind === "bat") drawBat(enemy);
     if (enemy.kind === "guard") drawGuard(enemy);
@@ -2057,6 +2168,7 @@ function drawAnimals() {
   ctx.translate(-cameraX, 0);
   for (const animal of level.animals) {
     if (!animal.alive) continue;
+    drawEntityShadow(animal, 0.9);
     if (animal.kind === "cow") drawCow(animal);
     if (animal.kind === "chicken") drawChicken(animal);
     if (animal.kind === "pig") drawPig(animal);
@@ -2068,6 +2180,7 @@ function drawCow(animal) {
   const step = Math.sin(animal.phase || Date.now() / 150) * 3;
   ctx.fillStyle = "#f4f1df";
   ctx.fillRect(animal.x, animal.y + 12, animal.width, animal.height - 12);
+  addPixelHighlights(animal.x, animal.y + 12, animal.width, animal.height - 12);
   ctx.fillStyle = "#4a342a";
   ctx.fillRect(animal.x + 8, animal.y + 18, 14, 12);
   ctx.fillRect(animal.x + 36, animal.y + 28, 16, 12);
@@ -2086,6 +2199,7 @@ function drawChicken(animal) {
   const bob = Math.sin(animal.phase || Date.now() / 120) * 2;
   ctx.fillStyle = "#fffdf0";
   ctx.fillRect(animal.x + 6, animal.y + 8 + bob, 24, 20);
+  addPixelHighlights(animal.x + 6, animal.y + 8 + bob, 24, 20);
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(animal.x + 14, animal.y, 20, 18);
   ctx.fillStyle = "#ffcf4a";
@@ -2103,6 +2217,7 @@ function drawPig(animal) {
   const step = Math.sin(animal.phase || Date.now() / 150) * 3;
   ctx.fillStyle = "#f4a0b7";
   ctx.fillRect(animal.x, animal.y + 10, animal.width, animal.height - 10);
+  addPixelHighlights(animal.x, animal.y + 10, animal.width, animal.height - 10);
   ctx.fillStyle = "#ffc0d0";
   ctx.fillRect(animal.x + 34, animal.y, 22, 22);
   ctx.fillStyle = "#211b2c";
@@ -2118,6 +2233,7 @@ function drawSlime(enemy) {
   ctx.fillStyle = enemy.hurtFlash > 0 ? "#ffffff" : "#66d86f";
   ctx.fillRect(enemy.x, enemy.y + 14, enemy.width, enemy.height - 14);
   ctx.fillRect(enemy.x + 10, enemy.y, enemy.width - 20, 18);
+  addPixelHighlights(enemy.x, enemy.y + 14, enemy.width, enemy.height - 14);
   ctx.fillStyle = "#211b2c";
   ctx.fillRect(enemy.x + 14, enemy.y + 24, 6, 6);
   ctx.fillRect(enemy.x + enemy.width - 20, enemy.y + 24, 6, 6);
@@ -2136,6 +2252,7 @@ function drawBat(enemy) {
 function drawGuard(enemy) {
   ctx.fillStyle = enemy.hurtFlash > 0 ? "#ffffff" : "#3a76f0";
   ctx.fillRect(enemy.x + 8, enemy.y + 8, enemy.width - 16, enemy.height - 8);
+  addPixelHighlights(enemy.x + 8, enemy.y + 8, enemy.width - 16, enemy.height - 8);
   ctx.fillStyle = "#d9dde5";
   ctx.fillRect(enemy.x + 12, enemy.y, enemy.width - 24, 18);
   ctx.fillStyle = "#211b2c";
@@ -2146,6 +2263,7 @@ function drawGuard(enemy) {
 function drawBrute(enemy) {
   ctx.fillStyle = enemy.hurtFlash > 0 ? "#ffffff" : "#e84c5f";
   ctx.fillRect(enemy.x, enemy.y + 10, enemy.width, enemy.height - 10);
+  addPixelHighlights(enemy.x, enemy.y + 10, enemy.width, enemy.height - 10);
   ctx.fillStyle = "#8e2440";
   ctx.fillRect(enemy.x + 12, enemy.y, enemy.width - 24, 18);
   ctx.fillStyle = "#ffffff";
@@ -2158,6 +2276,7 @@ function drawBrute(enemy) {
 function drawDrowned(enemy) {
   ctx.fillStyle = enemy.hurtFlash > 0 ? "#ffffff" : "#227c8f";
   ctx.fillRect(enemy.x + 6, enemy.y + 12, enemy.width - 12, enemy.height - 12);
+  addPixelHighlights(enemy.x + 6, enemy.y + 12, enemy.width - 12, enemy.height - 12);
   ctx.fillStyle = "#49c7bd";
   ctx.fillRect(enemy.x + 12, enemy.y, enemy.width - 24, 22);
   ctx.fillStyle = "#b6fff3";
@@ -2180,6 +2299,7 @@ function drawFish(enemy) {
   const faceX = enemy.facing > 0 ? enemy.x + 22 : enemy.x + enemy.width - 28;
   ctx.fillStyle = enemyFill(enemy, "#ff9f43");
   ctx.fillRect(enemy.x + 12, enemy.y + 8, enemy.width - 22, enemy.height - 14);
+  addPixelHighlights(enemy.x + 12, enemy.y + 8, enemy.width - 22, enemy.height - 14);
   ctx.fillRect(enemy.x + enemy.width - 16, enemy.y + 14, 18, 10);
   ctx.fillStyle = "#ffd34d";
   ctx.fillRect(enemy.x + 18, enemy.y + 3, 28, 8);
@@ -2192,6 +2312,7 @@ function drawFish(enemy) {
 function drawCrab(enemy) {
   ctx.fillStyle = enemyFill(enemy, "#e84c5f");
   ctx.fillRect(enemy.x + 12, enemy.y + 12, enemy.width - 24, enemy.height - 12);
+  addPixelHighlights(enemy.x + 12, enemy.y + 12, enemy.width - 24, enemy.height - 12);
   ctx.fillStyle = "#ff8a76";
   ctx.fillRect(enemy.x + 8, enemy.y + 4, 16, 14);
   ctx.fillRect(enemy.x + enemy.width - 24, enemy.y + 4, 16, 14);
@@ -2208,6 +2329,7 @@ function drawCrab(enemy) {
 function drawShark(enemy) {
   ctx.fillStyle = enemyFill(enemy, "#6d8291");
   ctx.fillRect(enemy.x + 12, enemy.y + 14, enemy.width - 24, enemy.height - 18);
+  addPixelHighlights(enemy.x + 12, enemy.y + 14, enemy.width - 24, enemy.height - 18);
   ctx.fillRect(enemy.x + enemy.width - 24, enemy.y + 22, 26, 14);
   ctx.fillStyle = "#465966";
   ctx.fillRect(enemy.x + 38, enemy.y + 2, 28, 16);
@@ -2224,6 +2346,7 @@ function drawShark(enemy) {
 function drawHarpooner(enemy) {
   ctx.fillStyle = enemyFill(enemy, "#16877b");
   ctx.fillRect(enemy.x + 12, enemy.y + 18, enemy.width - 24, enemy.height - 18);
+  addPixelHighlights(enemy.x + 12, enemy.y + 18, enemy.width - 24, enemy.height - 18);
   ctx.fillStyle = "#65d7ff";
   ctx.fillRect(enemy.x + 18, enemy.y + 4, enemy.width - 36, 22);
   ctx.fillStyle = "#211b2c";
@@ -2238,6 +2361,7 @@ function drawHarpooner(enemy) {
 function drawMummy(enemy) {
   ctx.fillStyle = enemyFill(enemy, "#d8c7a1");
   ctx.fillRect(enemy.x + 10, enemy.y + 8, enemy.width - 20, enemy.height - 8);
+  addPixelHighlights(enemy.x + 10, enemy.y + 8, enemy.width - 20, enemy.height - 8);
   ctx.fillStyle = "#f1e2bd";
   for (let band = enemy.y + 12; band < enemy.y + enemy.height; band += 14) {
     ctx.fillRect(enemy.x + 8, band, enemy.width - 16, 5);
@@ -2250,6 +2374,7 @@ function drawMummy(enemy) {
 function drawScorpion(enemy) {
   ctx.fillStyle = enemyFill(enemy, "#6a3d24");
   ctx.fillRect(enemy.x + 18, enemy.y + 12, enemy.width - 36, enemy.height - 12);
+  addPixelHighlights(enemy.x + 18, enemy.y + 12, enemy.width - 36, enemy.height - 12);
   ctx.fillRect(enemy.x + enemy.width - 26, enemy.y - 10, 16, 28);
   ctx.fillStyle = "#d9903d";
   ctx.fillRect(enemy.x + 8, enemy.y + 6, 18, 12);
@@ -2262,6 +2387,7 @@ function drawScorpion(enemy) {
 function drawSandGolem(enemy) {
   ctx.fillStyle = enemyFill(enemy, "#b98235");
   ctx.fillRect(enemy.x + 10, enemy.y + 18, enemy.width - 20, enemy.height - 18);
+  addPixelHighlights(enemy.x + 10, enemy.y + 18, enemy.width - 20, enemy.height - 18);
   ctx.fillStyle = "#e4b757";
   ctx.fillRect(enemy.x + 20, enemy.y, enemy.width - 40, 28);
   ctx.fillRect(enemy.x - 6, enemy.y + 34, 20, 28);
@@ -2274,6 +2400,7 @@ function drawSandGolem(enemy) {
 function drawScarab(enemy) {
   ctx.fillStyle = enemyFill(enemy, "#17445f");
   ctx.fillRect(enemy.x + 10, enemy.y + 8, enemy.width - 20, enemy.height - 8);
+  addPixelHighlights(enemy.x + 10, enemy.y + 8, enemy.width - 20, enemy.height - 8);
   ctx.fillStyle = "#31c6d4";
   ctx.fillRect(enemy.x + 18, enemy.y + 12, enemy.width - 36, 8);
   ctx.fillStyle = "#211b2c";
@@ -2284,6 +2411,7 @@ function drawScarab(enemy) {
 function drawSwampFrog(enemy) {
   ctx.fillStyle = enemyFill(enemy, "#62a64f");
   ctx.fillRect(enemy.x + 8, enemy.y + 16, enemy.width - 16, enemy.height - 16);
+  addPixelHighlights(enemy.x + 8, enemy.y + 16, enemy.width - 16, enemy.height - 16);
   ctx.fillStyle = "#b2e36f";
   ctx.fillRect(enemy.x + 14, enemy.y + 4, 18, 18);
   ctx.fillRect(enemy.x + enemy.width - 32, enemy.y + 4, 18, 18);
@@ -2297,6 +2425,7 @@ function drawSwampFrog(enemy) {
 function drawSwampWitch(enemy) {
   ctx.fillStyle = enemyFill(enemy, "#5a3a82");
   ctx.fillRect(enemy.x + 12, enemy.y + 24, enemy.width - 24, enemy.height - 24);
+  addPixelHighlights(enemy.x + 12, enemy.y + 24, enemy.width - 24, enemy.height - 24);
   ctx.fillStyle = "#243225";
   ctx.beginPath();
   ctx.moveTo(enemy.x + 8, enemy.y + 26);
@@ -2317,6 +2446,7 @@ function drawSwampWitch(enemy) {
 function drawMudBeast(enemy) {
   ctx.fillStyle = enemyFill(enemy, "#5b4a32");
   ctx.fillRect(enemy.x + 8, enemy.y + 18, enemy.width - 16, enemy.height - 18);
+  addPixelHighlights(enemy.x + 8, enemy.y + 18, enemy.width - 16, enemy.height - 18);
   ctx.fillStyle = "#35562f";
   ctx.fillRect(enemy.x + 20, enemy.y + 4, enemy.width - 40, 18);
   ctx.fillStyle = "#b2e36f";
@@ -2329,6 +2459,7 @@ function drawMudBeast(enemy) {
 function drawLavaMage(enemy) {
   ctx.fillStyle = enemyFill(enemy, "#6b1d2a");
   ctx.fillRect(enemy.x + 12, enemy.y + 22, enemy.width - 24, enemy.height - 22);
+  addPixelHighlights(enemy.x + 12, enemy.y + 22, enemy.width - 24, enemy.height - 22);
   ctx.fillStyle = "#ff5a2e";
   ctx.beginPath();
   ctx.moveTo(enemy.x + 10, enemy.y + 26);
@@ -2364,6 +2495,7 @@ function drawLavaSoldier(enemy) {
 function drawLavaBeast(enemy) {
   ctx.fillStyle = enemyFill(enemy, "#8b2c24");
   ctx.fillRect(enemy.x + 8, enemy.y + 20, enemy.width - 16, enemy.height - 20);
+  addPixelHighlights(enemy.x + 8, enemy.y + 20, enemy.width - 16, enemy.height - 20);
   ctx.fillStyle = "#ff8a2d";
   ctx.fillRect(enemy.x + 18, enemy.y + 4, enemy.width - 36, 24);
   ctx.fillStyle = "#ffd34d";
@@ -2376,6 +2508,7 @@ function drawLavaBeast(enemy) {
 function drawLavaSlime(enemy) {
   ctx.fillStyle = enemyFill(enemy, "#ff5a2e");
   ctx.fillRect(enemy.x, enemy.y + 14, enemy.width, enemy.height - 14);
+  addPixelHighlights(enemy.x, enemy.y + 14, enemy.width, enemy.height - 14);
   ctx.fillRect(enemy.x + 12, enemy.y + 4, enemy.width - 24, 18);
   ctx.fillStyle = "#ffd34d";
   ctx.fillRect(enemy.x + 16, enemy.y + 24, 8, 8);
@@ -2418,6 +2551,7 @@ function drawLavaBoss(enemy) {
 
   ctx.fillStyle = enemyFill(enemy, enemy.bossMode === "axeStuck" ? "#6a2d25" : "#21161b");
   ctx.fillRect(enemy.x + 14, enemy.y + 34, enemy.width - 28, enemy.height - 34);
+  addPixelHighlights(enemy.x + 14, enemy.y + 34, enemy.width - 28, enemy.height - 34);
   ctx.fillStyle = "#ff5a2e";
   ctx.fillRect(enemy.x + 30, enemy.y + 10, enemy.width - 60, 42);
   ctx.fillStyle = "#ffd34d";
@@ -2435,6 +2569,7 @@ function drawLavaBoss(enemy) {
 function drawLavaArmor(enemy, armorColor, glowColor) {
   ctx.fillStyle = enemyFill(enemy, armorColor);
   ctx.fillRect(enemy.x + 10, enemy.y + 18, enemy.width - 20, enemy.height - 18);
+  addPixelHighlights(enemy.x + 10, enemy.y + 18, enemy.width - 20, enemy.height - 18);
   ctx.fillStyle = glowColor;
   ctx.fillRect(enemy.x + 18, enemy.y + 2, enemy.width - 36, 28);
   ctx.fillRect(enemy.x + 22, enemy.y + 42, enemy.width - 44, 8);
@@ -2541,12 +2676,14 @@ function drawPlayer() {
   const moving = Math.abs(player.vx) > 0.15 || Math.abs(player.vy) > 0.5;
   const gait = moving ? Math.sin(Date.now() / 85) * 5 : 0;
   const swimKick = isPlayerInRiver() ? Math.sin(Date.now() / 90) * 6 : gait;
+  drawEntityShadow(player, hasDragonAdult || hasHorse ? 1.2 : 1);
 
   if (level && level.theme.id === "ocean" && diverSkinOwned) {
     ctx.fillStyle = "#ffd08a";
     ctx.fillRect(x + 14, y + 8, 28, 24);
     ctx.fillStyle = "#1b3958";
     ctx.fillRect(x + 8, y + 28, 40, 36);
+    addPixelHighlights(x + 8, y + 28, 40, 36);
     ctx.fillStyle = "#65d7ff";
     ctx.fillRect(x + 16, y + 12, 20, 10);
     ctx.fillStyle = "#211b2c";
@@ -2571,6 +2708,7 @@ function drawPlayer() {
   if (hasHorse) {
     ctx.fillStyle = "#8b5a36";
     ctx.fillRect(x - 6, y + 44, 72, 30);
+    addPixelHighlights(x - 6, y + 44, 72, 30);
     ctx.fillRect(x + 44, y + 24, 26, 28);
     ctx.fillStyle = "#211b2c";
     ctx.fillRect(x + 6, y + 70 + Math.max(0, gait), 10, 14);
@@ -2584,6 +2722,7 @@ function drawPlayer() {
   const knightY = hasDragonAdult ? y - 4 : hasHorse ? y + 4 : y;
   ctx.fillStyle = "#d9dde5";
   ctx.fillRect(x + 10, knightY + 30, 30, 36);
+  addPixelHighlights(x + 10, knightY + 30, 30, 36);
   ctx.fillStyle = "#8f95a3";
   ctx.fillRect(x + 10, knightY + 56 + Math.max(0, gait), 12, 12);
   ctx.fillRect(x + 28, knightY + 56 + Math.max(0, -gait), 12, 12);
@@ -2602,6 +2741,7 @@ function drawDragonMount(x, y, gait) {
   const wing = Math.sin(Date.now() / 95) * 10;
   ctx.fillStyle = "#2f9c5a";
   ctx.fillRect(x - 12, y + 42, 90, 30);
+  addPixelHighlights(x - 12, y + 42, 90, 30);
   ctx.fillRect(x + 44, y + 20, 32, 30);
   ctx.fillStyle = "#1d6d43";
   ctx.fillRect(x + 10, y + 28 + wing, 34, 14);
