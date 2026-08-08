@@ -257,6 +257,9 @@ function buildEnemy(kind, x, number, index, themeId) {
     bossSpin: 0,
     attackChecked: false,
     summonedOnMiss: false,
+    magicChargeTimer: 0,
+    magicTargetX: 0,
+    magicTargetY: 0,
   };
 }
 
@@ -423,6 +426,14 @@ function showMenu(reason) {
 function update() {
   if (gameState !== "playing") return;
 
+  if (isBackpackOpen()) {
+    if (player) player.vx = 0;
+    draw();
+    drawPauseOverlay();
+    animationFrame = requestAnimationFrame(update);
+    return;
+  }
+
   handleInput();
   movePlayer();
   moveEnemies();
@@ -468,6 +479,20 @@ function handleInput() {
 
   if (keys.has("KeyJ")) attack();
   if (keys.has("KeyK")) throwGrenade();
+}
+
+function isBackpackOpen() {
+  return backpackPanel && !backpackPanel.classList.contains("is-hidden");
+}
+
+function drawPauseOverlay() {
+  ctx.save();
+  ctx.fillStyle = "rgba(12, 10, 18, 0.34)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#fff4c7";
+  ctx.font = "900 24px Microsoft YaHei, sans-serif";
+  ctx.fillText("背包已打开，游戏暂停", canvas.width / 2 - 128, 78);
+  ctx.restore();
 }
 
 function isPlayerInRiver() {
@@ -565,9 +590,17 @@ function moveEnemies() {
       enemy.y = enemy.baseY + Math.sin((Date.now() / 160 + enemy.phase) % 80) * (enemy.kind === "shark" ? 16 : 22);
     }
 
-    if (enemy.kind === "swampWitch" && inSight && enemy.attackTimer === 0) {
-      enemy.attackTimer = 96;
-      castWitchMagic(enemy);
+    if (enemy.kind === "swampWitch" && enemy.magicChargeTimer > 0) {
+      enemy.magicChargeTimer -= 1;
+      if (enemy.magicChargeTimer === 0) {
+        castWitchMagic(enemy, enemy.magicTargetX, enemy.magicTargetY);
+      }
+    } else if (enemy.kind === "swampWitch" && inSight && enemy.attackTimer === 0) {
+      enemy.attackTimer = 240;
+      enemy.magicChargeTimer = 180;
+      enemy.magicTargetX = player.x + player.width / 2;
+      enemy.magicTargetY = player.y + player.height / 2;
+      effects.push({ x: enemy.x - 18, y: enemy.y + 4, width: enemy.width + 36, height: 42, life: 180, kind: "witchCharge" });
     }
 
     const attackRange =
@@ -594,15 +627,15 @@ function moveEnemies() {
 
     if (absDistance <= attackRange && Math.abs(player.y - enemy.y) < 118 && enemy.attackTimer === 0) {
       enemy.attackTimer = enemy.kind === "brute" || enemy.kind === "lavaAxeGuard" ? 92 : 70;
-      hurtPlayer(enemy.kind === "brute" || enemy.kind === "shark" || enemy.kind === "lavaAxeGuard" ? 2 : 1);
+      hurtPlayer(enemy.kind === "shark" ? 20 : enemy.kind === "brute" || enemy.kind === "lavaAxeGuard" ? 2 : 1);
       effects.push({ x: enemy.x, y: enemy.y + 8, width: enemy.width, height: enemy.height, life: 12, kind: "claw" });
     }
   }
 }
 
-function castWitchMagic(enemy) {
-  const dx = player.x + player.width / 2 - (enemy.x + enemy.width / 2);
-  const dy = player.y + player.height / 2 - (enemy.y + enemy.height / 2);
+function castWitchMagic(enemy, targetX = player.x + player.width / 2, targetY = player.y + player.height / 2) {
+  const dx = targetX - (enemy.x + enemy.width / 2);
+  const dy = targetY - (enemy.y + enemy.height / 2);
   const distance = Math.max(1, Math.hypot(dx, dy));
   projectiles.push({
     x: enemy.x + enemy.width / 2 - 9,
@@ -1281,7 +1314,7 @@ function rollChestDrops(levelNumber) {
     }
   }
 
-  if (Math.random() < 0.001) {
+  if (Math.random() < 0.06) {
     inventory.dragonEgg += 1;
     drops.push("龙蛋");
   }
@@ -2318,18 +2351,29 @@ function enemyFill(enemy, color) {
 
 function drawFish(enemy) {
   const swim = Math.sin(Date.now() / 120 + enemy.phase) * 5;
-  const tailX = enemy.facing > 0 ? enemy.x - 4 : enemy.x + enemy.width - 12;
-  const faceX = enemy.facing > 0 ? enemy.x + 22 : enemy.x + enemy.width - 28;
-  ctx.fillStyle = enemyFill(enemy, "#ff9f43");
-  ctx.fillRect(enemy.x + 12, enemy.y + 8, enemy.width - 22, enemy.height - 14);
-  addPixelHighlights(enemy.x + 12, enemy.y + 8, enemy.width - 22, enemy.height - 14);
-  ctx.fillRect(enemy.x + enemy.width - 16, enemy.y + 14, 18, 10);
-  ctx.fillStyle = "#ffd34d";
-  ctx.fillRect(enemy.x + 18, enemy.y + 3, 28, 8);
+  const isBlue = Math.floor(enemy.phase / 18) % 2 === 0;
+  const bodyColor = isBlue ? "#2f8df0" : "#ff6b43";
+  const finColor = isBlue ? "#8ee8ff" : "#ffd34d";
+  const stripeColor = isBlue ? "#17445f" : "#b83232";
+  const tailX = enemy.facing > 0 ? enemy.x - 4 : enemy.x + enemy.width - 10;
+  const faceX = enemy.facing > 0 ? enemy.x + enemy.width - 24 : enemy.x + 18;
+  ctx.fillStyle = enemyFill(enemy, bodyColor);
+  ctx.fillRect(enemy.x + 12, enemy.y + 10, enemy.width - 24, enemy.height - 16);
+  ctx.fillRect(enemy.x + 22, enemy.y + 5, enemy.width - 42, 8);
+  ctx.fillRect(enemy.x + 22, enemy.y + enemy.height - 13, enemy.width - 42, 8);
+  addPixelHighlights(enemy.x + 12, enemy.y + 10, enemy.width - 24, enemy.height - 16);
+  ctx.fillStyle = finColor;
+  ctx.fillRect(enemy.x + 28, enemy.y + 1, 20, 8);
+  ctx.fillRect(enemy.x + 34, enemy.y + enemy.height - 7, 18, 7);
+  ctx.fillStyle = stripeColor;
+  for (let stripe = 0; stripe < 3; stripe += 1) {
+    ctx.fillRect(enemy.x + 24 + stripe * 12, enemy.y + 12, 5, enemy.height - 20);
+  }
   ctx.fillStyle = "#211b2c";
   ctx.fillRect(faceX, enemy.y + 16, 5, 5);
-  ctx.fillStyle = "#f36b3d";
-  ctx.fillRect(tailX, enemy.y + 12 + swim, 16, 16);
+  ctx.fillStyle = finColor;
+  ctx.fillRect(tailX, enemy.y + 8 + swim, 12, 12);
+  ctx.fillRect(tailX, enemy.y + 22 - swim, 12, 12);
 }
 
 function drawCrab(enemy) {
@@ -2572,17 +2616,30 @@ function drawLavaBoss(enemy) {
     return;
   }
 
-  ctx.fillStyle = enemyFill(enemy, enemy.bossMode === "axeStuck" ? "#6a2d25" : "#21161b");
-  ctx.fillRect(enemy.x + 14, enemy.y + 34, enemy.width - 28, enemy.height - 34);
-  addPixelHighlights(enemy.x + 14, enemy.y + 34, enemy.width - 28, enemy.height - 34);
-  ctx.fillStyle = "#ff5a2e";
-  ctx.fillRect(enemy.x + 30, enemy.y + 10, enemy.width - 60, 42);
+  ctx.fillStyle = enemyFill(enemy, enemy.bossMode === "axeStuck" ? "#7a1d24" : "#a8202a");
+  ctx.fillRect(enemy.x + 18, enemy.y + 42, enemy.width - 36, enemy.height - 42);
+  addPixelHighlights(enemy.x + 18, enemy.y + 42, enemy.width - 36, enemy.height - 42);
+  ctx.fillStyle = "#21161b";
+  ctx.fillRect(enemy.x + 30, enemy.y + 68, enemy.width - 60, 12);
+  ctx.fillRect(enemy.x + 42, enemy.y + 94, enemy.width - 84, 10);
+  ctx.fillStyle = "#d9323b";
+  ctx.fillRect(enemy.x + 24, enemy.y + 50, 28, 64);
+  ctx.fillRect(enemy.x + enemy.width - 52, enemy.y + 50, 28, 64);
+  ctx.fillStyle = "#f04a3a";
+  ctx.fillRect(enemy.x + 34, enemy.y + 8, enemy.width - 68, 46);
+  ctx.fillStyle = "#21161b";
+  ctx.fillRect(enemy.x + 24, enemy.y + 2, enemy.width - 48, 14);
+  ctx.fillRect(enemy.x + 42, enemy.y - 8, enemy.width - 84, 14);
   ctx.fillStyle = "#ffd34d";
-  ctx.fillRect(enemy.x + 44, enemy.y + 28, 16, 16);
-  ctx.fillRect(enemy.x + enemy.width - 60, enemy.y + 28, 16, 16);
-  ctx.fillStyle = "#7a2e22";
-  ctx.fillRect(enemy.x - 10, enemy.y + 62, 30, 50);
-  ctx.fillRect(enemy.x + enemy.width - 20, enemy.y + 62, 30, 50);
+  ctx.fillRect(enemy.x + 52, enemy.y + 25, 14, 14);
+  ctx.fillRect(enemy.x + enemy.width - 66, enemy.y + 25, 14, 14);
+  ctx.fillRect(enemy.x + enemy.width / 2 - 8, enemy.y - 18, 16, 24);
+  ctx.fillStyle = "#fff4c7";
+  ctx.fillRect(enemy.x + 36, enemy.y - 16, 18, 10);
+  ctx.fillRect(enemy.x + enemy.width - 54, enemy.y - 16, 18, 10);
+  ctx.fillStyle = "#5b1317";
+  ctx.fillRect(enemy.x - 10, enemy.y + 70, 36, 48);
+  ctx.fillRect(enemy.x + enemy.width - 26, enemy.y + 70, 36, 48);
   drawHugeAxe(enemy, enemy.facing, enemy.x + (enemy.facing > 0 ? enemy.width - 14 : 14), enemy.y + 62, enemy.bossMode === "axeStuck");
   if (enemy.bossMode === "axeStuck") {
     drawTinyText("斧头卡住了！", enemy.x + 28, enemy.y - 12, "#ffd34d");
@@ -2863,6 +2920,13 @@ function drawEffects() {
       ctx.fillRect(effect.x + effect.width / 2 - 14, effect.y + effect.height / 2 - 14, 28, 28);
       ctx.fillStyle = "#d7b8ff";
       ctx.fillRect(effect.x + effect.width / 2 - 6, effect.y + effect.height / 2 - 6, 12, 12);
+    }
+    if (effect.kind === "witchCharge") {
+      const pulse = 12 + Math.floor((180 - effect.life) / 18) * 3;
+      ctx.fillStyle = "rgba(155, 92, 255, 0.38)";
+      ctx.fillRect(effect.x + effect.width / 2 - pulse, effect.y + 12 - pulse / 2, pulse * 2, pulse * 2);
+      ctx.fillStyle = "#d7b8ff";
+      ctx.fillRect(effect.x + effect.width / 2 - 5, effect.y + 18, 10, 10);
     }
     if (effect.kind === "xp") drawTinyText(`+${effect.amount} 经验`, effect.x, effect.y, "#8ee8ff");
     if (effect.kind === "levelUp") drawTinyText(`升级！战斗力 +1`, effect.x, effect.y, "#ffd34d");
