@@ -1099,14 +1099,38 @@ function handleChest() {
     chest.opened = true;
     const drops = rollChestDrops(level.number);
     coins += drops.coins;
+    const cameFromSwamp = level.theme.id === "swamp";
     currentLevel += 1;
     updateHud();
     renderBackpack();
     effects.push({ x: chest.x - 4, y: chest.y - 36, width: 150, height: 36, life: 70, kind: "coins", amount: drops.coins });
-    if (drops.message) effects.push({ x: chest.x - 18, y: chest.y - 76, width: 190, height: 30, life: 100, kind: "loot", text: drops.message });
+    if (cameFromSwamp) {
+      effects.push({ x: chest.x - 26, y: chest.y - 82, width: 210, height: 30, life: 80, kind: "loot", text: "传送到岩浆世界！" });
+    } else if (drops.message) {
+      effects.push({ x: chest.x - 18, y: chest.y - 76, width: 190, height: 30, life: 100, kind: "loot", text: drops.message });
+    }
     draw();
-    setTimeout(() => showMenu("win"), 450);
+    if (cameFromSwamp) {
+      setTimeout(() => enterNextLevelFromPortal(), 450);
+    } else {
+      setTimeout(() => showMenu("win"), 450);
+    }
   }
+}
+
+function enterNextLevelFromPortal() {
+  if (gameState !== "playing") return;
+  level = buildLevel(currentLevel);
+  player.x = 80;
+  player.y = floorY - player.height;
+  player.vx = 0;
+  player.vy = 0;
+  player.onGround = true;
+  projectiles = [];
+  effects = [{ x: player.x + 20, y: player.y - 34, width: 170, height: 30, life: 90, kind: "loot", text: "岩浆世界开启！" }];
+  cameraX = 0;
+  updateHud();
+  draw();
 }
 
 function rollChestDrops(levelNumber) {
@@ -1678,6 +1702,25 @@ function drawThemeDecor() {
   }
 
   if (level.theme.id === "lava") {
+    const flameTime = Date.now() / 120;
+    for (let x = 30; x < level.worldWidth; x += 96) {
+      const height = 72 + ((x / 13 + Math.floor(flameTime)) % 5) * 18;
+      const sway = Math.sin(flameTime + x * 0.02) * 10;
+      ctx.fillStyle = "#7a1d19";
+      ctx.fillRect(x + sway, floorY - height, 34, height);
+      ctx.fillStyle = "#ff4d2e";
+      ctx.fillRect(x + 7 + sway * 0.4, floorY - height + 18, 20, height - 18);
+      ctx.fillStyle = "#ffd34d";
+      ctx.fillRect(x + 13 - sway * 0.2, floorY - height + 42, 10, Math.max(18, height - 54));
+    }
+
+    for (let ember = 0; ember < 44; ember += 1) {
+      const x = (ember * 211 + Math.floor(Date.now() / 35) * (ember % 3 + 1)) % level.worldWidth;
+      const y = 66 + ((ember * 47 + Math.floor(Date.now() / 60)) % 250);
+      ctx.fillStyle = ember % 2 === 0 ? "#ff8a2d" : "#ffd34d";
+      ctx.fillRect(x, y, 5, 5);
+    }
+
     for (let x = 90; x < level.worldWidth; x += 470) {
       ctx.fillStyle = "#1b1116";
       ctx.fillRect(x, floorY - 112, 64, 112);
@@ -1796,13 +1839,20 @@ function drawChest() {
   }
 
   if (level.theme.id === "swamp") {
-    ctx.fillStyle = chest.locked ? "#243225" : "#7fffd4";
-    ctx.fillRect(chest.x + 24, chest.y + 8, 56, 64);
-    ctx.fillStyle = chest.locked ? "#4a5d3d" : "#c8fff3";
-    ctx.fillRect(chest.x + 34, chest.y + 18, 36, 44);
-    ctx.fillStyle = "#162018";
-    ctx.fillRect(chest.x + 12, chest.y + 68, 82, 10);
-    drawTinyText(chest.locked ? `BOSS 剩 ${level.enemies.filter((enemy) => enemy.alive).length}` : "沼泽出口", chest.x - 2, chest.y - 13, chest.locked ? "#211b2c" : "#7fffd4");
+    const pulse = Math.sin(Date.now() / 120) * 6;
+    ctx.fillStyle = "#05040a";
+    ctx.fillRect(chest.x + 8, chest.y - 8, 92, 92);
+    ctx.fillStyle = "#211b2c";
+    ctx.fillRect(chest.x + 18, chest.y + 2, 72, 72);
+    ctx.fillStyle = chest.locked ? "#1b2220" : "#7fffd4";
+    ctx.fillRect(chest.x + 28, chest.y + 12, 52, 52);
+    ctx.fillStyle = chest.locked ? "#31462f" : "#6f4dff";
+    ctx.fillRect(chest.x + 36 + pulse * 0.25, chest.y + 20, 36, 36);
+    ctx.fillStyle = chest.locked ? "#243225" : "#c8fff3";
+    ctx.fillRect(chest.x + 46 - pulse * 0.2, chest.y + 30, 16, 16);
+    ctx.fillStyle = "#05040a";
+    ctx.fillRect(chest.x + 12, chest.y + 76, 84, 10);
+    drawTinyText(chest.locked ? `打败 ${level.enemies.filter((enemy) => enemy.alive).length} 只怪` : "进入岩浆传送门", chest.x - 18, chest.y - 13, chest.locked ? "#211b2c" : "#7fffd4");
     ctx.restore();
     return;
   }
