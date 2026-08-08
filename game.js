@@ -224,7 +224,7 @@ function enemySize(kind, number, index) {
 
 function buildEnemy(kind, x, number, index, themeId) {
   const [width, height] = enemySize(kind, number, index);
-  const flying = ["bat", "fish", "shark", "harpooner"].includes(kind);
+  const flying = ["fish", "shark", "harpooner"].includes(kind);
   const deepSea = themeId === "ocean" && ["crab", "shark", "harpooner"].includes(kind);
   const y = flying ? floorY - (deepSea ? 250 : 150) + (index % 2) * 34 : floorY - height;
   const hpBonus =
@@ -586,7 +586,7 @@ function moveEnemies() {
     const inSight = absDistance < 620;
     enemy.facing = distance > 0 ? 1 : -1;
 
-    if (["bat", "drowned", "fish", "shark", "harpooner", "swampWitch", "lavaMage"].includes(enemy.kind)) {
+    if (["drowned", "fish", "shark", "harpooner", "swampWitch", "lavaMage"].includes(enemy.kind)) {
       enemy.y = enemy.baseY + Math.sin((Date.now() / 160 + enemy.phase) % 80) * (enemy.kind === "shark" ? 16 : 22);
     }
 
@@ -609,13 +609,7 @@ function moveEnemies() {
       122;
 
     if (inSight && absDistance > attackRange * 0.55) {
-      const speed =
-        enemy.kind === "brute" || enemy.kind === "sandGolem" ? 1.35 :
-        enemy.kind === "lavaKnight" || enemy.kind === "lavaBeast" || enemy.kind === "lavaAxeGuard" ? 1.45 :
-        enemy.kind === "lavaBlade" || enemy.kind === "lavaSoldier" ? 2.25 :
-        enemy.kind === "shark" || enemy.kind === "fish" ? 2.55 :
-        enemy.kind === "crab" || enemy.kind === "scorpion" ? 1.8 :
-        2.05;
+      const speed = player.speed;
       enemy.x += Math.sign(distance) * speed;
     } else if (!inSight) {
       enemy.x += Math.sin((Date.now() / 550 + enemy.phase) % 20) * 0.85;
@@ -2296,13 +2290,22 @@ function drawSlime(enemy) {
 }
 
 function drawBat(enemy) {
+  const step = Math.sin(Date.now() / 100 + enemy.phase) * 3;
   ctx.fillStyle = enemy.hurtFlash > 0 ? "#ffffff" : "#673ab7";
-  ctx.fillRect(enemy.x + 16, enemy.y + 10, enemy.width - 32, enemy.height - 12);
-  ctx.fillRect(enemy.x, enemy.y + 18, 22, 12);
-  ctx.fillRect(enemy.x + enemy.width - 22, enemy.y + 18, 22, 12);
+  ctx.fillRect(enemy.x + 10, enemy.y + 12, enemy.width - 20, enemy.height - 12);
+  addPixelHighlights(enemy.x + 10, enemy.y + 12, enemy.width - 20, enemy.height - 12);
+  ctx.fillStyle = "#4b2a86";
+  ctx.fillRect(enemy.x + 2, enemy.y + 20, 16, 16);
+  ctx.fillRect(enemy.x + enemy.width - 18, enemy.y + 20, 16, 16);
+  ctx.fillStyle = "#211b2c";
+  ctx.fillRect(enemy.x + 16, enemy.y + enemy.height - 3 + Math.max(0, step), 10, 10);
+  ctx.fillRect(enemy.x + enemy.width - 26, enemy.y + enemy.height - 3 + Math.max(0, -step), 10, 10);
   ctx.fillStyle = "#ffd34d";
-  ctx.fillRect(enemy.x + 24, enemy.y + 24, 6, 6);
-  ctx.fillRect(enemy.x + enemy.width - 30, enemy.y + 24, 6, 6);
+  ctx.fillRect(enemy.x + 20, enemy.y + 22, 6, 6);
+  ctx.fillRect(enemy.x + enemy.width - 26, enemy.y + 22, 6, 6);
+  ctx.fillStyle = "#d7b8ff";
+  ctx.fillRect(enemy.x + enemy.width / 2 - 10, enemy.y + 2, 8, 12);
+  ctx.fillRect(enemy.x + enemy.width / 2 + 2, enemy.y + 2, 8, 12);
 }
 
 function drawGuard(enemy) {
