@@ -45,6 +45,9 @@ const floorY = 454;
 const starValue = 6;
 const experienceNeeded = 10;
 const unlimitedCoinsMode = true;
+const basePlayerHealth = 100;
+const maxBoostedHealth = 1000;
+const enemySpeedMultiplier = 0.68;
 
 const worldThemes = [
   { id: "gravel", name: "砾石草原", next: "海洋" },
@@ -104,7 +107,7 @@ const skinGoods = [
 ];
 
 const professions = {
-  doctor: { name: "医生", button: "回复", description: "点击回复，立刻回满生命。" },
+  doctor: { name: "医生", button: "回复", description: "点击回复，生命 +100，可叠到 1000。" },
   police: { name: "警察", button: "牢笼", description: "发射牢笼，困住怪物 10 秒。" },
   boxer: { name: "黑拳", button: "黑拳", description: "短时间内所有伤害无效。" },
 };
@@ -638,7 +641,7 @@ function moveEnemies() {
       122;
 
     if (inSight && absDistance > attackRange * 0.55) {
-      const speed = player.speed;
+      const speed = getEnemyChaseSpeed(enemy);
       enemy.x += Math.sign(distance) * speed;
     } else if (!inSight) {
       enemy.x += Math.sin((Date.now() / 550 + enemy.phase) % 20) * 0.85;
@@ -650,7 +653,7 @@ function moveEnemies() {
 
     if (absDistance <= attackRange && Math.abs(player.y - enemy.y) < 118 && enemy.attackTimer === 0 && !isPlayerProtectedByPlatform(enemy)) {
       enemy.attackTimer = enemy.kind === "brute" || enemy.kind === "lavaAxeGuard" ? 92 : 70;
-      hurtPlayer(enemy.kind === "shark" ? 20 : enemy.kind === "brute" || enemy.kind === "lavaAxeGuard" ? 2 : 1);
+      hurtPlayer(getEnemyAttackDamage(enemy));
       effects.push({ x: enemy.x, y: enemy.y + 8, width: enemy.width, height: enemy.height, life: 12, kind: "claw" });
     }
   }
@@ -667,6 +670,18 @@ function getPlayerStandingPlatform() {
 
 function canEnemyIgnorePlatformShield(enemy) {
   return ["lavaBoss", "swampWitch", "lavaMage"].includes(enemy.kind);
+}
+
+function getEnemyChaseSpeed(enemy) {
+  const bossBonus = enemy.kind === "lavaBoss" ? 0.08 : 0;
+  return player.speed * (enemySpeedMultiplier + bossBonus);
+}
+
+function getEnemyAttackDamage(enemy) {
+  if (!enemy) return 50;
+  if (enemy.kind === "lavaBoss") return 98;
+  if (["swampWitch", "lavaMage", "lavaKnight"].includes(enemy.kind)) return 70;
+  return 50;
 }
 
 function isPlayerProtectedByPlatform(enemy) {
@@ -687,7 +702,7 @@ function castWitchMagic(enemy, targetX = player.x + player.width / 2, targetY = 
     height: 18,
     vx: (dx / distance) * 5.2,
     vy: (dy / distance) * 5.2,
-    damage: 1,
+    damage: getEnemyAttackDamage(enemy),
     rangeLeft: 720,
     kind: "witchMagic",
     owner: "enemy",
@@ -739,7 +754,7 @@ function moveLavaBoss(enemy) {
       };
       effects.push({ x: axeBox.x, y: axeBox.y, width: axeBox.width, height: axeBox.height, life: 18, kind: "claw" });
       if (touches(player, axeBox)) {
-        hurtPlayer(2);
+        hurtPlayer(getEnemyAttackDamage(enemy));
       } else {
         enemy.bossMode = "axeStuck";
         enemy.bossTimer = 210;
@@ -764,7 +779,7 @@ function moveLavaBoss(enemy) {
   }
 
   if (inSight && absDistance > 110) {
-    enemy.x += Math.sign(distance) * player.speed;
+    enemy.x += Math.sign(distance) * getEnemyChaseSpeed(enemy);
     enemy.x = Math.max(18, Math.min(level.worldWidth - enemy.width - 18, enemy.x));
   } else if (!inSight) {
     enemy.x += Math.sin((Date.now() / 620 + enemy.phase) % 20) * 0.8;
@@ -879,7 +894,7 @@ function moveTraps() {
       }
     } else if (trap.state === "lava") {
       if (!trap.permanent) trap.timer -= 1;
-      if (onTrap && !isFireResistant()) hurtPlayer(1);
+      if (onTrap && !isFireResistant()) hurtPlayer(50);
       if (!trap.permanent && trap.timer <= 0) {
         trap.state = "safe";
       }
@@ -900,7 +915,7 @@ function moveTraps() {
         if (trap.timer <= 0) {
           trap.state = "swallowed";
           trap.timer = 140;
-          hurtPlayer(2);
+          hurtPlayer(50);
         }
       } else {
         trap.state = "quiet";
@@ -927,7 +942,7 @@ function moveTraps() {
         if (trap.timer <= 0) {
           trap.state = "swallowed";
           trap.timer = 140;
-          hurtPlayer(2);
+          hurtPlayer(50);
         }
       } else {
         trap.state = "quiet";
@@ -994,7 +1009,11 @@ function getAttackDamage(baseDamage) {
 }
 
 function getMaxHearts() {
-  return 2;
+  return basePlayerHealth;
+}
+
+function useHealthBoost() {
+  player.hearts = Math.min(maxBoostedHealth, player.hearts + basePlayerHealth);
 }
 
 function throwGrenade() {
@@ -1021,7 +1040,7 @@ function useProfessionSkill() {
   if (gameState !== "playing" || !player || player.skillTimer > 0) return;
 
   if (selectedProfession === "doctor") {
-    player.hearts = getMaxHearts();
+    useHealthBoost();
     player.skillTimer = 180;
     effects.push({ x: player.x - 10, y: player.y - 28, width: 90, height: 30, life: 44, kind: "heal" });
   }
@@ -1071,7 +1090,7 @@ function useFireResistPotion() {
 function useMedkit() {
   if (!player || inventory.medkit <= 0) return;
   inventory.medkit -= 1;
-  player.hearts = getMaxHearts();
+  useHealthBoost();
   effects.push({ x: player.x - 10, y: player.y - 28, width: 90, height: 30, life: 44, kind: "heal" });
   updateHud();
   renderBackpack();
@@ -1381,22 +1400,22 @@ function rollChestDrops(levelNumber) {
 function checkDangerHits() {
   for (const enemy of level.enemies) {
     if (enemy.alive && touches(player, enemy) && !isPlayerProtectedByPlatform(enemy)) {
-      hurtPlayer(1);
+      hurtPlayer(getEnemyAttackDamage(enemy));
     }
   }
 
   for (const trap of level.spikeTraps) {
     if (trap.state === "falling" && touches(player, trap)) {
-      if (!isFireResistant()) hurtPlayer(1);
+      if (!isFireResistant()) hurtPlayer(50);
     }
   }
 
   for (const trap of level.quicksandTraps) {
-    if (trap.state === "swallowed" && touches(player, trap)) hurtPlayer(1);
+    if (trap.state === "swallowed" && touches(player, trap)) hurtPlayer(50);
   }
 
   for (const trap of level.bogTraps) {
-    if (trap.state === "swallowed" && touches(player, trap)) hurtPlayer(1);
+    if (trap.state === "swallowed" && touches(player, trap)) hurtPlayer(50);
   }
 }
 
@@ -1685,7 +1704,7 @@ function updateHud() {
   coinsElement.textContent = coinText;
   heroLevelElement.textContent = heroLevel;
   experienceElement.textContent = `${experience}/${experienceNeeded}`;
-  heartsElement.textContent = player ? `${Math.max(0, player.hearts)}/${getMaxHearts()}` : getMaxHearts();
+  heartsElement.textContent = player ? `${Math.max(0, player.hearts)}/${maxBoostedHealth}` : `${getMaxHearts()}/${maxBoostedHealth}`;
   monsterCountElement.textContent = remainingMonsters;
   professionNameElement.textContent = professions[selectedProfession].name;
   const fireText = fireResistTimer > 0 ? ` 抗火${Math.ceil(fireResistTimer / 60)}秒` : "";
@@ -3160,7 +3179,7 @@ function drawEffects() {
     if (effect.kind === "xp") drawTinyText(`+${effect.amount} 经验`, effect.x, effect.y, "#8ee8ff");
     if (effect.kind === "levelUp") drawTinyText(`升级！战斗力 +1`, effect.x, effect.y, "#ffd34d");
     if (effect.kind === "unlock") drawTinyText("宝箱已解锁！", effect.x, effect.y, "#ffd34d");
-    if (effect.kind === "heal") drawTinyText("生命回满", effect.x, effect.y, "#45d06f");
+    if (effect.kind === "heal") drawTinyText("生命 +100", effect.x, effect.y, "#45d06f");
     if (effect.kind === "power") drawTinyText("力量 x3", effect.x, effect.y, "#ff6b50");
     if (effect.kind === "fireResist") drawTinyText("抗火 60 秒", effect.x, effect.y, "#ff8a2d");
     if (effect.kind === "blackFist") drawTinyText("黑拳无敌", effect.x, effect.y, "#fff29a");
