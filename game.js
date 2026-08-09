@@ -17,7 +17,13 @@ const resultLabel = document.querySelector("#resultLabel");
 const menuText = document.querySelector("#menuText");
 const menuPlayCount = document.querySelector("#menuPlayCount");
 const menuCoins = document.querySelector("#menuCoins");
+const menuCoinsTop = document.querySelector("#menuCoinsTop");
+const menuDiamonds = document.querySelector("#menuDiamonds");
+const shopTitle = document.querySelector("#shopTitle");
 const shopItems = document.querySelector("#shopItems");
+const skinShopButton = document.querySelector("#skinShopButton");
+const weaponShopButton = document.querySelector("#weaponShopButton");
+const exchangeDiamondButton = document.querySelector("#exchangeDiamondButton");
 const startButton = document.querySelector("#startButton");
 const professionChoices = document.querySelector("#professionChoices");
 const professionHint = document.querySelector("#professionHint");
@@ -87,6 +93,15 @@ const shopGoods = [
   { type: "item", item: "medkit", name: "医疗包", cost: 31 },
 ];
 
+const skinGoods = [
+  { key: "magmaSamurai", name: "岩浆武士皮肤", cost: 100, line: "红色盔甲和火焰护肩" },
+  { key: "guanYu", name: "关羽", cost: 600, line: "青绿色战袍，红面长须" },
+  { key: "zhangFei", name: "张飞", cost: 400, line: "黑紫战甲，勇猛风格" },
+  { key: "liuBei", name: "刘备", cost: 700, line: "金蓝王者战衣" },
+  { key: "luBu", name: "吕布", cost: 600, line: "暗红金甲，头戴长翎" },
+  { key: "zhangFeiAlt", name: "张飞（另一款）", cost: 900, line: "红黑重甲加强版" },
+];
+
 const professions = {
   doctor: { name: "医生", button: "回复", description: "点击回复，立刻回满生命。" },
   police: { name: "警察", button: "牢笼", description: "发射牢笼，困住怪物 10 秒。" },
@@ -98,6 +113,7 @@ let level;
 let projectiles = [];
 let effects = [];
 let coins = 50;
+let diamonds = 0;
 let experience = 0;
 let heroLevel = 1;
 let playCount = 0;
@@ -112,6 +128,18 @@ let lightningBootsEquipped = false;
 let equippedArrow = "normalArrow";
 let equippedTool = "";
 let diverSkinOwned = false;
+let selectedSkin = "knight";
+let shopMode = "weapons";
+let ownedSkins = {
+  knight: true,
+  diverSkin: false,
+  magmaSamurai: false,
+  guanYu: false,
+  zhangFei: false,
+  liuBei: false,
+  luBu: false,
+  zhangFeiAlt: false,
+};
 let selectedProfession = "doctor";
 let speedPotionOwned = false;
 let powerBoostTimer = 0;
@@ -1388,6 +1416,15 @@ function hurtPlayer(amount) {
 
 function renderShop() {
   shopItems.innerHTML = "";
+  const showingSkins = shopMode === "skins";
+  if (shopTitle) shopTitle.textContent = showingSkins ? "皮肤商城" : "武器商店";
+  if (skinShopButton) skinShopButton.classList.toggle("is-selected", showingSkins);
+  if (weaponShopButton) weaponShopButton.classList.toggle("is-selected", !showingSkins);
+
+  if (showingSkins) {
+    renderSkinShop();
+    return;
+  }
 
   for (const item of shopGoods) {
     const button = document.createElement("button");
@@ -1402,6 +1439,43 @@ function renderShop() {
     button.disabled = owned || lockedByOrder || coins < item.cost;
     button.innerHTML = `<strong>${item.name}</strong><span>${owned ? "已拥有" : `${item.cost} 金币`}</span>`;
     button.addEventListener("click", () => buyItem(item));
+    shopItems.append(button);
+  }
+}
+
+function renderSkinShop() {
+  const knightButton = document.createElement("button");
+  knightButton.type = "button";
+  knightButton.className = selectedSkin === "knight" ? "shop-item is-equipped" : "shop-item is-owned";
+  knightButton.innerHTML = `<strong>骑士皮肤</strong><span>${selectedSkin === "knight" ? "已佩戴" : "佩戴"}</span>`;
+  knightButton.disabled = selectedSkin === "knight";
+  knightButton.addEventListener("click", () => equipSkin("knight"));
+  shopItems.append(knightButton);
+
+  const diverButton = document.createElement("button");
+  const diverEquipped = selectedSkin === "diverSkin";
+  diverButton.type = "button";
+  diverButton.className = diverEquipped ? "shop-item is-equipped" : ownedSkins.diverSkin ? "shop-item is-owned" : "shop-item";
+  diverButton.disabled = diverEquipped || !ownedSkins.diverSkin;
+  diverButton.innerHTML = `<strong>潜水员皮肤</strong><span>${diverEquipped ? "已佩戴" : ownedSkins.diverSkin ? "佩戴" : "在武器商店购买"}</span><span>海洋世界专用泳装</span>`;
+  diverButton.addEventListener("click", () => equipSkin("diverSkin"));
+  shopItems.append(diverButton);
+
+  for (const skin of skinGoods) {
+    const owned = ownedSkins[skin.key];
+    const equipped = selectedSkin === skin.key;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = equipped ? "shop-item is-equipped" : owned ? "shop-item is-owned" : "shop-item";
+    button.disabled = equipped || (!owned && diamonds < skin.cost);
+    button.innerHTML = `<strong>${skin.name}</strong><span>${equipped ? "已佩戴" : owned ? "佩戴" : `${skin.cost} 钻石`}</span><span>${skin.line}</span>`;
+    button.addEventListener("click", () => {
+      if (owned) {
+        equipSkin(skin.key);
+      } else {
+        buySkin(skin);
+      }
+    });
     shopItems.append(button);
   }
 }
@@ -1512,6 +1586,8 @@ function buyItem(item) {
     hasHorse = true;
   } else if (item.type === "skin" && item.item === "diverSkin") {
     diverSkinOwned = true;
+    ownedSkins.diverSkin = true;
+    selectedSkin = "diverSkin";
   } else if (item.type === "item" && item.item === "speedPotion") {
     speedPotionOwned = true;
   } else if (item.type === "item") {
@@ -1523,6 +1599,28 @@ function buyItem(item) {
   updateHud();
   renderShop();
   renderBackpack();
+}
+
+function exchangeDiamond() {
+  if (coins < 10) return;
+  coins -= 10;
+  diamonds += 1;
+  updateHud();
+  renderShop();
+}
+
+function buySkin(skin) {
+  if (ownedSkins[skin.key] || diamonds < skin.cost) return;
+  diamonds -= skin.cost;
+  ownedSkins[skin.key] = true;
+  equipSkin(skin.key);
+}
+
+function equipSkin(key) {
+  if (!ownedSkins[key]) return;
+  selectedSkin = key;
+  updateHud();
+  renderShop();
 }
 
 function tickTimers() {
@@ -1572,6 +1670,8 @@ function updateHud() {
   weaponNameElement.textContent = `${hasHorse ? `${weapons[weaponLevel].name}+马` : weapons[weaponLevel].name}${fireText}`;
   menuPlayCount.textContent = playCount;
   menuCoins.textContent = coins;
+  if (menuCoinsTop) menuCoinsTop.textContent = coins;
+  if (menuDiamonds) menuDiamonds.textContent = diamonds;
   updateActionButtons();
 }
 
@@ -2771,6 +2871,19 @@ function drawProjectiles() {
   ctx.restore();
 }
 
+function getPlayerSkinPalette() {
+  const palettes = {
+    knight: { armor: "#d9dde5", leg: "#8f95a3", helmet: "#c7d4e8", accent: "#ffd34d", eye: "#211b2c", face: "#ffd08a" },
+    magmaSamurai: { armor: "#b72b20", leg: "#411018", helmet: "#7d1517", accent: "#ffb02e", eye: "#fff0a6", face: "#f2a56b", horns: true, cape: "#2b0b12" },
+    guanYu: { armor: "#1f8b5a", leg: "#14513b", helmet: "#2f5f3c", accent: "#d9aa32", eye: "#241315", face: "#bd5138", beard: "#2b1512" },
+    zhangFei: { armor: "#2d224f", leg: "#11131f", helmet: "#17101f", accent: "#ff5a4f", eye: "#fff2bb", face: "#744135", beard: "#17101f" },
+    liuBei: { armor: "#2e65a5", leg: "#173052", helmet: "#e2c15c", accent: "#fff1a0", eye: "#211b2c", face: "#ffd08a", cape: "#f0d96b" },
+    luBu: { armor: "#7d1822", leg: "#27111a", helmet: "#341018", accent: "#ffca45", eye: "#fff2bb", face: "#d78152", plume: "#e63232" },
+    zhangFeiAlt: { armor: "#8b1518", leg: "#141018", helmet: "#24101a", accent: "#ffcf42", eye: "#fff2bb", face: "#6e3c32", beard: "#101018", cape: "#3b0d12" },
+  };
+  return palettes[selectedSkin] || palettes.knight;
+}
+
 function drawPlayer() {
   const flashing = player.invincible > 0 && Math.floor(player.invincible / 6) % 2 === 0;
   if (flashing) return;
@@ -2784,7 +2897,7 @@ function drawPlayer() {
   const swimKick = isPlayerInRiver() ? Math.sin(Date.now() / 90) * 6 : gait;
   drawEntityShadow(player, hasDragonAdult || hasHorse ? 1.2 : 1);
 
-  if (level && level.theme.id === "ocean" && diverSkinOwned) {
+  if (selectedSkin === "diverSkin" || (level && level.theme.id === "ocean" && diverSkinOwned && selectedSkin === "knight")) {
     ctx.fillStyle = "#ffd08a";
     ctx.fillRect(x + 14, y + 8, 28, 24);
     ctx.fillStyle = "#1b3958";
@@ -2826,19 +2939,42 @@ function drawPlayer() {
   }
 
   const knightY = hasDragonAdult ? y - 4 : hasHorse ? y + 4 : y;
-  ctx.fillStyle = "#d9dde5";
+  const skin = getPlayerSkinPalette();
+  if (skin.cape) {
+    ctx.fillStyle = skin.cape;
+    ctx.fillRect(x + 6, knightY + 30, 12, 38);
+  }
+  ctx.fillStyle = skin.armor;
   ctx.fillRect(x + 10, knightY + 30, 30, 36);
   addPixelHighlights(x + 10, knightY + 30, 30, 36);
-  ctx.fillStyle = "#8f95a3";
+  ctx.fillStyle = skin.leg;
   ctx.fillRect(x + 10, knightY + 56 + Math.max(0, gait), 12, 12);
   ctx.fillRect(x + 28, knightY + 56 + Math.max(0, -gait), 12, 12);
-  ctx.fillStyle = "#c7d4e8";
+  ctx.fillStyle = skin.face;
+  ctx.fillRect(x + 15, knightY + 15, 22, 16);
+  ctx.fillStyle = skin.helmet;
   ctx.fillRect(x + 8, knightY + 8, 36, 30);
-  ctx.fillStyle = "#211b2c";
+  ctx.fillStyle = skin.face;
+  ctx.fillRect(x + 16, knightY + 18, 20, 12);
+  ctx.fillStyle = skin.eye;
   ctx.fillRect(x + (player.facing > 0 ? 30 : 16), knightY + 20, 12, 5);
-  ctx.fillStyle = "#ffd34d";
+  if (skin.beard) {
+    ctx.fillStyle = skin.beard;
+    ctx.fillRect(x + 18, knightY + 28, 18, 12);
+  }
+  ctx.fillStyle = skin.accent;
   ctx.fillRect(x + 14, knightY - 8, 24, 10);
   ctx.fillRect(x + 22, knightY - 16, 8, 8);
+  if (skin.horns) {
+    ctx.fillStyle = "#fff0a6";
+    ctx.fillRect(x + 8, knightY - 14, 8, 8);
+    ctx.fillRect(x + 36, knightY - 14, 8, 8);
+  }
+  if (skin.plume) {
+    ctx.fillStyle = skin.plume;
+    ctx.fillRect(x + 26, knightY - 28, 6, 18);
+    ctx.fillRect(x + 30, knightY - 24, 12, 5);
+  }
   drawWeapon(knightY);
   ctx.restore();
 }
@@ -2992,6 +3128,21 @@ window.addEventListener("keyup", (event) => {
 });
 
 startButton.addEventListener("click", startGame);
+if (skinShopButton) {
+  skinShopButton.addEventListener("click", () => {
+    shopMode = "skins";
+    renderShop();
+  });
+}
+if (weaponShopButton) {
+  weaponShopButton.addEventListener("click", () => {
+    shopMode = "weapons";
+    renderShop();
+  });
+}
+if (exchangeDiamondButton) {
+  exchangeDiamondButton.addEventListener("click", exchangeDiamond);
+}
 healButton.addEventListener("click", useProfessionSkill);
 cageButton.addEventListener("click", useProfessionSkill);
 blackFistButton.addEventListener("click", useProfessionSkill);

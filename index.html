@@ -60,6 +60,23 @@
       <section class="stage-wrap" aria-label="游戏舞台">
         <canvas id="game" width="960" height="540"></canvas>
         <div id="mainMenu" class="main-menu">
+          <div class="menu-hero">
+            <h2 class="minecraft-title">元宝世界</h2>
+            <div class="menu-top-actions" aria-live="polite">
+              <div class="menu-currency">
+                <span>金币</span>
+                <strong id="menuCoinsTop">0</strong>
+              </div>
+              <div class="menu-currency menu-currency--diamond">
+                <span>钻石</span>
+                <strong id="menuDiamonds">0</strong>
+              </div>
+              <button id="exchangeDiamondButton" type="button">10 金币 → 1 钻石</button>
+              <button id="skinShopButton" type="button">皮肤商城</button>
+              <button id="weaponShopButton" type="button">武器商店</button>
+            </div>
+          </div>
+
           <div class="menu-panel">
             <p id="resultLabel" class="result-label">准备冒险</p>
             <h2>主界面</h2>
@@ -86,7 +103,7 @@
           </div>
 
           <div class="shop-panel">
-            <h3>武器商店</h3>
+            <h3 id="shopTitle">武器商店</h3>
             <div id="shopItems" class="shop-items"></div>
           </div>
 
@@ -134,6 +151,6 @@
       </section>
     </main>
 
-    <script src="game.js?v=20260809-platform-shield-axe"></script>
+    <script src="game.js?v=20260809-skin-shop-menu"></script>
   </body>
 </html>
