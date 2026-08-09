@@ -32,6 +32,8 @@ const gameActions = document.querySelector(".game-actions");
 const healButton = document.querySelector("#healButton");
 const cageButton = document.querySelector("#cageButton");
 const blackFistButton = document.querySelector("#blackFistButton");
+const rageButton = document.querySelector("#rageButton");
+const roarButton = document.querySelector("#roarButton");
 const powerPotionButton = document.querySelector("#powerPotionButton");
 const medkitButton = document.querySelector("#medkitButton");
 const backpackButton = document.querySelector("#backpackButton");
@@ -88,6 +90,9 @@ const shopGoods = [
   { type: "weapon", index: 7, name: "缓慢弓", cost: 165 },
   { type: "weapon", index: 8, name: "闪电剑", cost: 150 },
   { type: "weapon", index: 9, name: "火焰剑", cost: 180 },
+  { type: "armor", item: "goldenArmor", name: "黄金甲", cost: 260 },
+  { type: "mount", item: "redHare", name: "赤兔宝马", cost: 0 },
+  { type: "mount", item: "blackHorse", name: "黑马", cost: 0 },
   { type: "item", item: "normalArrow", name: "普通箭 x10", cost: 10, amount: 10 },
   { type: "item", item: "poisonArrow", name: "剧毒箭 x5", cost: 14, amount: 5 },
   { type: "item", item: "fireArrow", name: "火焰箭 x5", cost: 16, amount: 5 },
@@ -125,6 +130,9 @@ let weaponLevel = 0;
 let ownedWeapons = [true, false, false, false, false, false, false, false, false, false];
 let specialWeaponIndexes = {};
 let hasHorse = false;
+let hasRedHare = false;
+let hasBlackHorse = false;
+let hasGoldenArmor = false;
 let hasDragonAdult = false;
 let dragonFeedCount = 0;
 let dragonAttackTimer = 0;
@@ -149,6 +157,10 @@ let speedPotionOwned = false;
 let powerBoostTimer = 0;
 let fireResistTimer = 0;
 let blackFistTimer = 0;
+let guanYuInvincibleTimer = 0;
+let zhangFeiRageTimer = 0;
+let zhangFeiRageCooldown = 0;
+let zhangFeiRoarCooldown = 0;
 let inventory = {
   medkit: 0,
   powerPotion: 0,
@@ -157,6 +169,8 @@ let inventory = {
   poisonArrow: 8,
   fireArrow: 6,
   stinkSock: 0,
+  redDye: 0,
+  blackDye: 0,
   lightningSword: 0,
   fireSwordLoot: 0,
   lightningBoots: 0,
@@ -207,6 +221,13 @@ function startGame() {
 
   projectiles = [];
   effects = [];
+  guanYuInvincibleTimer = selectedSkin === "guanYu" ? 3600 : 0;
+  zhangFeiRageTimer = 0;
+  zhangFeiRageCooldown = 0;
+  zhangFeiRoarCooldown = 0;
+  if (guanYuInvincibleTimer > 0) {
+    effects.push({ x: player.x - 20, y: player.y - 34, width: 170, height: 30, life: 120, kind: "loot", text: "关羽开局无敌 60 秒！" });
+  }
   cameraX = 0;
   updateHud();
   cancelAnimationFrame(animationFrame);
@@ -604,6 +625,10 @@ function movePlayer() {
 function moveEnemies() {
   for (const enemy of level.enemies) {
     if (!enemy.alive) continue;
+    if (zhangFeiRageTimer > 0) {
+      enemy.cagedTimer = Math.max(enemy.cagedTimer, 12);
+      continue;
+    }
     if (enemy.cagedTimer > 0) {
       continue;
     }
@@ -1096,6 +1121,35 @@ function useMedkit() {
   renderBackpack();
 }
 
+function canUseZhangFeiSkills() {
+  return gameState === "playing" && player && (selectedSkin === "zhangFei" || selectedSkin === "zhangFeiAlt");
+}
+
+function useZhangFeiRage() {
+  if (!canUseZhangFeiSkills() || zhangFeiRageCooldown > 0) return;
+  zhangFeiRageTimer = 1800;
+  zhangFeiRageCooldown = 2400;
+  effects.push({ x: player.x - 20, y: player.y - 44, width: 170, height: 34, life: 120, kind: "loot", text: "张飞狂怒！敌人害怕了！" });
+  updateHud();
+}
+
+function useZhangFeiRoar() {
+  if (!canUseZhangFeiSkills() || zhangFeiRoarCooldown > 0) return;
+  zhangFeiRoarCooldown = 900;
+  const roarRange = 620;
+  for (const enemy of level.enemies) {
+    if (!enemy.alive) continue;
+    const dx = Math.abs(enemy.x + enemy.width / 2 - (player.x + player.width / 2));
+    const dy = Math.abs(enemy.y + enemy.height / 2 - (player.y + player.height / 2));
+    if (dx < roarRange && dy < 220) {
+      enemy.cagedTimer = Math.max(enemy.cagedTimer, 600);
+      effects.push({ x: enemy.x - 8, y: enemy.y - 20, width: enemy.width + 16, height: 34, life: 70, kind: "cageHit" });
+    }
+  }
+  effects.push({ x: player.x - 30, y: player.y - 50, width: 210, height: 40, life: 90, kind: "loot", text: "大吼！全部停住 10 秒！" });
+  updateHud();
+}
+
 function spawnBullet(weapon) {
   const arrowKind =
     player.loadedArrow === "fireArrow" ? "fireArrow" :
@@ -1228,6 +1282,10 @@ function damageEnemiesIfHit(hitBox, damage) {
 }
 
 function damageEnemy(enemy, damage) {
+  const specialDamage = getSkinSpecialDamage(enemy, damage);
+  const usedSpecialDamage = specialDamage > damage;
+  damage = specialDamage;
+
   if (enemy.kind === "lavaBoss") {
     if (enemy.bossMode === "hidden") {
       effects.push({ x: enemy.x, y: floorY - 44, width: 120, height: 28, life: 32, kind: "miss" });
@@ -1247,7 +1305,7 @@ function damageEnemy(enemy, damage) {
         effects.push({ x: enemy.x + 10, y: enemy.y - 20, width: 150, height: 28, life: 46, kind: "loot", text: "先打败小弟！" });
         return;
       }
-      damage *= 1.5;
+      if (!usedSpecialDamage) damage *= 1.5;
     }
   }
 
@@ -1328,6 +1386,28 @@ function handleChest() {
   }
 }
 
+function getSkinSpecialDamage(enemy, damage) {
+  if (selectedSkin === "guanYu") {
+    if (enemy.kind === "lavaBoss" && hasHorse) return Math.max(damage, Math.ceil(enemy.maxHp / 4));
+    if (enemy.kind !== "lavaBoss") return Math.max(damage, enemy.hp);
+  }
+
+  if (selectedSkin === "luBu" && hasRedHare) {
+    return Math.max(damage, Math.ceil(enemy.maxHp / 2));
+  }
+
+  if (selectedSkin === "liuBei" && hasGoldenArmor && enemy.kind === "lavaAxeGuard") {
+    return Math.max(damage, enemy.hp);
+  }
+
+  if ((selectedSkin === "zhangFei" || selectedSkin === "zhangFeiAlt") && hasBlackHorse) {
+    if (enemy.kind === "lavaBoss") return Math.max(damage, Math.max(1, Math.ceil(enemy.maxHp / 4) - 20));
+    return Math.max(damage, Math.max(1, enemy.hp - 20));
+  }
+
+  return damage;
+}
+
 function enterNextLevelFromPortal() {
   if (gameState !== "playing") return;
   level = buildLevel(currentLevel);
@@ -1393,6 +1473,14 @@ function rollChestDrops(levelNumber) {
     inventory.beef += 1;
     drops.push("牛肉");
   }
+  if (hasHorse && selectedSkin === "luBu" && Math.random() < 0.45) {
+    inventory.redDye += 1;
+    drops.push("红色染料");
+  }
+  if (hasHorse && (selectedSkin === "zhangFei" || selectedSkin === "zhangFeiAlt") && Math.random() < 0.45) {
+    inventory.blackDye += 1;
+    drops.push("黑色染料");
+  }
 
   return { coins: chestCoins, message: drops.length ? drops.join("、") : "" };
 }
@@ -1420,7 +1508,7 @@ function checkDangerHits() {
 }
 
 function hurtPlayer(amount) {
-  if (blackFistTimer > 0 || player.invincible > 0 || gameState !== "playing") return;
+  if (blackFistTimer > 0 || guanYuInvincibleTimer > 0 || zhangFeiRageTimer > 0 || player.invincible > 0 || gameState !== "playing") return;
 
   playSound("hurt");
   player.hearts -= amount;
@@ -1450,14 +1538,27 @@ function renderShop() {
     const button = document.createElement("button");
     const owned =
       item.type === "horse" ? hasHorse :
+      item.type === "armor" && item.item === "goldenArmor" ? hasGoldenArmor :
+      item.type === "mount" && item.item === "redHare" ? hasRedHare :
+      item.type === "mount" && item.item === "blackHorse" ? hasBlackHorse :
       item.type === "skin" && item.item === "diverSkin" ? diverSkinOwned :
       item.type === "item" && item.item === "speedPotion" ? speedPotionOwned :
       item.type === "weapon" && ownedWeapons[item.index];
+    const missingRequirement =
+      item.type === "mount" && item.item === "redHare" ? (!hasHorse || inventory.redDye <= 0) :
+      item.type === "mount" && item.item === "blackHorse" ? (!hasHorse || inventory.blackDye <= 0) :
+      false;
     const lockedByOrder = false;
     button.type = "button";
     button.className = owned ? "shop-item is-owned" : "shop-item";
-    button.disabled = owned || lockedByOrder || coins < item.cost;
-    button.innerHTML = `<strong>${item.name}</strong><span>${owned ? "已拥有" : `${item.cost} 金币`}</span>`;
+    button.disabled = owned || lockedByOrder || missingRequirement || (!unlimitedCoinsMode && coins < item.cost);
+    const priceText =
+      owned ? "已拥有" :
+      missingRequirement && item.item === "redHare" ? "需要马和红色染料" :
+      missingRequirement && item.item === "blackHorse" ? "需要马和黑色染料" :
+      item.type === "mount" ? "兑换" :
+      `${item.cost} 金币`;
+    button.innerHTML = `<strong>${item.name}</strong><span>${priceText}</span>`;
     button.addEventListener("click", () => buyItem(item));
     shopItems.append(button);
   }
@@ -1543,6 +1644,11 @@ function renderBackpack() {
   const rows = [
     { key: "slots", name: `物品栏 6格：${getQuickSlotsText()}`, count: 1, action: "整理", onClick: renderBackpack },
     { key: "stinkSock", name: "臭袜子", count: inventory.stinkSock, action: "卖 1", onClick: () => sellTreasure("stinkSock", 1) },
+    { key: "redDye", name: "红色染料", count: inventory.redDye, action: "兑换赤兔", onClick: renderShop },
+    { key: "blackDye", name: "黑色染料", count: inventory.blackDye, action: "兑换黑马", onClick: renderShop },
+    { key: "goldenArmor", name: `黄金甲${hasGoldenArmor ? "（已拥有）" : ""}`, count: hasGoldenArmor ? 1 : 0, action: "已拥有", onClick: renderBackpack },
+    { key: "redHare", name: `赤兔宝马${hasRedHare ? "（已拥有）" : ""}`, count: hasRedHare ? 1 : 0, action: "已拥有", onClick: renderBackpack },
+    { key: "blackHorse", name: `黑马${hasBlackHorse ? "（已拥有）" : ""}`, count: hasBlackHorse ? 1 : 0, action: "已拥有", onClick: renderBackpack },
     { key: "powerPotion", name: "力量药水", count: inventory.powerPotion, action: "使用", onClick: usePowerPotion },
     { key: "fireResistPotion", name: "抗火药水", count: inventory.fireResistPotion, action: "使用", onClick: useFireResistPotion },
     { key: "medkit", name: "医疗包", count: inventory.medkit, action: "使用", onClick: useMedkit },
@@ -1616,13 +1722,30 @@ function equipTool(key) {
 function buyItem(item) {
   const owned =
     item.type === "horse" ? hasHorse :
+    item.type === "armor" && item.item === "goldenArmor" ? hasGoldenArmor :
+    item.type === "mount" && item.item === "redHare" ? hasRedHare :
+    item.type === "mount" && item.item === "blackHorse" ? hasBlackHorse :
     item.type === "skin" && item.item === "diverSkin" ? diverSkinOwned :
       item.type === "item" && item.item === "speedPotion" ? speedPotionOwned :
       item.type === "weapon" && ownedWeapons[item.index];
-  if (owned || (!unlimitedCoinsMode && coins < item.cost)) return;
+  const missingRequirement =
+    item.type === "mount" && item.item === "redHare" ? (!hasHorse || inventory.redDye <= 0) :
+    item.type === "mount" && item.item === "blackHorse" ? (!hasHorse || inventory.blackDye <= 0) :
+    false;
+  if (owned || missingRequirement || (!unlimitedCoinsMode && coins < item.cost)) return;
 
   if (!unlimitedCoinsMode) coins -= item.cost;
   if (item.type === "horse") {
+    hasHorse = true;
+  } else if (item.type === "armor" && item.item === "goldenArmor") {
+    hasGoldenArmor = true;
+  } else if (item.type === "mount" && item.item === "redHare") {
+    inventory.redDye -= 1;
+    hasRedHare = true;
+    hasHorse = true;
+  } else if (item.type === "mount" && item.item === "blackHorse") {
+    inventory.blackDye -= 1;
+    hasBlackHorse = true;
     hasHorse = true;
   } else if (item.type === "skin" && item.item === "diverSkin") {
     diverSkinOwned = true;
@@ -1672,6 +1795,10 @@ function tickTimers() {
   powerBoostTimer = Math.max(0, powerBoostTimer - 1);
   fireResistTimer = Math.max(0, fireResistTimer - 1);
   blackFistTimer = Math.max(0, blackFistTimer - 1);
+  guanYuInvincibleTimer = Math.max(0, guanYuInvincibleTimer - 1);
+  zhangFeiRageTimer = Math.max(0, zhangFeiRageTimer - 1);
+  zhangFeiRageCooldown = Math.max(0, zhangFeiRageCooldown - 1);
+  zhangFeiRoarCooldown = Math.max(0, zhangFeiRoarCooldown - 1);
   dragonAttackTimer = Math.max(0, dragonAttackTimer - 1);
 
   for (const enemy of level.enemies) {
@@ -1708,7 +1835,13 @@ function updateHud() {
   monsterCountElement.textContent = remainingMonsters;
   professionNameElement.textContent = professions[selectedProfession].name;
   const fireText = fireResistTimer > 0 ? ` 抗火${Math.ceil(fireResistTimer / 60)}秒` : "";
-  weaponNameElement.textContent = `${hasHorse ? `${weapons[weaponLevel].name}+马` : weapons[weaponLevel].name}${fireText}`;
+  const skinBuffText =
+    guanYuInvincibleTimer > 0 ? ` 关羽无敌${Math.ceil(guanYuInvincibleTimer / 60)}秒` :
+    zhangFeiRageTimer > 0 ? ` 狂怒${Math.ceil(zhangFeiRageTimer / 60)}秒` :
+    "";
+  const mountName = hasRedHare ? "赤兔宝马" : hasBlackHorse ? "黑马" : hasHorse ? "马" : "";
+  const weaponName = getSpecialWeaponName() || weapons[weaponLevel].name;
+  weaponNameElement.textContent = `${mountName ? `${weaponName}+${mountName}` : weaponName}${fireText}${skinBuffText}`;
   menuPlayCount.textContent = playCount;
   menuCoins.textContent = coinText;
   if (menuCoinsTop) menuCoinsTop.textContent = coinText;
@@ -1717,20 +1850,35 @@ function updateHud() {
   updateActionButtons();
 }
 
+function getSpecialWeaponName() {
+  if (selectedSkin === "guanYu" && hasHorse) return "青龙偃月刀";
+  if (selectedSkin === "luBu" && hasRedHare) return "方天画戟";
+  if (selectedSkin === "liuBei" && hasGoldenArmor) return "双股剑";
+  if ((selectedSkin === "zhangFei" || selectedSkin === "zhangFeiAlt") && hasBlackHorse) return "丈八蛇矛";
+  return "";
+}
+
 function updateActionButtons() {
   const inGame = gameState === "playing" && Boolean(player);
   healButton.classList.toggle("is-hidden", selectedProfession !== "doctor");
   cageButton.classList.toggle("is-hidden", selectedProfession !== "police");
   blackFistButton.classList.toggle("is-hidden", selectedProfession !== "boxer");
+  rageButton.classList.toggle("is-hidden", selectedSkin !== "zhangFei" && selectedSkin !== "zhangFeiAlt");
+  roarButton.classList.toggle("is-hidden", selectedSkin !== "zhangFei" && selectedSkin !== "zhangFeiAlt");
   healButton.classList.toggle("is-active-skill", selectedProfession === "doctor");
   cageButton.classList.toggle("is-active-skill", selectedProfession === "police");
   blackFistButton.classList.toggle("is-active-skill", selectedProfession === "boxer");
+  rageButton.classList.toggle("is-active-skill", zhangFeiRageTimer > 0);
   healButton.textContent = player && player.skillTimer > 0 && selectedProfession === "doctor" ? "回复冷却中" : "回复";
   cageButton.textContent = player && player.skillTimer > 0 && selectedProfession === "police" ? "牢笼冷却中" : "牢笼";
   blackFistButton.textContent = blackFistTimer > 0 ? "黑拳生效中" : player && player.skillTimer > 0 && selectedProfession === "boxer" ? "黑拳冷却中" : "黑拳";
+  rageButton.textContent = zhangFeiRageTimer > 0 ? `狂怒${Math.ceil(zhangFeiRageTimer / 60)}秒` : zhangFeiRageCooldown > 0 ? "狂怒冷却" : "狂怒";
+  roarButton.textContent = zhangFeiRoarCooldown > 0 ? "大吼冷却" : "大吼";
   healButton.disabled = !inGame || selectedProfession !== "doctor" || player.skillTimer > 0;
   cageButton.disabled = !inGame || selectedProfession !== "police" || player.skillTimer > 0;
   blackFistButton.disabled = !inGame || selectedProfession !== "boxer" || player.skillTimer > 0;
+  rageButton.disabled = !inGame || (selectedSkin !== "zhangFei" && selectedSkin !== "zhangFeiAlt") || zhangFeiRageCooldown > 0;
+  roarButton.disabled = !inGame || (selectedSkin !== "zhangFei" && selectedSkin !== "zhangFeiAlt") || zhangFeiRoarCooldown > 0;
   powerPotionButton.disabled = !inGame || inventory.powerPotion <= 0;
   medkitButton.disabled = !inGame || inventory.medkit <= 0;
 }
@@ -3061,6 +3209,15 @@ function drawPlayer() {
 
   const knightY = hasDragonAdult ? y - 4 : hasHorse ? y + 4 : y;
   drawSkinSprite(ctx, x, knightY, selectedSkin, gait, player.facing);
+  if (zhangFeiRageTimer > 0 && (selectedSkin === "zhangFei" || selectedSkin === "zhangFeiAlt")) {
+    ctx.save();
+    ctx.globalAlpha = 0.35;
+    ctx.fillStyle = "#ff1f1f";
+    ctx.fillRect(x + 4, knightY - 18, 48, 88);
+    ctx.restore();
+    ctx.fillStyle = "#fff29a";
+    ctx.fillRect(x + 12, knightY + 2, 30, 5);
+  }
   drawWeapon(knightY);
   ctx.restore();
 }
@@ -3083,12 +3240,32 @@ function drawDragonMount(x, y, gait) {
 
 function drawWeapon(knightY) {
   const weapon = weapons[weaponLevel];
+  const specialWeapon = getSpecialWeaponName();
   const handX = player.facing > 0 ? player.x + 42 : player.x + 6;
   const handY = knightY + 44;
 
   ctx.save();
   ctx.translate(handX, handY);
   ctx.scale(player.facing, 1);
+
+  if (specialWeapon) {
+    ctx.fillStyle =
+      specialWeapon === "青龙偃月刀" ? "#38b66a" :
+      specialWeapon === "方天画戟" ? "#d22d2d" :
+      specialWeapon === "双股剑" ? "#ffd34d" :
+      "#211b2c";
+    ctx.fillRect(-6, player.attacking > 0 ? -48 : -36, 9, 86);
+    ctx.fillStyle = "#d9dde5";
+    ctx.fillRect(0, player.attacking > 0 ? -54 : -42, 44, 12);
+    ctx.fillStyle = "#ffd34d";
+    ctx.fillRect(30, player.attacking > 0 ? -58 : -46, 10, 20);
+    if (specialWeapon === "双股剑") {
+      ctx.fillStyle = "#d9dde5";
+      ctx.fillRect(4, player.attacking > 0 ? -26 : -14, 38, 8);
+    }
+    ctx.restore();
+    return;
+  }
 
   if (isSwordWeapon(weapon)) {
     ctx.fillStyle =
@@ -3204,8 +3381,10 @@ function drawTinyText(text, x, y, color) {
 
 window.addEventListener("keydown", (event) => {
   keys.add(event.code);
-  if (["ArrowLeft", "ArrowRight", "ArrowUp", "Space", "KeyJ", "KeyK", "Enter"].includes(event.code)) event.preventDefault();
+  if (["ArrowLeft", "ArrowRight", "ArrowUp", "Space", "KeyJ", "KeyK", "KeyU", "KeyI", "Enter"].includes(event.code)) event.preventDefault();
   if (event.code === "KeyK") throwGrenade();
+  if (event.code === "KeyU") useZhangFeiRage();
+  if (event.code === "KeyI") useZhangFeiRoar();
   if (event.code === "Enter" && gameState === "menu") startGame();
 });
 
@@ -3232,6 +3411,8 @@ if (exchangeDiamondButton) {
 healButton.addEventListener("click", useProfessionSkill);
 cageButton.addEventListener("click", useProfessionSkill);
 blackFistButton.addEventListener("click", useProfessionSkill);
+rageButton.addEventListener("click", useZhangFeiRage);
+roarButton.addEventListener("click", useZhangFeiRoar);
 powerPotionButton.addEventListener("click", usePowerPotion);
 medkitButton.addEventListener("click", useMedkit);
 backpackButton.addEventListener("click", () => {
