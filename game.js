@@ -34,6 +34,8 @@ const cageButton = document.querySelector("#cageButton");
 const blackFistButton = document.querySelector("#blackFistButton");
 const rageButton = document.querySelector("#rageButton");
 const roarButton = document.querySelector("#roarButton");
+const swiftButton = document.querySelector("#swiftButton");
+const thousandKillButton = document.querySelector("#thousandKillButton");
 const powerPotionButton = document.querySelector("#powerPotionButton");
 const medkitButton = document.querySelector("#medkitButton");
 const backpackButton = document.querySelector("#backpackButton");
@@ -109,6 +111,7 @@ const skinGoods = [
   { key: "liuBei", name: "刘备", cost: 700, line: "金蓝王者战衣" },
   { key: "luBu", name: "吕布", cost: 600, line: "暗红金甲，头戴长翎" },
   { key: "zhangFeiAlt", name: "张飞（另一款）", cost: 900, line: "红黑重甲加强版" },
+  { key: "zhaoYun", name: "赵云", cost: 650, line: "蓝甲蓝披风，长矛与青龙头盔" },
 ];
 
 const professions = {
@@ -151,6 +154,7 @@ let ownedSkins = {
   liuBei: false,
   luBu: false,
   zhangFeiAlt: false,
+  zhaoYun: false,
 };
 let selectedProfession = "doctor";
 let speedPotionOwned = false;
@@ -161,6 +165,10 @@ let guanYuInvincibleTimer = 0;
 let zhangFeiRageTimer = 0;
 let zhangFeiRageCooldown = 0;
 let zhangFeiRoarCooldown = 0;
+let zhaoYunSwiftTimer = 0;
+let zhaoYunSwiftCooldown = 0;
+let zhaoYunInvincibleTimer = 0;
+let zhaoYunInvincibleCooldown = 0;
 let inventory = {
   medkit: 0,
   powerPotion: 0,
@@ -225,6 +233,10 @@ function startGame() {
   zhangFeiRageTimer = 0;
   zhangFeiRageCooldown = 0;
   zhangFeiRoarCooldown = 0;
+  zhaoYunSwiftTimer = 0;
+  zhaoYunSwiftCooldown = 0;
+  zhaoYunInvincibleTimer = 0;
+  zhaoYunInvincibleCooldown = 0;
   if (guanYuInvincibleTimer > 0) {
     effects.push({ x: player.x - 20, y: player.y - 34, width: 170, height: 30, life: 120, kind: "loot", text: "关羽开局无敌 60 秒！" });
   }
@@ -506,14 +518,15 @@ function update() {
 
 function handleInput() {
   player.vx = 0;
+  const moveSpeed = getPlayerMoveSpeed();
 
   if (keys.has("ArrowLeft") || keys.has("KeyA")) {
-    player.vx = -player.speed;
+    player.vx = -moveSpeed;
     player.facing = -1;
   }
 
   if (keys.has("ArrowRight") || keys.has("KeyD")) {
-    player.vx = player.speed;
+    player.vx = moveSpeed;
     player.facing = 1;
   }
 
@@ -591,6 +604,9 @@ function movePlayer() {
 
   player.x += player.vx;
   player.y += player.vy;
+  if (selectedSkin === "zhaoYun" && Math.abs(player.vx) > 0.2) {
+    effects.push({ x: player.x - player.facing * 18, y: player.y + 20, width: 46, height: 18, life: 18, kind: "zhaoTrail" });
+  }
   player.vy += gravity;
   if (isPlayerInRiver()) {
     player.vy *= level.theme.id === "ocean" ? 0.64 : 0.72;
@@ -700,6 +716,17 @@ function canEnemyIgnorePlatformShield(enemy) {
 function getEnemyChaseSpeed(enemy) {
   const bossBonus = enemy.kind === "lavaBoss" ? 0.08 : 0;
   return player.speed * (enemySpeedMultiplier + bossBonus);
+}
+
+function getFastestEnemySpeed() {
+  return player.speed * (enemySpeedMultiplier + 0.08);
+}
+
+function getPlayerMoveSpeed() {
+  if (selectedSkin === "zhaoYun" && zhaoYunSwiftTimer > 0) {
+    return getFastestEnemySpeed() * 10;
+  }
+  return player.speed;
 }
 
 function getEnemyAttackDamage(enemy) {
@@ -1125,6 +1152,10 @@ function canUseZhangFeiSkills() {
   return gameState === "playing" && player && (selectedSkin === "zhangFei" || selectedSkin === "zhangFeiAlt");
 }
 
+function canUseZhaoYunSkills() {
+  return gameState === "playing" && player && selectedSkin === "zhaoYun";
+}
+
 function useZhangFeiRage() {
   if (!canUseZhangFeiSkills() || zhangFeiRageCooldown > 0) return;
   zhangFeiRageTimer = 1800;
@@ -1147,6 +1178,22 @@ function useZhangFeiRoar() {
     }
   }
   effects.push({ x: player.x - 30, y: player.y - 50, width: 210, height: 40, life: 90, kind: "loot", text: "大吼！全部停住 10 秒！" });
+  updateHud();
+}
+
+function useZhaoYunSwift() {
+  if (!canUseZhaoYunSkills() || !hasHorse || zhaoYunSwiftCooldown > 0) return;
+  zhaoYunSwiftTimer = 600;
+  zhaoYunSwiftCooldown = 1200;
+  effects.push({ x: player.x - 18, y: player.y - 42, width: 160, height: 32, life: 90, kind: "loot", text: "赵云飞速！蓝光突进！" });
+  updateHud();
+}
+
+function useZhaoYunThousandKill() {
+  if (!canUseZhaoYunSkills() || zhaoYunInvincibleCooldown > 0) return;
+  zhaoYunInvincibleTimer = 2400;
+  zhaoYunInvincibleCooldown = 3000;
+  effects.push({ x: player.x - 28, y: player.y - 46, width: 210, height: 36, life: 120, kind: "loot", text: "千杀百万！无敌 40 秒！" });
   updateHud();
 }
 
@@ -1318,6 +1365,9 @@ function damageEnemy(enemy, damage) {
       addExperience(monsterXp[enemy.kind], enemy.x, enemy.y);
     }
     effects.push({ x: enemy.x, y: enemy.y, width: enemy.width, height: enemy.height, life: 24, kind: "poof" });
+    if (selectedSkin === "zhaoYun") {
+      effects.push({ x: enemy.x + enemy.width / 2 - 12, y: enemy.y + 8, width: 24, height: 24, vy: -7, life: 80, kind: "fallenHead" });
+    }
     if (level.enemies.every((monster) => !monster.alive)) {
       level.chest.locked = false;
       effects.push({ x: level.chest.x - 42, y: level.chest.y - 42, width: 160, height: 36, life: 110, kind: "unlock" });
@@ -1403,6 +1453,10 @@ function getSkinSpecialDamage(enemy, damage) {
   if ((selectedSkin === "zhangFei" || selectedSkin === "zhangFeiAlt") && hasBlackHorse) {
     if (enemy.kind === "lavaBoss") return Math.max(damage, Math.max(1, Math.ceil(enemy.maxHp / 4) - 20));
     return Math.max(damage, Math.max(1, enemy.hp - 20));
+  }
+
+  if (selectedSkin === "zhaoYun" && enemy.kind === "lavaBoss") {
+    return Math.max(damage, Math.ceil(enemy.maxHp / 2));
   }
 
   return damage;
@@ -1508,7 +1562,7 @@ function checkDangerHits() {
 }
 
 function hurtPlayer(amount) {
-  if (blackFistTimer > 0 || guanYuInvincibleTimer > 0 || zhangFeiRageTimer > 0 || player.invincible > 0 || gameState !== "playing") return;
+  if (blackFistTimer > 0 || guanYuInvincibleTimer > 0 || zhangFeiRageTimer > 0 || zhaoYunInvincibleTimer > 0 || player.invincible > 0 || gameState !== "playing") return;
 
   playSound("hurt");
   player.hearts -= amount;
@@ -1799,6 +1853,10 @@ function tickTimers() {
   zhangFeiRageTimer = Math.max(0, zhangFeiRageTimer - 1);
   zhangFeiRageCooldown = Math.max(0, zhangFeiRageCooldown - 1);
   zhangFeiRoarCooldown = Math.max(0, zhangFeiRoarCooldown - 1);
+  zhaoYunSwiftTimer = Math.max(0, zhaoYunSwiftTimer - 1);
+  zhaoYunSwiftCooldown = Math.max(0, zhaoYunSwiftCooldown - 1);
+  zhaoYunInvincibleTimer = Math.max(0, zhaoYunInvincibleTimer - 1);
+  zhaoYunInvincibleCooldown = Math.max(0, zhaoYunInvincibleCooldown - 1);
   dragonAttackTimer = Math.max(0, dragonAttackTimer - 1);
 
   for (const enemy of level.enemies) {
@@ -1809,6 +1867,14 @@ function tickTimers() {
 
   for (const effect of effects) {
     effect.life -= 1;
+    if (effect.kind === "fallenHead") {
+      effect.vy = (effect.vy || 0) + 0.45;
+      effect.y += effect.vy;
+      if (effect.y > floorY - effect.height) {
+        effect.y = floorY - effect.height;
+        effect.vy = -Math.abs(effect.vy) * 0.32;
+      }
+    }
   }
   effects = effects.filter((effect) => effect.life > 0);
   updateActionButtons();
@@ -1838,6 +1904,8 @@ function updateHud() {
   const skinBuffText =
     guanYuInvincibleTimer > 0 ? ` 关羽无敌${Math.ceil(guanYuInvincibleTimer / 60)}秒` :
     zhangFeiRageTimer > 0 ? ` 狂怒${Math.ceil(zhangFeiRageTimer / 60)}秒` :
+    zhaoYunInvincibleTimer > 0 ? ` 千杀无敌${Math.ceil(zhaoYunInvincibleTimer / 60)}秒` :
+    zhaoYunSwiftTimer > 0 ? ` 飞速${Math.ceil(zhaoYunSwiftTimer / 60)}秒` :
     "";
   const mountName = hasRedHare ? "赤兔宝马" : hasBlackHorse ? "黑马" : hasHorse ? "马" : "";
   const weaponName = getSpecialWeaponName() || weapons[weaponLevel].name;
@@ -1855,6 +1923,7 @@ function getSpecialWeaponName() {
   if (selectedSkin === "luBu" && hasRedHare) return "方天画戟";
   if (selectedSkin === "liuBei" && hasGoldenArmor) return "双股剑";
   if ((selectedSkin === "zhangFei" || selectedSkin === "zhangFeiAlt") && hasBlackHorse) return "丈八蛇矛";
+  if (selectedSkin === "zhaoYun") return "龙胆亮银枪";
   return "";
 }
 
@@ -1865,20 +1934,28 @@ function updateActionButtons() {
   blackFistButton.classList.toggle("is-hidden", selectedProfession !== "boxer");
   rageButton.classList.toggle("is-hidden", selectedSkin !== "zhangFei" && selectedSkin !== "zhangFeiAlt");
   roarButton.classList.toggle("is-hidden", selectedSkin !== "zhangFei" && selectedSkin !== "zhangFeiAlt");
+  swiftButton.classList.toggle("is-hidden", selectedSkin !== "zhaoYun");
+  thousandKillButton.classList.toggle("is-hidden", selectedSkin !== "zhaoYun");
   healButton.classList.toggle("is-active-skill", selectedProfession === "doctor");
   cageButton.classList.toggle("is-active-skill", selectedProfession === "police");
   blackFistButton.classList.toggle("is-active-skill", selectedProfession === "boxer");
   rageButton.classList.toggle("is-active-skill", zhangFeiRageTimer > 0);
+  swiftButton.classList.toggle("is-active-skill", zhaoYunSwiftTimer > 0);
+  thousandKillButton.classList.toggle("is-active-skill", zhaoYunInvincibleTimer > 0);
   healButton.textContent = player && player.skillTimer > 0 && selectedProfession === "doctor" ? "回复冷却中" : "回复";
   cageButton.textContent = player && player.skillTimer > 0 && selectedProfession === "police" ? "牢笼冷却中" : "牢笼";
   blackFistButton.textContent = blackFistTimer > 0 ? "黑拳生效中" : player && player.skillTimer > 0 && selectedProfession === "boxer" ? "黑拳冷却中" : "黑拳";
   rageButton.textContent = zhangFeiRageTimer > 0 ? `狂怒${Math.ceil(zhangFeiRageTimer / 60)}秒` : zhangFeiRageCooldown > 0 ? "狂怒冷却" : "狂怒";
   roarButton.textContent = zhangFeiRoarCooldown > 0 ? "大吼冷却" : "大吼";
+  swiftButton.textContent = zhaoYunSwiftTimer > 0 ? `飞速${Math.ceil(zhaoYunSwiftTimer / 60)}秒` : zhaoYunSwiftCooldown > 0 ? "飞速冷却" : "飞速";
+  thousandKillButton.textContent = zhaoYunInvincibleTimer > 0 ? `无敌${Math.ceil(zhaoYunInvincibleTimer / 60)}秒` : zhaoYunInvincibleCooldown > 0 ? "千杀冷却" : "千杀百万";
   healButton.disabled = !inGame || selectedProfession !== "doctor" || player.skillTimer > 0;
   cageButton.disabled = !inGame || selectedProfession !== "police" || player.skillTimer > 0;
   blackFistButton.disabled = !inGame || selectedProfession !== "boxer" || player.skillTimer > 0;
   rageButton.disabled = !inGame || (selectedSkin !== "zhangFei" && selectedSkin !== "zhangFeiAlt") || zhangFeiRageCooldown > 0;
   roarButton.disabled = !inGame || (selectedSkin !== "zhangFei" && selectedSkin !== "zhangFeiAlt") || zhangFeiRoarCooldown > 0;
+  swiftButton.disabled = !inGame || selectedSkin !== "zhaoYun" || !hasHorse || zhaoYunSwiftCooldown > 0;
+  thousandKillButton.disabled = !inGame || selectedSkin !== "zhaoYun" || zhaoYunInvincibleCooldown > 0;
   powerPotionButton.disabled = !inGame || inventory.powerPotion <= 0;
   medkitButton.disabled = !inGame || inventory.medkit <= 0;
 }
@@ -3070,6 +3147,7 @@ function getPlayerSkinPalette() {
     liuBei: { armor: "#2e65a5", leg: "#173052", helmet: "#e2c15c", accent: "#fff1a0", eye: "#211b2c", face: "#ffd08a", cape: "#f0d96b" },
     luBu: { armor: "#7d1822", leg: "#27111a", helmet: "#341018", accent: "#ffca45", eye: "#fff2bb", face: "#d78152", plume: "#e63232" },
     zhangFeiAlt: { armor: "#8b1518", leg: "#141018", helmet: "#24101a", accent: "#ffcf42", eye: "#fff2bb", face: "#6e3c32", beard: "#101018", cape: "#3b0d12" },
+    zhaoYun: { armor: "#2469c9", leg: "#153b78", helmet: "#1f5eb4", accent: "#8ee8ff", eye: "#111827", face: "#ffd08a", cape: "#164aa4", dragon: true },
   };
   return palettes[selectedSkin] || palettes.knight;
 }
@@ -3159,6 +3237,17 @@ function drawSkinSprite(targetCtx, x, y, skinKey, gait, facing) {
     targetCtx.fillStyle = "#ffcf42";
     targetCtx.fillRect(x + 5, y + 32, 8, 13);
     targetCtx.fillRect(x + 38, y + 32, 8, 13);
+  }
+  if (skin.dragon) {
+    targetCtx.fillStyle = "#8ee8ff";
+    targetCtx.fillRect(x + 11, y + 11, 8, 4);
+    targetCtx.fillRect(x + 17, y + 8, 5, 5);
+    targetCtx.fillRect(x + 30, y + 11, 8, 4);
+    targetCtx.fillRect(x + 28, y + 8, 5, 5);
+    targetCtx.fillRect(x + 21, y + 34, 8, 4);
+    targetCtx.fillStyle = "#0e2236";
+    targetCtx.fillRect(x + 23, y + 20, 3, 3);
+    targetCtx.fillRect(x + 31, y + 20, 3, 3);
   }
 }
 
@@ -3253,12 +3342,19 @@ function drawWeapon(knightY) {
       specialWeapon === "青龙偃月刀" ? "#38b66a" :
       specialWeapon === "方天画戟" ? "#d22d2d" :
       specialWeapon === "双股剑" ? "#ffd34d" :
+      specialWeapon === "龙胆亮银枪" ? "#8ee8ff" :
       "#211b2c";
     ctx.fillRect(-6, player.attacking > 0 ? -48 : -36, 9, 86);
     ctx.fillStyle = "#d9dde5";
     ctx.fillRect(0, player.attacking > 0 ? -54 : -42, 44, 12);
     ctx.fillStyle = "#ffd34d";
     ctx.fillRect(30, player.attacking > 0 ? -58 : -46, 10, 20);
+    if (specialWeapon === "龙胆亮银枪") {
+      ctx.fillStyle = "#c9fbff";
+      ctx.fillRect(36, player.attacking > 0 ? -57 : -45, 22, 8);
+      ctx.fillStyle = "#2469c9";
+      ctx.fillRect(10, player.attacking > 0 ? -50 : -38, 12, 5);
+    }
     if (specialWeapon === "双股剑") {
       ctx.fillStyle = "#d9dde5";
       ctx.fillRect(4, player.attacking > 0 ? -26 : -14, 38, 8);
@@ -3331,6 +3427,23 @@ function drawEffects() {
       ctx.fillRect(effect.x + effect.width / 2 - 10, effect.y + effect.height / 2 - 20, 20, 12);
     }
 
+    if (effect.kind === "zhaoTrail") {
+      ctx.fillStyle = "rgba(71, 191, 255, 0.38)";
+      ctx.fillRect(effect.x, effect.y, effect.width, effect.height);
+      ctx.fillStyle = "rgba(207, 246, 255, 0.74)";
+      ctx.fillRect(effect.x + 10, effect.y + 5, Math.max(10, effect.width - 18), 5);
+    }
+
+    if (effect.kind === "fallenHead") {
+      ctx.fillStyle = "#503321";
+      ctx.fillRect(effect.x, effect.y, effect.width, effect.height);
+      ctx.fillStyle = "#ffd08a";
+      ctx.fillRect(effect.x + 4, effect.y + 5, effect.width - 8, effect.height - 8);
+      ctx.fillStyle = "#211b2c";
+      ctx.fillRect(effect.x + 8, effect.y + 10, 4, 4);
+      ctx.fillRect(effect.x + 15, effect.y + 10, 4, 4);
+    }
+
     if (effect.kind === "coins") drawTinyText(`+${effect.amount || level.reward} 金币`, effect.x, effect.y - (42 - effect.life), "#ffd34d");
     if (effect.kind === "starCoins") drawTinyText(`+${starValue} 金币`, effect.x, effect.y - (42 - effect.life), "#ffd34d");
     if (effect.kind === "loot") drawTinyText(effect.text, effect.x, effect.y - Math.max(0, 42 - effect.life), "#fff29a");
@@ -3381,10 +3494,12 @@ function drawTinyText(text, x, y, color) {
 
 window.addEventListener("keydown", (event) => {
   keys.add(event.code);
-  if (["ArrowLeft", "ArrowRight", "ArrowUp", "Space", "KeyJ", "KeyK", "KeyU", "KeyI", "Enter"].includes(event.code)) event.preventDefault();
+  if (["ArrowLeft", "ArrowRight", "ArrowUp", "Space", "KeyJ", "KeyK", "KeyU", "KeyI", "KeyO", "KeyP", "Enter"].includes(event.code)) event.preventDefault();
   if (event.code === "KeyK") throwGrenade();
   if (event.code === "KeyU") useZhangFeiRage();
   if (event.code === "KeyI") useZhangFeiRoar();
+  if (event.code === "KeyO") useZhaoYunSwift();
+  if (event.code === "KeyP") useZhaoYunThousandKill();
   if (event.code === "Enter" && gameState === "menu") startGame();
 });
 
@@ -3413,6 +3528,8 @@ cageButton.addEventListener("click", useProfessionSkill);
 blackFistButton.addEventListener("click", useProfessionSkill);
 rageButton.addEventListener("click", useZhangFeiRage);
 roarButton.addEventListener("click", useZhangFeiRoar);
+swiftButton.addEventListener("click", useZhaoYunSwift);
+thousandKillButton.addEventListener("click", useZhaoYunThousandKill);
 powerPotionButton.addEventListener("click", usePowerPotion);
 medkitButton.addEventListener("click", useMedkit);
 backpackButton.addEventListener("click", () => {
