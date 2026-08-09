@@ -619,12 +619,32 @@ function moveEnemies() {
       ? Math.max(18, Math.min(level.worldWidth - enemy.width - 18, enemy.x))
       : Math.max(enemy.patrolLeft, Math.min(enemy.patrolRight, enemy.x));
 
-    if (absDistance <= attackRange && Math.abs(player.y - enemy.y) < 118 && enemy.attackTimer === 0) {
+    if (absDistance <= attackRange && Math.abs(player.y - enemy.y) < 118 && enemy.attackTimer === 0 && !isPlayerProtectedByPlatform(enemy)) {
       enemy.attackTimer = enemy.kind === "brute" || enemy.kind === "lavaAxeGuard" ? 92 : 70;
       hurtPlayer(enemy.kind === "shark" ? 20 : enemy.kind === "brute" || enemy.kind === "lavaAxeGuard" ? 2 : 1);
       effects.push({ x: enemy.x, y: enemy.y + 8, width: enemy.width, height: enemy.height, life: 12, kind: "claw" });
     }
   }
+}
+
+function getPlayerStandingPlatform() {
+  if (!player || !level || !level.platforms.length) return null;
+  const playerBottom = player.y + player.height;
+  return level.platforms.find((platform) => {
+    const overlapsX = player.x + player.width > platform.x + 8 && player.x < platform.x + platform.width - 8;
+    return overlapsX && Math.abs(playerBottom - platform.y) <= 3;
+  }) || null;
+}
+
+function canEnemyIgnorePlatformShield(enemy) {
+  return ["lavaBoss", "swampWitch", "lavaMage"].includes(enemy.kind);
+}
+
+function isPlayerProtectedByPlatform(enemy) {
+  if (canEnemyIgnorePlatformShield(enemy)) return false;
+  const platform = getPlayerStandingPlatform();
+  if (!platform) return false;
+  return enemy.y + enemy.height > platform.y + 18;
 }
 
 function castWitchMagic(enemy, targetX = player.x + player.width / 2, targetY = player.y + player.height / 2) {
@@ -683,10 +703,10 @@ function moveLavaBoss(enemy) {
       enemy.attackChecked = true;
       enemy.attackTimer = 110;
       const axeBox = {
-        x: enemy.facing > 0 ? enemy.x + enemy.width - 12 : enemy.x - 96,
-        y: enemy.y + 42,
-        width: 108,
-        height: 52,
+        x: enemy.facing > 0 ? enemy.x + enemy.width - 16 : enemy.x - 126,
+        y: enemy.y + 34,
+        width: 140,
+        height: 64,
       };
       effects.push({ x: axeBox.x, y: axeBox.y, width: axeBox.width, height: axeBox.height, life: 18, kind: "claw" });
       if (touches(player, axeBox)) {
@@ -715,7 +735,7 @@ function moveLavaBoss(enemy) {
   }
 
   if (inSight && absDistance > 110) {
-    enemy.x += Math.sign(distance) * 1.25;
+    enemy.x += Math.sign(distance) * player.speed;
     enemy.x = Math.max(18, Math.min(level.worldWidth - enemy.width - 18, enemy.x));
   } else if (!inSight) {
     enemy.x += Math.sin((Date.now() / 620 + enemy.phase) % 20) * 0.8;
@@ -1331,7 +1351,7 @@ function rollChestDrops(levelNumber) {
 
 function checkDangerHits() {
   for (const enemy of level.enemies) {
-    if (enemy.alive && touches(player, enemy)) {
+    if (enemy.alive && touches(player, enemy) && !isPlayerProtectedByPlatform(enemy)) {
       hurtPlayer(1);
     }
   }
@@ -2669,11 +2689,14 @@ function drawHugeAxe(enemy, facing, handX, handY, stuck) {
   ctx.scale(facing, 1);
   ctx.rotate(stuck ? 0.75 : -0.35);
   ctx.fillStyle = "#6a3d24";
-  ctx.fillRect(0, -8, 72, 10);
+  ctx.fillRect(-4, -10, 96, 13);
   ctx.fillStyle = "#d9dde5";
-  ctx.fillRect(52, -24, 24, 34);
+  ctx.fillRect(66, -34, 34, 50);
+  ctx.fillRect(78, -44, 18, 70);
   ctx.fillStyle = "#ff5a2e";
-  ctx.fillRect(58, -16, 12, 12);
+  ctx.fillRect(74, -22, 18, 18);
+  ctx.fillStyle = "#fff4c7";
+  ctx.fillRect(86, -30, 8, 18);
   ctx.restore();
 }
 
