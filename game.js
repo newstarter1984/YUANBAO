@@ -44,6 +44,7 @@ const gravity = 0.75;
 const floorY = 454;
 const starValue = 6;
 const experienceNeeded = 10;
+const unlimitedCoinsMode = true;
 
 const worldThemes = [
   { id: "gravel", name: "砾石草原", next: "海洋" },
@@ -112,7 +113,7 @@ let player;
 let level;
 let projectiles = [];
 let effects = [];
-let coins = 50;
+let coins = unlimitedCoinsMode ? 999999 : 50;
 let diamonds = 0;
 let experience = 0;
 let heroLevel = 1;
@@ -1446,8 +1447,8 @@ function renderShop() {
 function renderSkinShop() {
   const knightButton = document.createElement("button");
   knightButton.type = "button";
-  knightButton.className = selectedSkin === "knight" ? "shop-item is-equipped" : "shop-item is-owned";
-  knightButton.innerHTML = `<strong>骑士皮肤</strong><span>${selectedSkin === "knight" ? "已佩戴" : "佩戴"}</span>`;
+  knightButton.className = selectedSkin === "knight" ? "shop-item has-preview is-equipped" : "shop-item has-preview is-owned";
+  knightButton.append(createSkinPreviewCanvas("knight"), createShopCopy("骑士皮肤", selectedSkin === "knight" ? "已佩戴" : "佩戴", "默认的小骑士"));
   knightButton.disabled = selectedSkin === "knight";
   knightButton.addEventListener("click", () => equipSkin("knight"));
   shopItems.append(knightButton);
@@ -1455,9 +1456,9 @@ function renderSkinShop() {
   const diverButton = document.createElement("button");
   const diverEquipped = selectedSkin === "diverSkin";
   diverButton.type = "button";
-  diverButton.className = diverEquipped ? "shop-item is-equipped" : ownedSkins.diverSkin ? "shop-item is-owned" : "shop-item";
+  diverButton.className = diverEquipped ? "shop-item has-preview is-equipped" : ownedSkins.diverSkin ? "shop-item has-preview is-owned" : "shop-item has-preview";
   diverButton.disabled = diverEquipped || !ownedSkins.diverSkin;
-  diverButton.innerHTML = `<strong>潜水员皮肤</strong><span>${diverEquipped ? "已佩戴" : ownedSkins.diverSkin ? "佩戴" : "在武器商店购买"}</span><span>海洋世界专用泳装</span>`;
+  diverButton.append(createSkinPreviewCanvas("diverSkin"), createShopCopy("潜水员皮肤", diverEquipped ? "已佩戴" : ownedSkins.diverSkin ? "佩戴" : "在武器商店购买", "海洋世界专用泳装"));
   diverButton.addEventListener("click", () => equipSkin("diverSkin"));
   shopItems.append(diverButton);
 
@@ -1466,9 +1467,9 @@ function renderSkinShop() {
     const equipped = selectedSkin === skin.key;
     const button = document.createElement("button");
     button.type = "button";
-    button.className = equipped ? "shop-item is-equipped" : owned ? "shop-item is-owned" : "shop-item";
+    button.className = equipped ? "shop-item has-preview is-equipped" : owned ? "shop-item has-preview is-owned" : "shop-item has-preview";
     button.disabled = equipped || (!owned && diamonds < skin.cost);
-    button.innerHTML = `<strong>${skin.name}</strong><span>${equipped ? "已佩戴" : owned ? "佩戴" : `${skin.cost} 钻石`}</span><span>${skin.line}</span>`;
+    button.append(createSkinPreviewCanvas(skin.key), createShopCopy(skin.name, equipped ? "已佩戴" : owned ? "佩戴" : `${skin.cost} 钻石`, skin.line));
     button.addEventListener("click", () => {
       if (owned) {
         equipSkin(skin.key);
@@ -1478,6 +1479,26 @@ function renderSkinShop() {
     });
     shopItems.append(button);
   }
+}
+
+function createShopCopy(name, action, line) {
+  const copy = document.createElement("span");
+  copy.className = "shop-copy";
+  copy.innerHTML = `<strong>${name}</strong><span>${action}</span><span>${line}</span>`;
+  return copy;
+}
+
+function createSkinPreviewCanvas(skinKey) {
+  const preview = document.createElement("canvas");
+  preview.width = 56;
+  preview.height = 72;
+  preview.className = "skin-preview-canvas";
+  const previewCtx = preview.getContext("2d");
+  previewCtx.imageSmoothingEnabled = false;
+  previewCtx.fillStyle = "#fffdf0";
+  previewCtx.fillRect(0, 0, preview.width, preview.height);
+  drawSkinSprite(previewCtx, 2, 5, skinKey, 0, 1);
+  return preview;
 }
 
 function renderProfessions() {
@@ -1579,9 +1600,9 @@ function buyItem(item) {
     item.type === "skin" && item.item === "diverSkin" ? diverSkinOwned :
       item.type === "item" && item.item === "speedPotion" ? speedPotionOwned :
       item.type === "weapon" && ownedWeapons[item.index];
-  if (owned || coins < item.cost) return;
+  if (owned || (!unlimitedCoinsMode && coins < item.cost)) return;
 
-  coins -= item.cost;
+  if (!unlimitedCoinsMode) coins -= item.cost;
   if (item.type === "horse") {
     hasHorse = true;
   } else if (item.type === "skin" && item.item === "diverSkin") {
@@ -1602,9 +1623,9 @@ function buyItem(item) {
 }
 
 function exchangeDiamond() {
-  if (coins < 10) return;
-  coins -= 10;
-  diamonds += 1;
+  if (!unlimitedCoinsMode && coins < 10) return;
+  if (!unlimitedCoinsMode) coins -= 10;
+  diamonds += unlimitedCoinsMode ? 100 : 1;
   updateHud();
   renderShop();
 }
@@ -1660,7 +1681,8 @@ function updateHud() {
     themeNameElement.textContent = level ? level.theme.name : getTheme(currentLevel).name;
   }
   playCountElement.textContent = playCount;
-  coinsElement.textContent = coins;
+  const coinText = unlimitedCoinsMode ? "∞" : coins;
+  coinsElement.textContent = coinText;
   heroLevelElement.textContent = heroLevel;
   experienceElement.textContent = `${experience}/${experienceNeeded}`;
   heartsElement.textContent = player ? `${Math.max(0, player.hearts)}/${getMaxHearts()}` : getMaxHearts();
@@ -1669,9 +1691,10 @@ function updateHud() {
   const fireText = fireResistTimer > 0 ? ` 抗火${Math.ceil(fireResistTimer / 60)}秒` : "";
   weaponNameElement.textContent = `${hasHorse ? `${weapons[weaponLevel].name}+马` : weapons[weaponLevel].name}${fireText}`;
   menuPlayCount.textContent = playCount;
-  menuCoins.textContent = coins;
-  if (menuCoinsTop) menuCoinsTop.textContent = coins;
+  menuCoins.textContent = coinText;
+  if (menuCoinsTop) menuCoinsTop.textContent = coinText;
   if (menuDiamonds) menuDiamonds.textContent = diamonds;
+  if (exchangeDiamondButton) exchangeDiamondButton.textContent = unlimitedCoinsMode ? "无限金币 → +100 钻石" : "10 金币 → 1 钻石";
   updateActionButtons();
 }
 
@@ -2884,6 +2907,101 @@ function getPlayerSkinPalette() {
   return palettes[selectedSkin] || palettes.knight;
 }
 
+function getSkinPalette(skinKey) {
+  const previousSkin = selectedSkin;
+  selectedSkin = skinKey;
+  const palette = getPlayerSkinPalette();
+  selectedSkin = previousSkin;
+  return palette;
+}
+
+function drawSkinSprite(targetCtx, x, y, skinKey, gait, facing) {
+  if (skinKey === "diverSkin") {
+    targetCtx.fillStyle = "#ffd08a";
+    targetCtx.fillRect(x + 14, y + 8, 28, 24);
+    targetCtx.fillStyle = "#1b3958";
+    targetCtx.fillRect(x + 8, y + 28, 40, 36);
+    addPixelHighlightsTo(targetCtx, x + 8, y + 28, 40, 36);
+    targetCtx.fillStyle = "#65d7ff";
+    targetCtx.fillRect(x + 16, y + 12, 20, 10);
+    targetCtx.fillStyle = "#211b2c";
+    targetCtx.fillRect(x + 18, y + 14, 16, 5);
+    targetCtx.fillStyle = "#f0c24d";
+    targetCtx.fillRect(x + 5, y + 34, 7, 30);
+    targetCtx.fillRect(x + 44, y + 34, 7, 30);
+    targetCtx.fillStyle = "#0e2236";
+    targetCtx.fillRect(x + 7, y + 62 + Math.max(0, gait), 16, 10);
+    targetCtx.fillRect(x + 31, y + 62 + Math.max(0, -gait), 16, 10);
+    targetCtx.fillStyle = "#8f95a3";
+    targetCtx.fillRect(x + 39, y + 8, 6, 26);
+    return;
+  }
+
+  const skin = getSkinPalette(skinKey);
+  if (skin.cape) {
+    targetCtx.fillStyle = skin.cape;
+    targetCtx.fillRect(x + 5, y + 30, 13, 38);
+    targetCtx.fillRect(x + 36, y + 34, 8, 30);
+  }
+  targetCtx.fillStyle = skin.armor;
+  targetCtx.fillRect(x + 10, y + 30, 30, 36);
+  addPixelHighlightsTo(targetCtx, x + 10, y + 30, 30, 36);
+  targetCtx.fillStyle = skin.accent;
+  targetCtx.fillRect(x + 14, y + 36, 22, 5);
+  targetCtx.fillRect(x + 23, y + 31, 4, 30);
+  targetCtx.fillStyle = skin.leg;
+  targetCtx.fillRect(x + 10, y + 56 + Math.max(0, gait), 12, 12);
+  targetCtx.fillRect(x + 28, y + 56 + Math.max(0, -gait), 12, 12);
+  targetCtx.fillStyle = skin.helmet;
+  targetCtx.fillRect(x + 8, y + 8, 36, 30);
+  targetCtx.fillStyle = skin.face;
+  targetCtx.fillRect(x + 16, y + 18, 20, 12);
+  targetCtx.fillStyle = skin.eye;
+  targetCtx.fillRect(x + (facing > 0 ? 30 : 16), y + 20, 12, 5);
+  if (skin.beard) {
+    targetCtx.fillStyle = skin.beard;
+    targetCtx.fillRect(x + 18, y + 28, 18, 13);
+    if (skinKey === "guanYu") {
+      targetCtx.fillRect(x + 20, y + 39, 14, 18);
+      targetCtx.fillRect(x + 23, y + 57, 8, 8);
+    }
+  }
+  targetCtx.fillStyle = skin.accent;
+  targetCtx.fillRect(x + 14, y - 8, 24, 10);
+  targetCtx.fillRect(x + 22, y - 16, 8, 8);
+  if (skin.horns) {
+    targetCtx.fillStyle = "#fff0a6";
+    targetCtx.fillRect(x + 8, y - 14, 8, 8);
+    targetCtx.fillRect(x + 36, y - 14, 8, 8);
+    targetCtx.fillStyle = "#ff6b2e";
+    targetCtx.fillRect(x + 12, y - 20, 5, 8);
+    targetCtx.fillRect(x + 35, y - 20, 5, 8);
+  }
+  if (skin.plume) {
+    targetCtx.fillStyle = skin.plume;
+    targetCtx.fillRect(x + 26, y - 28, 6, 18);
+    targetCtx.fillRect(x + 30, y - 24, 12, 5);
+    targetCtx.fillRect(x + 36, y - 20, 8, 4);
+  }
+  if (skinKey === "liuBei") {
+    targetCtx.fillStyle = "#fff1a0";
+    targetCtx.fillRect(x + 18, y - 20, 16, 5);
+    targetCtx.fillRect(x + 24, y - 26, 4, 6);
+  }
+  if (skinKey === "zhangFeiAlt") {
+    targetCtx.fillStyle = "#ffcf42";
+    targetCtx.fillRect(x + 5, y + 32, 8, 13);
+    targetCtx.fillRect(x + 38, y + 32, 8, 13);
+  }
+}
+
+function addPixelHighlightsTo(targetCtx, x, y, width, height) {
+  targetCtx.fillStyle = "rgba(255,255,255,0.18)";
+  targetCtx.fillRect(x + 4, y + 4, Math.max(4, width / 3), 4);
+  targetCtx.fillStyle = "rgba(0,0,0,0.16)";
+  targetCtx.fillRect(x + width - 6, y + 6, 4, Math.max(6, height / 2));
+}
+
 function drawPlayer() {
   const flashing = player.invincible > 0 && Math.floor(player.invincible / 6) % 2 === 0;
   if (flashing) return;
@@ -2898,23 +3016,7 @@ function drawPlayer() {
   drawEntityShadow(player, hasDragonAdult || hasHorse ? 1.2 : 1);
 
   if (selectedSkin === "diverSkin" || (level && level.theme.id === "ocean" && diverSkinOwned && selectedSkin === "knight")) {
-    ctx.fillStyle = "#ffd08a";
-    ctx.fillRect(x + 14, y + 8, 28, 24);
-    ctx.fillStyle = "#1b3958";
-    ctx.fillRect(x + 8, y + 28, 40, 36);
-    addPixelHighlights(x + 8, y + 28, 40, 36);
-    ctx.fillStyle = "#65d7ff";
-    ctx.fillRect(x + 16, y + 12, 20, 10);
-    ctx.fillStyle = "#211b2c";
-    ctx.fillRect(x + 18, y + 14, 16, 5);
-    ctx.fillStyle = "#f0c24d";
-    ctx.fillRect(x + 5, y + 34, 7, 30);
-    ctx.fillRect(x + 44, y + 34, 7, 30);
-    ctx.fillStyle = "#0e2236";
-    ctx.fillRect(x + 7, y + 62 + Math.max(0, swimKick), 16, 10);
-    ctx.fillRect(x + 31, y + 62 + Math.max(0, -swimKick), 16, 10);
-    ctx.fillStyle = "#8f95a3";
-    ctx.fillRect(x + 39, y + 8, 6, 26);
+    drawSkinSprite(ctx, x, y, "diverSkin", swimKick, player.facing);
     drawWeapon(y);
     ctx.restore();
     return;
@@ -2939,42 +3041,7 @@ function drawPlayer() {
   }
 
   const knightY = hasDragonAdult ? y - 4 : hasHorse ? y + 4 : y;
-  const skin = getPlayerSkinPalette();
-  if (skin.cape) {
-    ctx.fillStyle = skin.cape;
-    ctx.fillRect(x + 6, knightY + 30, 12, 38);
-  }
-  ctx.fillStyle = skin.armor;
-  ctx.fillRect(x + 10, knightY + 30, 30, 36);
-  addPixelHighlights(x + 10, knightY + 30, 30, 36);
-  ctx.fillStyle = skin.leg;
-  ctx.fillRect(x + 10, knightY + 56 + Math.max(0, gait), 12, 12);
-  ctx.fillRect(x + 28, knightY + 56 + Math.max(0, -gait), 12, 12);
-  ctx.fillStyle = skin.face;
-  ctx.fillRect(x + 15, knightY + 15, 22, 16);
-  ctx.fillStyle = skin.helmet;
-  ctx.fillRect(x + 8, knightY + 8, 36, 30);
-  ctx.fillStyle = skin.face;
-  ctx.fillRect(x + 16, knightY + 18, 20, 12);
-  ctx.fillStyle = skin.eye;
-  ctx.fillRect(x + (player.facing > 0 ? 30 : 16), knightY + 20, 12, 5);
-  if (skin.beard) {
-    ctx.fillStyle = skin.beard;
-    ctx.fillRect(x + 18, knightY + 28, 18, 12);
-  }
-  ctx.fillStyle = skin.accent;
-  ctx.fillRect(x + 14, knightY - 8, 24, 10);
-  ctx.fillRect(x + 22, knightY - 16, 8, 8);
-  if (skin.horns) {
-    ctx.fillStyle = "#fff0a6";
-    ctx.fillRect(x + 8, knightY - 14, 8, 8);
-    ctx.fillRect(x + 36, knightY - 14, 8, 8);
-  }
-  if (skin.plume) {
-    ctx.fillStyle = skin.plume;
-    ctx.fillRect(x + 26, knightY - 28, 6, 18);
-    ctx.fillRect(x + 30, knightY - 24, 12, 5);
-  }
+  drawSkinSprite(ctx, x, knightY, selectedSkin, gait, player.facing);
   drawWeapon(knightY);
   ctx.restore();
 }

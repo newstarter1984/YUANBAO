@@ -356,6 +356,25 @@ button:disabled {
   text-align: left;
 }
 
+.shop-item.has-preview {
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.skin-preview-canvas {
+  width: 56px;
+  height: 72px;
+  border: 3px solid var(--line);
+  background: #fffdf0;
+  image-rendering: pixelated;
+}
+
+.shop-copy {
+  min-width: 0;
+}
+
 .shop-item strong {
   display: block;
   font-size: 20px;
