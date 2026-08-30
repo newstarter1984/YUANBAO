@@ -334,11 +334,13 @@ function buildEnemy(kind, x, number, index, themeId) {
     bossTimer: kind === "lavaBoss" ? 120 : 0,
     summonTimer: 0,
     bossSpin: 0,
+    chargeDir: 0,
     attackChecked: false,
     summonedOnMiss: false,
     magicChargeTimer: 0,
     magicTargetX: 0,
     magicTargetY: 0,
+    leapWave: 0,
   };
 }
 
@@ -349,8 +351,8 @@ function getBossHp() {
 
 function buildLevel(number) {
   const theme = getTheme(number);
-  const worldWidth = 2600 + number * 560;
-  const enemyCount = theme.id === "lava" ? 6 + number : theme.id === "swamp" ? 4 + number : 3 + number;
+  const worldWidth = 3800 + number * 850;
+  const enemyCount = theme.id === "lava" ? 8 + number : theme.id === "swamp" ? 5 + number : 4 + number;
   const platforms = theme.id === "ocean" ? [] : [
     { x: 210, y: 378, width: 150, height: 20 },
     { x: 520, y: 320, width: 160, height: 20 },
@@ -698,8 +700,10 @@ function moveEnemies() {
     if (inSight && absDistance > attackRange * 0.55) {
       const speed = getEnemyChaseSpeed(enemy);
       enemy.x += Math.sign(distance) * speed;
+      animateEnemyLeap(enemy, speed);
     } else if (!inSight) {
       enemy.x += Math.sin((Date.now() / 550 + enemy.phase) % 20) * 0.85;
+      animateEnemyLeap(enemy, 0.8);
     }
 
     enemy.x = inSight
@@ -712,6 +716,17 @@ function moveEnemies() {
       effects.push({ x: enemy.x, y: enemy.y + 8, width: enemy.width, height: enemy.height, life: 12, kind: "claw" });
     }
   }
+}
+
+function isFloatingEnemy(enemy) {
+  return ["drowned", "fish", "shark", "harpooner", "swampWitch", "lavaMage", "lavaBoss"].includes(enemy.kind);
+}
+
+function animateEnemyLeap(enemy, speed) {
+  if (isFloatingEnemy(enemy)) return;
+  enemy.leapWave += 0.18 + Math.min(0.12, speed * 0.02);
+  const hop = Math.abs(Math.sin(enemy.leapWave + enemy.phase * 0.05));
+  enemy.y = enemy.baseY - hop * (enemy.kind === "brute" || enemy.kind === "lavaAxeGuard" ? 18 : 26);
 }
 
 function getPlayerStandingPlatform() {
@@ -844,6 +859,20 @@ function moveLavaBoss(enemy) {
     return;
   }
 
+  if (enemy.bossMode === "charge") {
+    enemy.x += enemy.chargeDir * getEnemyChaseSpeed(enemy) * 3.8;
+    enemy.x = Math.max(18, Math.min(level.worldWidth - enemy.width - 18, enemy.x));
+    effects.push({ x: enemy.x + (enemy.chargeDir > 0 ? 0 : enemy.width - 24), y: enemy.y + 28, width: 52, height: 62, life: 14, kind: "bossChargeFire" });
+    if (touches(player, enemy)) {
+      hurtPlayer(getEnemyAttackDamage(enemy));
+    }
+    if (enemy.bossTimer <= 0) {
+      enemy.bossMode = "armor";
+      enemy.bossTimer = 110;
+    }
+    return;
+  }
+
   if (inSight && absDistance > 110) {
     enemy.x += Math.sign(distance) * getEnemyChaseSpeed(enemy);
     enemy.x = Math.max(18, Math.min(level.worldWidth - enemy.width - 18, enemy.x));
@@ -856,7 +885,34 @@ function moveLavaBoss(enemy) {
     enemy.bossMode = "diving";
     enemy.bossTimer = 42;
     enemy.bossSpin = 0;
+  } else if (inSight && enemy.attackTimer === 0 && absDistance < 620) {
+    if (absDistance > 260) {
+      enemy.bossMode = "charge";
+      enemy.bossTimer = 46;
+      enemy.chargeDir = Math.sign(distance);
+      enemy.attackTimer = 180;
+      effects.push({ x: enemy.x - 20, y: enemy.y - 34, width: enemy.width + 40, height: 36, life: 54, kind: "loot", text: "岩浆武士冲刺！" });
+    } else {
+      enemy.attackTimer = 130;
+      spawnBossFire(enemy);
+    }
   }
+}
+
+function spawnBossFire(enemy) {
+  projectiles.push({
+    x: enemy.facing > 0 ? enemy.x + enemy.width - 12 : enemy.x - 46,
+    y: enemy.y + 58,
+    width: 46,
+    height: 24,
+    vx: enemy.facing * 8.2,
+    vy: 0,
+    damage: getEnemyAttackDamage(enemy),
+    rangeLeft: 520,
+    kind: "bossFire",
+    owner: "enemy",
+  });
+  effects.push({ x: enemy.x + (enemy.facing > 0 ? enemy.width - 20 : -20), y: enemy.y + 48, width: 76, height: 44, life: 22, kind: "bossChargeFire" });
 }
 
 function summonLavaAxeGuard(boss, count = 1) {
@@ -2529,6 +2585,25 @@ function drawGround() {
     ctx.fillStyle = themeId === "lava" ? (x % 64 === 0 ? "#ff8a2d" : "#cc3c21") : x % 64 === 0 ? "#216f3e" : "#2d8c4a";
     ctx.fillRect(x, floorY + 16 + (x % 96 === 0 ? 4 : 0), 16, 10);
   }
+  for (let x = 180; x < level.worldWidth; x += 360) {
+    ctx.fillStyle =
+      themeId === "ocean" ? "#0f78a8" :
+      themeId === "desert" ? "#c98f3a" :
+      themeId === "lava" ? "#5b1317" :
+      themeId === "swamp" ? "#273c2a" :
+      "#2f6b3f";
+    ctx.fillRect(x, floorY - 2, 96, 12);
+    ctx.fillStyle =
+      themeId === "lava" ? "#ff8a2d" :
+      themeId === "ocean" ? "#65d7ff" :
+      themeId === "desert" ? "#f4dc8a" :
+      themeId === "swamp" ? "#89b35c" :
+      "#8ee06f";
+    ctx.fillRect(x + 14, floorY - 12, 42, 8);
+    if (x % 720 === 180) {
+      ctx.fillRect(x + 68, floorY - 24, 18, 18);
+    }
+  }
 }
 
 function drawPlatforms() {
@@ -3251,9 +3326,12 @@ function drawLavaBoss(enemy) {
     return;
   }
 
-  ctx.fillStyle = enemyFill(enemy, enemy.bossMode === "axeStuck" ? "#7a1d24" : "#a8202a");
+  ctx.fillStyle = enemyFill(enemy, enemy.bossMode === "axeStuck" ? "#7a1d24" : "#b42125");
   ctx.fillRect(enemy.x + 18, enemy.y + 42, enemy.width - 36, enemy.height - 42);
   addPixelHighlights(enemy.x + 18, enemy.y + 42, enemy.width - 36, enemy.height - 42);
+  ctx.fillStyle = "#ff5a2e";
+  ctx.fillRect(enemy.x + 28, enemy.y + 50, enemy.width - 56, 12);
+  ctx.fillRect(enemy.x + 44, enemy.y + 78, enemy.width - 88, 10);
   ctx.fillStyle = "#21161b";
   ctx.fillRect(enemy.x + 30, enemy.y + 68, enemy.width - 60, 12);
   ctx.fillRect(enemy.x + 42, enemy.y + 94, enemy.width - 84, 10);
@@ -3262,6 +3340,8 @@ function drawLavaBoss(enemy) {
   ctx.fillRect(enemy.x + enemy.width - 52, enemy.y + 50, 28, 64);
   ctx.fillStyle = "#f04a3a";
   ctx.fillRect(enemy.x + 34, enemy.y + 8, enemy.width - 68, 46);
+  ctx.fillStyle = "#7a1d19";
+  ctx.fillRect(enemy.x + 46, enemy.y + 18, enemy.width - 92, 26);
   ctx.fillStyle = "#21161b";
   ctx.fillRect(enemy.x + 24, enemy.y + 2, enemy.width - 48, 14);
   ctx.fillRect(enemy.x + 42, enemy.y - 8, enemy.width - 84, 14);
@@ -3269,6 +3349,16 @@ function drawLavaBoss(enemy) {
   ctx.fillRect(enemy.x + 52, enemy.y + 25, 14, 14);
   ctx.fillRect(enemy.x + enemy.width - 66, enemy.y + 25, 14, 14);
   ctx.fillRect(enemy.x + enemy.width / 2 - 8, enemy.y - 18, 16, 24);
+  ctx.fillStyle = "#fff4c7";
+  ctx.fillRect(enemy.x + 58, enemy.y + 28, enemy.width - 116, 16);
+  ctx.fillStyle = "#e63232";
+  ctx.fillRect(enemy.x + 66, enemy.y + 34, enemy.width - 132, 6);
+  ctx.fillStyle = "#21161b";
+  ctx.fillRect(enemy.x + 62, enemy.y + 30, 22, 5);
+  ctx.fillRect(enemy.x + enemy.width - 84, enemy.y + 30, 22, 5);
+  ctx.fillStyle = "#ff8a2d";
+  ctx.fillRect(enemy.x + 20, enemy.y - 12, 24, 12);
+  ctx.fillRect(enemy.x + enemy.width - 44, enemy.y - 12, 24, 12);
   ctx.fillStyle = "#fff4c7";
   ctx.fillRect(enemy.x + 36, enemy.y - 16, 18, 10);
   ctx.fillRect(enemy.x + enemy.width - 54, enemy.y - 16, 18, 10);
@@ -3375,6 +3465,11 @@ function drawProjectiles() {
     if (projectile.kind === "witchMagic") {
       ctx.fillStyle = "#d7b8ff";
       ctx.fillRect(projectile.x + 5, projectile.y + 5, 8, 8);
+    } else if (projectile.kind === "bossFire") {
+      ctx.fillStyle = "#ffd34d";
+      ctx.fillRect(projectile.x + 8, projectile.y + 5, projectile.width - 14, 8);
+      ctx.fillStyle = "#ff8a2d";
+      ctx.fillRect(projectile.x + 18, projectile.y - 4, 16, 10);
     } else if (projectile.kind.includes("Arrow") || projectile.kind === "arrow") {
       ctx.fillStyle = "#f4f1df";
       ctx.fillRect(projectile.x - Math.sign(projectile.vx) * 8, projectile.y + 1, 8, 4);
@@ -3711,6 +3806,15 @@ function drawEffects() {
       ctx.fillRect(effect.x, effect.y, effect.width, effect.height);
       ctx.fillStyle = "rgba(207, 246, 255, 0.74)";
       ctx.fillRect(effect.x + 10, effect.y + 5, Math.max(10, effect.width - 18), 5);
+    }
+
+    if (effect.kind === "bossChargeFire") {
+      ctx.fillStyle = "rgba(255, 90, 46, 0.58)";
+      ctx.fillRect(effect.x, effect.y, effect.width, effect.height);
+      ctx.fillStyle = "#ffd34d";
+      ctx.fillRect(effect.x + 10, effect.y + 8, Math.max(12, effect.width - 20), 8);
+      ctx.fillStyle = "#7a1d19";
+      ctx.fillRect(effect.x + 20, effect.y + 24, Math.max(8, effect.width - 34), 8);
     }
 
     if (effect.kind === "fallenHead") {
