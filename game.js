@@ -22,6 +22,7 @@ const menuDiamonds = document.querySelector("#menuDiamonds");
 const shopTitle = document.querySelector("#shopTitle");
 const shopItems = document.querySelector("#shopItems");
 const skinShopButton = document.querySelector("#skinShopButton");
+const dragonLibraryButton = document.querySelector("#dragonLibraryButton");
 const weaponShopButton = document.querySelector("#weaponShopButton");
 const exchangeDiamondButton = document.querySelector("#exchangeDiamondButton");
 const startButton = document.querySelector("#startButton");
@@ -115,6 +116,14 @@ const skinGoods = [
   { key: "zhaoYun", name: "赵云", cost: 650, line: "蓝甲蓝披风，长矛与青龙头盔" },
 ];
 
+const dragonTypes = [
+  { key: "gold", name: "金龙", color: "#ffd34d", dark: "#8f6b18", skill: "召唤金属攻击怪物" },
+  { key: "wood", name: "木龙", color: "#43c46b", dark: "#1f6b3f", skill: "召唤藤蔓缠住怪物" },
+  { key: "water", name: "水龙", color: "#52c7ff", dark: "#126aa6", skill: "吐出冰霜" },
+  { key: "fire", name: "火龙", color: "#ff5a2e", dark: "#7a1d19", skill: "吐出火焰" },
+  { key: "earth", name: "土龙", color: "#b98235", dark: "#5b3a1e", skill: "召唤地刺" },
+];
+
 const professions = {
   doctor: { name: "医生", button: "回复", description: "点击回复，生命 +100，可叠到 1000。" },
   police: { name: "警察", button: "牢笼", description: "发射牢笼，困住怪物 10 秒。" },
@@ -140,6 +149,10 @@ let hasGoldenArmor = false;
 let hasDragonAdult = false;
 let dragonFeedCount = 0;
 let dragonAttackTimer = 0;
+let dragonBiteTimer = 0;
+let dragonEggIncubator = null;
+let dragons = [];
+let activeDragonId = "";
 let lightningBootsEquipped = false;
 let equippedArrow = "normalArrow";
 let equippedTool = "";
@@ -455,7 +468,7 @@ function buildLevel(number) {
       width: theme.id === "desert" ? 96 : theme.id === "swamp" ? 104 : theme.id === "lava" ? 118 : 62,
       height: theme.id === "desert" ? 72 : theme.id === "swamp" ? 72 : theme.id === "lava" ? 84 : 52,
       opened: false,
-      locked: true,
+      locked: false,
     },
   };
 }
@@ -872,9 +885,8 @@ function moveAnimals() {
 }
 
 function dragonAssistAttack() {
-  if (!hasDragonAdult || !player || dragonAttackTimer > 0) return;
-  const dragonReady = inventory.dragonNest > 0 && inventory.dragonWand > 0;
-  if (!dragonReady) return;
+  const activeDragon = getActiveDragon();
+  if (!hasDragonAdult || !activeDragon || !player || dragonAttackTimer > 0) return;
 
   const playerCenter = player.x + player.width / 2;
   let target = null;
@@ -891,15 +903,31 @@ function dragonAssistAttack() {
 
   if (!target) return;
   dragonAttackTimer = 84;
+  if (dragonBiteTimer <= 0) {
+    target.cagedTimer = Math.max(target.cagedTimer, 600);
+    dragonBiteTimer = 360;
+    effects.push({ x: target.x - 8, y: target.y - 28, width: target.width + 16, height: 34, life: 80, kind: "loot", text: "龙咬住了怪物！" });
+  }
+  if (activeDragon.type === "wood") {
+    target.cagedTimer = Math.max(target.cagedTimer, 180);
+  }
   effects.push({
     x: Math.min(player.x, target.x),
     y: Math.min(player.y, target.y) + 18,
     width: Math.abs(target.x - player.x) + target.width,
     height: 22,
     life: 18,
-    kind: "dragonFire",
+    kind: `dragon-${activeDragon.type}`,
   });
-  damageEnemy(target, getAttackDamage(18));
+  damageEnemy(target, getDragonSkillDamage(activeDragon.type));
+}
+
+function getDragonSkillDamage(type) {
+  if (type === "fire") return getAttackDamage(28);
+  if (type === "water") return getAttackDamage(22);
+  if (type === "earth") return getAttackDamage(26);
+  if (type === "wood") return getAttackDamage(18);
+  return getAttackDamage(24);
 }
 
 function moveTraps() {
@@ -1584,12 +1612,18 @@ function hurtPlayer(amount) {
 function renderShop() {
   shopItems.innerHTML = "";
   const showingSkins = shopMode === "skins";
-  if (shopTitle) shopTitle.textContent = showingSkins ? "皮肤商城" : "武器商店";
+  const showingDragons = shopMode === "dragons";
+  if (shopTitle) shopTitle.textContent = showingSkins ? "皮肤商城" : showingDragons ? "龙库" : "武器商店";
   if (skinShopButton) skinShopButton.classList.toggle("is-selected", showingSkins);
-  if (weaponShopButton) weaponShopButton.classList.toggle("is-selected", !showingSkins);
+  if (dragonLibraryButton) dragonLibraryButton.classList.toggle("is-selected", showingDragons);
+  if (weaponShopButton) weaponShopButton.classList.toggle("is-selected", !showingSkins && !showingDragons);
 
   if (showingSkins) {
     renderSkinShop();
+    return;
+  }
+  if (showingDragons) {
+    renderDragonLibrary();
     return;
   }
 
@@ -1619,6 +1653,51 @@ function renderShop() {
       `${item.cost} 金币`;
     button.innerHTML = `<strong>${item.name}</strong><span>${priceText}</span>`;
     button.addEventListener("click", () => buyItem(item));
+    shopItems.append(button);
+  }
+}
+
+function renderDragonLibrary() {
+  const eggButton = document.createElement("button");
+  eggButton.type = "button";
+  eggButton.className = "shop-item has-preview";
+  eggButton.append(createDragonPreviewCanvas(dragonEggIncubator ? dragonEggIncubator.type : "egg"), createShopCopy("龙蛋", inventory.dragonEgg > 0 ? `拥有 ${inventory.dragonEgg} 个` : "还没有龙蛋", dragonEggIncubator ? getIncubatorText() : "放入龙库后等待一天孵化"));
+  eggButton.disabled = inventory.dragonEgg <= 0 || Boolean(dragonEggIncubator);
+  eggButton.addEventListener("click", startDragonIncubation);
+  shopItems.append(eggButton);
+
+  if (dragonEggIncubator) {
+    const hatchButton = document.createElement("button");
+    hatchButton.type = "button";
+    hatchButton.className = "shop-item has-preview";
+    hatchButton.append(createDragonPreviewCanvas(dragonEggIncubator.type), createShopCopy(getDragonType(dragonEggIncubator.type).name + "龙蛋", canHatchDragon() ? "可以孵化" : getIncubatorText(), "孵化后喂 10 次牛肉就能骑乘飞行"));
+    hatchButton.disabled = !canHatchDragon();
+    hatchButton.addEventListener("click", hatchDragonEgg);
+    shopItems.append(hatchButton);
+
+    const quickButton = document.createElement("button");
+    quickButton.type = "button";
+    quickButton.className = "shop-item";
+    quickButton.innerHTML = "<strong>快速孵化测试</strong><span>立刻把等待时间调到完成</span>";
+    quickButton.addEventListener("click", () => {
+      dragonEggIncubator.readyAt = Date.now();
+      renderShop();
+    });
+    shopItems.append(quickButton);
+  }
+
+  for (const dragon of dragons) {
+    const adult = dragon.feedCount >= 10;
+    const equipped = activeDragonId === dragon.id;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = equipped ? "shop-item has-preview is-equipped" : adult ? "shop-item has-preview is-owned" : "shop-item has-preview";
+    button.append(createDragonPreviewCanvas(dragon.type), createShopCopy(getDragonType(dragon.type).name, adult ? equipped ? "已骑乘" : "骑乘" : `喂养 ${dragon.feedCount}/10`, getDragonType(dragon.type).skill + "，还会咬住怪物 10 秒"));
+    button.disabled = adult && equipped;
+    button.addEventListener("click", () => {
+      if (adult) selectDragon(dragon.id);
+      else feedDragonById(dragon.id);
+    });
     shopItems.append(button);
   }
 }
@@ -1680,6 +1759,90 @@ function createSkinPreviewCanvas(skinKey) {
   return preview;
 }
 
+function createDragonPreviewCanvas(typeKey) {
+  const preview = document.createElement("canvas");
+  preview.width = 56;
+  preview.height = 72;
+  preview.className = "skin-preview-canvas";
+  const previewCtx = preview.getContext("2d");
+  previewCtx.imageSmoothingEnabled = false;
+  previewCtx.fillStyle = "#fffdf0";
+  previewCtx.fillRect(0, 0, preview.width, preview.height);
+  drawDragonSprite(previewCtx, 7, 18, typeKey, 0.6);
+  return preview;
+}
+
+function getDragonType(typeKey) {
+  return dragonTypes.find((dragon) => dragon.key === typeKey) || dragonTypes[0];
+}
+
+function getRandomDragonType() {
+  return dragonTypes[Math.floor(Math.random() * dragonTypes.length)].key;
+}
+
+function startDragonIncubation() {
+  if (inventory.dragonEgg <= 0 || dragonEggIncubator) return;
+  inventory.dragonEgg -= 1;
+  dragonEggIncubator = {
+    type: getRandomDragonType(),
+    readyAt: Date.now() + 24 * 60 * 60 * 1000,
+  };
+  renderBackpack();
+  renderShop();
+}
+
+function canHatchDragon() {
+  return dragonEggIncubator && Date.now() >= dragonEggIncubator.readyAt;
+}
+
+function getIncubatorText() {
+  if (!dragonEggIncubator) return "";
+  const remaining = Math.max(0, dragonEggIncubator.readyAt - Date.now());
+  if (remaining <= 0) return "等待完成";
+  const hours = Math.floor(remaining / 3600000);
+  const minutes = Math.ceil((remaining % 3600000) / 60000);
+  return `还需 ${hours}小时${minutes}分`;
+}
+
+function hatchDragonEgg() {
+  if (!canHatchDragon()) return;
+  const type = dragonEggIncubator.type;
+  dragons.push({ id: `dragon-${Date.now()}-${dragons.length}`, type, feedCount: 0 });
+  dragonEggIncubator = null;
+  renderBackpack();
+  renderShop();
+}
+
+function feedDragonById(id) {
+  const dragon = dragons.find((item) => item.id === id);
+  if (!dragon || dragon.feedCount >= 10 || inventory.beef <= 0) return;
+  inventory.beef -= 1;
+  dragon.feedCount += 1;
+  if (dragon.feedCount >= 10) selectDragon(dragon.id);
+  renderBackpack();
+  renderShop();
+  updateHud();
+}
+
+function selectDragon(id) {
+  const dragon = dragons.find((item) => item.id === id && item.feedCount >= 10);
+  if (!dragon) return;
+  activeDragonId = dragon.id;
+  hasDragonAdult = true;
+  if (player) {
+    player.speed = Math.max(player.speed, 5.6 * (speedPotionOwned ? 2 : 1) * (lightningBootsEquipped ? 1.25 : 1));
+    player.jumpPower = Math.min(player.jumpPower, -15.5);
+    player.width = Math.max(player.width, 78);
+    player.height = Math.max(player.height, 88);
+  }
+  updateHud();
+  renderShop();
+}
+
+function getActiveDragon() {
+  return dragons.find((dragon) => dragon.id === activeDragonId && dragon.feedCount >= 10) || null;
+}
+
 function renderProfessions() {
   professionChoices.innerHTML = "";
   professionHint.textContent = `${professions[selectedProfession].name}：${professions[selectedProfession].description}`;
@@ -1718,7 +1881,7 @@ function renderBackpack() {
     { key: "fireSwordLoot", name: "火焰剑", count: inventory.fireSwordLoot || 0, action: "佩戴", onClick: () => equipWeapon(9) },
     { key: "lightningBoots", name: "闪电靴子", count: inventory.lightningBoots, action: lightningBootsEquipped ? "已佩戴" : "佩戴", onClick: () => useLightningBoots() },
     { key: "skyAxe", name: "轰天斧", count: inventory.skyAxe, action: "佩戴", onClick: () => equipLootWeapon("skyAxe") },
-    { key: "dragonEgg", name: `龙蛋/幼龙 喂养${dragonFeedCount}/10`, count: inventory.dragonEgg, action: "喂牛肉", onClick: feedDragon },
+    { key: "dragonEgg", name: `龙蛋/幼龙 ${getDragonLibrarySummary()}`, count: inventory.dragonEgg + dragons.length + (dragonEggIncubator ? 1 : 0), action: "去龙库", onClick: () => { shopMode = "dragons"; renderShop(); } },
     { key: "dragonWand", name: `驯龙杖${equippedTool === "dragonWand" ? "（已佩戴）" : ""}`, count: inventory.dragonWand, action: equippedTool === "dragonWand" ? "已佩戴" : "佩戴", onClick: () => equipTool("dragonWand") },
     { key: "dragonNest", name: `驯龙巢${equippedTool === "dragonNest" ? "（已佩戴）" : ""}`, count: inventory.dragonNest, action: equippedTool === "dragonNest" ? "已佩戴" : "佩戴", onClick: () => equipTool("dragonNest") },
     { key: "beef", name: "牛肉", count: inventory.beef, action: "喂龙", onClick: feedDragon },
@@ -1863,6 +2026,7 @@ function tickTimers() {
   zhaoYunInvincibleTimer = Math.max(0, zhaoYunInvincibleTimer - 1);
   zhaoYunInvincibleCooldown = Math.max(0, zhaoYunInvincibleCooldown - 1);
   dragonAttackTimer = Math.max(0, dragonAttackTimer - 1);
+  dragonBiteTimer = Math.max(0, dragonBiteTimer - 1);
 
   for (const enemy of level.enemies) {
     enemy.hurtFlash = Math.max(0, enemy.hurtFlash - 1);
@@ -2058,6 +2222,12 @@ function getQuickSlotsText() {
   return ["武器", "箭", "药水", "抗火", "医疗", "金币"].join(" / ");
 }
 
+function getDragonLibrarySummary() {
+  const adultCount = dragons.filter((dragon) => dragon.feedCount >= 10).length;
+  const babyCount = dragons.length - adultCount;
+  return `蛋${inventory.dragonEgg} 孵化${dragonEggIncubator ? 1 : 0} 幼龙${babyCount} 成年${adultCount}`;
+}
+
 function drawQuickSlots() {
   if (gameState !== "playing") return;
   const slots = [
@@ -2191,19 +2361,19 @@ function useLightningBoots() {
 }
 
 function feedDragon() {
-  if (inventory.beef <= 0 || inventory.dragonEgg <= 0 || inventory.dragonNest <= 0) return;
-  inventory.beef -= 1;
-  dragonFeedCount += 1;
-  if (dragonFeedCount >= 10) {
-    hasDragonAdult = true;
-    if (player) {
-      player.speed = Math.max(player.speed, 5.6 * (speedPotionOwned ? 2 : 1) * (lightningBootsEquipped ? 1.25 : 1));
-      player.jumpPower = Math.min(player.jumpPower, -15.5);
-    }
-    effects.push({ x: player ? player.x - 20 : cameraX + 320, y: player ? player.y - 38 : 230, width: 170, height: 30, life: 110, kind: "loot", text: "龙成年了！" });
+  const hatchling = dragons.find((dragon) => dragon.feedCount < 10);
+  if (hatchling) {
+    feedDragonById(hatchling.id);
+    return;
   }
-  updateHud();
-  renderBackpack();
+  if (inventory.dragonEgg > 0 && !dragonEggIncubator) {
+    startDragonIncubation();
+    return;
+  }
+  if (dragonEggIncubator) {
+    dragonEggIncubator.readyAt = Date.now();
+    hatchDragonEgg();
+  }
 }
 
 function isFireResistant() {
@@ -2580,7 +2750,7 @@ function drawChest() {
     ctx.fillRect(chest.x + 38, chest.y + 42, 22, 30);
     ctx.fillStyle = chest.locked ? "#7d4a2b" : "#ffd34d";
     ctx.fillRect(chest.x + 16, chest.y + 52, 66, 8);
-    drawTinyText(chest.locked ? `剩 ${level.enemies.filter((enemy) => enemy.alive).length} 只怪` : "进入金字塔", chest.x - 8, chest.y - 13, chest.locked ? "#211b2c" : "#ffd34d");
+    drawTinyText(chest.locked ? "靠近打开" : "进入金字塔", chest.x - 8, chest.y - 13, chest.locked ? "#211b2c" : "#ffd34d");
     ctx.restore();
     return;
   }
@@ -2599,7 +2769,7 @@ function drawChest() {
     ctx.fillRect(chest.x + 46 - pulse * 0.2, chest.y + 30, 16, 16);
     ctx.fillStyle = "#05040a";
     ctx.fillRect(chest.x + 12, chest.y + 76, 84, 10);
-    drawTinyText(chest.locked ? `打败 ${level.enemies.filter((enemy) => enemy.alive).length} 只怪` : "进入岩浆传送门", chest.x - 18, chest.y - 13, chest.locked ? "#211b2c" : "#7fffd4");
+    drawTinyText(chest.locked ? "靠近打开" : "进入岩浆传送门", chest.x - 18, chest.y - 13, chest.locked ? "#211b2c" : "#7fffd4");
     ctx.restore();
     return;
   }
@@ -2613,7 +2783,7 @@ function drawChest() {
     ctx.fillRect(chest.x + 8, chest.y + 72, 102, 12);
     ctx.fillStyle = "#ff8a2d";
     ctx.fillRect(chest.x + 42, chest.y - 8, 34, 30);
-    drawTinyText(chest.locked ? `剩 ${level.enemies.filter((enemy) => enemy.alive).length} 只岩浆怪` : "离开岩浆世界", chest.x - 20, chest.y - 13, chest.locked ? "#211b2c" : "#ffd34d");
+    drawTinyText(chest.locked ? "靠近打开" : "离开岩浆世界", chest.x - 20, chest.y - 13, chest.locked ? "#211b2c" : "#ffd34d");
     ctx.restore();
     return;
   }
@@ -2628,7 +2798,7 @@ function drawChest() {
   ctx.fillStyle = chest.locked ? "#8f95a3" : "#ffd34d";
   ctx.fillRect(chest.x + 25, chest.y + 19, 12, 16);
   if (chest.locked) {
-    drawTinyText(`剩 ${level.enemies.filter((enemy) => enemy.alive).length} 只怪`, chest.x - 20, chest.y - 13, "#211b2c");
+    drawTinyText("靠近打开", chest.x - 20, chest.y - 13, "#211b2c");
   } else {
     drawTinyText("宝箱已解锁", chest.x - 26, chest.y - 13, "#ffd34d");
   }
@@ -3235,6 +3405,39 @@ function getSkinPalette(skinKey) {
   return palette;
 }
 
+function drawDragonSprite(targetCtx, x, y, typeKey, scale = 1) {
+  const dragon = getDragonType(typeKey === "egg" ? "fire" : typeKey);
+  const bodyColor = typeKey === "egg" ? "#fff4c7" : dragon.color;
+  const darkColor = typeKey === "egg" ? "#8f95a3" : dragon.dark;
+  targetCtx.save();
+  targetCtx.translate(x, y);
+  targetCtx.scale(scale, scale);
+  targetCtx.fillStyle = darkColor;
+  targetCtx.fillRect(2, 30, 46, 22);
+  targetCtx.fillRect(32, 14, 18, 22);
+  targetCtx.fillStyle = bodyColor;
+  targetCtx.fillRect(0, 24, 46, 22);
+  targetCtx.fillRect(30, 8, 20, 20);
+  targetCtx.fillStyle = "#fff8db";
+  targetCtx.fillRect(40, 14, 4, 4);
+  targetCtx.fillStyle = darkColor;
+  targetCtx.fillRect(6, 44, 8, 12);
+  targetCtx.fillRect(30, 44, 8, 12);
+  targetCtx.fillStyle = bodyColor;
+  targetCtx.fillRect(-10, 30, 14, 8);
+  targetCtx.fillRect(48, 18, 12, 8);
+  targetCtx.fillStyle = darkColor;
+  targetCtx.fillRect(12, 14, 22, 8);
+  targetCtx.fillRect(16, 8, 14, 8);
+  if (typeKey === "egg") {
+    targetCtx.fillStyle = "#8ee8ff";
+    targetCtx.fillRect(12, 12, 8, 8);
+    targetCtx.fillStyle = "#ffd34d";
+    targetCtx.fillRect(28, 30, 8, 8);
+  }
+  targetCtx.restore();
+}
+
 function drawSkinSprite(targetCtx, x, y, skinKey, gait, facing) {
   if (skinKey === "diverSkin") {
     targetCtx.fillStyle = "#ffd08a";
@@ -3387,12 +3590,13 @@ function drawPlayer() {
 }
 
 function drawDragonMount(x, y, gait) {
+  const dragon = getDragonType(getActiveDragon()?.type || "wood");
   const wing = Math.sin(Date.now() / 95) * 10;
-  ctx.fillStyle = "#2f9c5a";
+  ctx.fillStyle = dragon.color;
   ctx.fillRect(x - 12, y + 42, 90, 30);
   addPixelHighlights(x - 12, y + 42, 90, 30);
   ctx.fillRect(x + 44, y + 20, 32, 30);
-  ctx.fillStyle = "#1d6d43";
+  ctx.fillStyle = dragon.dark;
   ctx.fillRect(x + 10, y + 28 + wing, 34, 14);
   ctx.fillRect(x + 8, y + 70 + Math.max(0, gait), 12, 16);
   ctx.fillRect(x + 54, y + 70 + Math.max(0, -gait), 12, 16);
@@ -3522,11 +3726,27 @@ function drawEffects() {
     if (effect.kind === "coins") drawTinyText(`+${effect.amount || level.reward} 金币`, effect.x, effect.y - (42 - effect.life), "#ffd34d");
     if (effect.kind === "starCoins") drawTinyText(`+${starValue} 金币`, effect.x, effect.y - (42 - effect.life), "#ffd34d");
     if (effect.kind === "loot") drawTinyText(effect.text, effect.x, effect.y - Math.max(0, 42 - effect.life), "#fff29a");
-    if (effect.kind === "dragonFire") {
-      ctx.fillStyle = "#ff6b2e";
+    if (effect.kind === "dragonFire" || effect.kind.startsWith("dragon-")) {
+      const type = effect.kind.replace("dragon-", "");
+      ctx.fillStyle =
+        type === "water" ? "#8ee8ff" :
+        type === "earth" ? "#b98235" :
+        type === "wood" ? "#43c46b" :
+        type === "gold" ? "#ffd34d" :
+        "#ff6b2e";
       ctx.fillRect(effect.x, effect.y, effect.width, effect.height);
-      ctx.fillStyle = "#ffd34d";
+      ctx.fillStyle =
+        type === "water" ? "#f1fdff" :
+        type === "earth" ? "#5b3a1e" :
+        type === "wood" ? "#164d2f" :
+        type === "gold" ? "#fff29a" :
+        "#ffd34d";
       ctx.fillRect(effect.x + 16, effect.y + 5, Math.max(20, effect.width - 32), 7);
+      if (type === "earth" || type === "gold") {
+        for (let spike = effect.x + 18; spike < effect.x + effect.width - 10; spike += 34) {
+          ctx.fillRect(spike, effect.y - 16, 10, 22);
+        }
+      }
     }
     if (effect.kind === "magicCast" || effect.kind === "magicHit") {
       ctx.fillStyle = "#9b5cff";
@@ -3586,6 +3806,12 @@ startButton.addEventListener("click", startGame);
 if (skinShopButton) {
   skinShopButton.addEventListener("click", () => {
     shopMode = "skins";
+    renderShop();
+  });
+}
+if (dragonLibraryButton) {
+  dragonLibraryButton.addEventListener("click", () => {
+    shopMode = "dragons";
     renderShop();
   });
 }
