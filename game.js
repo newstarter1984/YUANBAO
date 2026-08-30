@@ -52,6 +52,7 @@ const unlimitedCoinsMode = true;
 const basePlayerHealth = 100;
 const maxBoostedHealth = 1000;
 const enemySpeedMultiplier = 0.68;
+const chestDropChanceBonus = 0.1;
 
 const worldThemes = [
   { id: "gravel", name: "砾石草原", next: "海洋" },
@@ -1483,12 +1484,12 @@ function rollChestDrops(levelNumber) {
   const chestCoins = coinChoices[Math.floor(Math.random() * coinChoices.length)];
   const drops = [];
 
-  if (Math.random() < 0.96) {
+  if (Math.random() < boostDropChance(0.96)) {
     inventory.stinkSock += 1;
     drops.push("臭袜子");
   }
 
-  if (Math.random() < (levelNumber >= 2 ? 0.35 : 0.3)) {
+  if (Math.random() < boostDropChance(levelNumber >= 2 ? 0.35 : 0.3)) {
     if (Math.random() < 0.5) {
       inventory.lightningSword += 1;
       ownedWeapons[8] = true;
@@ -1500,7 +1501,7 @@ function rollChestDrops(levelNumber) {
     }
   }
 
-  if (Math.random() < 0.006) {
+  if (Math.random() < boostDropChance(0.006)) {
     if (Math.random() < 0.5) {
       inventory.lightningBoots += 1;
       drops.push("闪电靴子");
@@ -1510,11 +1511,11 @@ function rollChestDrops(levelNumber) {
     }
   }
 
-  if (Math.random() < 0.06) {
+  if (Math.random() < boostDropChance(0.06)) {
     inventory.dragonEgg += 1;
     drops.push("龙蛋");
   }
-  if (Math.random() < 0.003) {
+  if (Math.random() < boostDropChance(0.003)) {
     if (Math.random() < 0.5) {
       inventory.dragonWand += 1;
       drops.push("驯龙杖");
@@ -1523,20 +1524,24 @@ function rollChestDrops(levelNumber) {
       drops.push("驯龙巢");
     }
   }
-  if (Math.random() < 0.1) {
+  if (Math.random() < boostDropChance(0.1)) {
     inventory.beef += 1;
     drops.push("牛肉");
   }
-  if (hasHorse && selectedSkin === "luBu" && Math.random() < 0.45) {
+  if (hasHorse && selectedSkin === "luBu" && Math.random() < boostDropChance(0.45)) {
     inventory.redDye += 1;
     drops.push("红色染料");
   }
-  if (hasHorse && (selectedSkin === "zhangFei" || selectedSkin === "zhangFeiAlt") && Math.random() < 0.45) {
+  if (hasHorse && (selectedSkin === "zhangFei" || selectedSkin === "zhangFeiAlt") && Math.random() < boostDropChance(0.45)) {
     inventory.blackDye += 1;
     drops.push("黑色染料");
   }
 
   return { coins: chestCoins, message: drops.length ? drops.join("、") : "" };
+}
+
+function boostDropChance(chance) {
+  return Math.min(1, chance + chestDropChanceBonus);
 }
 
 function checkDangerHits() {
