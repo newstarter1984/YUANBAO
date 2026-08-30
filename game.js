@@ -1996,6 +1996,7 @@ function draw() {
   drawEffects();
   drawForegroundDepth();
   drawScreenDepthOverlay();
+  drawVisionMask();
   drawQuickSlots();
 }
 
@@ -2010,6 +2011,7 @@ function drawWorld() {
   ctx.save();
   ctx.translate(-cameraX, 0);
   drawSky();
+  drawVerticalDepthBackdrop();
   drawGround();
   drawRiver();
   drawThemeDecor();
@@ -2018,6 +2020,8 @@ function drawWorld() {
 }
 
 function drawBlock3D(x, y, width, height, front, top, side, depth = 12) {
+  ctx.fillStyle = "rgba(0, 0, 0, 0.24)";
+  ctx.fillRect(x + depth + 10, y + depth + height - 2, width, Math.max(10, depth));
   ctx.fillStyle = side;
   ctx.fillRect(x + depth, y + depth, width, height);
   ctx.fillStyle = top;
@@ -2036,10 +2040,10 @@ function drawEntityShadow(entity, scale = 1) {
   const width = Math.max(22, entity.width * 0.82 * scale);
   const x = entity.x + entity.width / 2 - width / 2 + 7;
   const y = Math.min(floorY + 2, entity.y + entity.height - 4);
-  ctx.fillStyle = "rgba(0, 0, 0, 0.28)";
-  ctx.fillRect(x, y, width, 8);
-  ctx.fillStyle = "rgba(0, 0, 0, 0.15)";
-  ctx.fillRect(x + 8, y - 4, width - 16, 4);
+  ctx.fillStyle = "rgba(0, 0, 0, 0.34)";
+  ctx.fillRect(x, y, width, 10);
+  ctx.fillStyle = "rgba(0, 0, 0, 0.18)";
+  ctx.fillRect(x + 8, y - 5, width - 16, 5);
 }
 
 function addPixelHighlights(x, y, width, height) {
@@ -2106,6 +2110,13 @@ function drawForegroundDepth() {
       ctx.fillRect(x + 16, floorY + 44, 12, 42);
     }
   }
+  ctx.fillStyle = themeId === "lava" ? "rgba(30, 8, 10, 0.62)" : "rgba(10, 14, 22, 0.24)";
+  for (let x = 120; x < level.worldWidth + canvas.width; x += 520) {
+    ctx.fillRect(x, floorY + 8, 42, 118);
+    ctx.fillStyle = themeId === "lava" ? "rgba(255, 90, 46, 0.48)" : "rgba(255, 255, 255, 0.12)";
+    ctx.fillRect(x + 8, floorY + 18, 8, 78);
+    ctx.fillStyle = themeId === "lava" ? "rgba(30, 8, 10, 0.62)" : "rgba(10, 14, 22, 0.24)";
+  }
   ctx.restore();
 }
 
@@ -2118,6 +2129,24 @@ function drawScreenDepthOverlay() {
   ctx.fillStyle = "rgba(0, 0, 0, 0.12)";
   ctx.fillRect(0, 0, 18, canvas.height);
   ctx.fillRect(canvas.width - 18, 0, 18, canvas.height);
+  ctx.restore();
+}
+
+function drawVisionMask() {
+  if (gameState !== "playing" || !player) return;
+  const centerX = player.x + player.width / 2 - cameraX;
+  const centerY = player.y + player.height / 2;
+  const vision = ctx.createRadialGradient(centerX, centerY, 120, centerX, centerY, 470);
+  vision.addColorStop(0, "rgba(0, 0, 0, 0)");
+  vision.addColorStop(0.58, "rgba(0, 0, 0, 0.08)");
+  vision.addColorStop(1, "rgba(0, 0, 0, 0.46)");
+
+  ctx.save();
+  ctx.fillStyle = vision;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "rgba(0, 0, 0, 0.18)";
+  ctx.fillRect(0, 0, canvas.width, 42);
+  ctx.fillRect(0, canvas.height - 72, canvas.width, 72);
   ctx.restore();
 }
 
@@ -2256,6 +2285,35 @@ function drawBlockCloud(x, y, scale) {
   ctx.fillRect(x + size * 2, y - size, size * 2, size);
 }
 
+function drawVerticalDepthBackdrop() {
+  const themeId = level.theme.id;
+  const wall =
+    themeId === "ocean" ? "rgba(4, 39, 78, 0.32)" :
+    themeId === "desert" ? "rgba(126, 79, 32, 0.24)" :
+    themeId === "lava" ? "rgba(9, 4, 8, 0.42)" :
+    themeId === "swamp" ? "rgba(20, 35, 24, 0.34)" :
+    "rgba(34, 73, 76, 0.24)";
+  const edge =
+    themeId === "lava" ? "rgba(255, 90, 46, 0.28)" :
+    themeId === "ocean" ? "rgba(101, 215, 255, 0.2)" :
+    "rgba(255, 255, 255, 0.14)";
+  const parallaxOffset = cameraX * 0.42;
+
+  ctx.fillStyle = wall;
+  for (let x = parallaxOffset - 260; x < parallaxOffset + canvas.width + 360; x += 220) {
+    const height = 170 + (x % 4) * 18;
+    ctx.fillRect(x, 126, 126, height);
+    ctx.fillStyle = edge;
+    ctx.fillRect(x + 12, 142, 12, height - 24);
+    ctx.fillStyle = wall;
+  }
+
+  ctx.fillStyle = "rgba(0, 0, 0, 0.18)";
+  for (let y = 172; y < floorY; y += 58) {
+    ctx.fillRect(parallaxOffset - 160, y, canvas.width + 320, 4);
+  }
+}
+
 function drawGround() {
   const themeId = level.theme.id;
   const front =
@@ -2282,10 +2340,20 @@ function drawGround() {
   ctx.fillRect(0, floorY, level.worldWidth, 54);
   ctx.fillStyle = top;
   ctx.fillRect(0, floorY - 14, level.worldWidth, 30);
+  ctx.fillStyle = "rgba(255, 255, 255, 0.12)";
+  for (let x = 0; x < level.worldWidth; x += 96) {
+    ctx.fillRect(x, floorY - 12, 44, 4);
+  }
   ctx.fillStyle = "rgba(255, 255, 255, 0.18)";
   ctx.fillRect(0, floorY - 10, level.worldWidth, 5);
   ctx.fillStyle = "rgba(0, 0, 0, 0.26)";
   ctx.fillRect(0, floorY + 34, level.worldWidth, 8);
+  ctx.fillStyle = "rgba(0, 0, 0, 0.18)";
+  for (let x = 0; x < level.worldWidth; x += 128) {
+    ctx.fillRect(x + 40, floorY + 2, 8, 94);
+  }
+  ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
+  ctx.fillRect(0, floorY + 50, level.worldWidth, 6);
 
   for (let x = 0; x < level.worldWidth; x += 32) {
     ctx.fillStyle = themeId === "lava" ? (x % 64 === 0 ? "#ff8a2d" : "#cc3c21") : x % 64 === 0 ? "#216f3e" : "#2d8c4a";
@@ -2299,7 +2367,9 @@ function drawPlatforms() {
     const front = themeId === "lava" ? "#2b2229" : themeId === "desert" ? "#8f6631" : themeId === "swamp" ? "#3b3024" : "#6a3d24";
     const top = themeId === "lava" ? "#ff7a2e" : themeId === "desert" ? "#f0cc72" : themeId === "swamp" ? "#5d7e45" : "#45d06f";
     const side = themeId === "lava" ? "#171116" : themeId === "desert" ? "#6c4d27" : themeId === "swamp" ? "#251f19" : "#4b2717";
-    drawBlock3D(platform.x, platform.y, platform.width, platform.height + 12, front, top, side, 12);
+    ctx.fillStyle = "rgba(0, 0, 0, 0.22)";
+    ctx.fillRect(platform.x + 22, platform.y + platform.height + 24, platform.width, 16);
+    drawBlock3D(platform.x, platform.y, platform.width, platform.height + 18, front, top, side, 20);
   }
 }
 
