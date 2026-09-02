@@ -21,6 +21,7 @@ const menuCoinsTop = document.querySelector("#menuCoinsTop");
 const menuDiamonds = document.querySelector("#menuDiamonds");
 const shopTitle = document.querySelector("#shopTitle");
 const shopItems = document.querySelector("#shopItems");
+const warehouseButton = document.querySelector("#warehouseButton");
 const skinShopButton = document.querySelector("#skinShopButton");
 const dragonLibraryButton = document.querySelector("#dragonLibraryButton");
 const weaponShopButton = document.querySelector("#weaponShopButton");
@@ -37,6 +38,7 @@ const rageButton = document.querySelector("#rageButton");
 const roarButton = document.querySelector("#roarButton");
 const swiftButton = document.querySelector("#swiftButton");
 const thousandKillButton = document.querySelector("#thousandKillButton");
+const mountButton = document.querySelector("#mountButton");
 const powerPotionButton = document.querySelector("#powerPotionButton");
 const medkitButton = document.querySelector("#medkitButton");
 const backpackButton = document.querySelector("#backpackButton");
@@ -104,6 +106,8 @@ const shopGoods = [
   { type: "item", item: "fireResistPotion", name: "抗火药水", cost: 8 },
   { type: "item", item: "speedPotion", name: "速度药水", cost: 96 },
   { type: "item", item: "medkit", name: "医疗包", cost: 31 },
+  { type: "item", item: "beef", name: "牛排/牛肉", cost: 12 },
+  { type: "item", item: "dragonEgg", name: "龙蛋", cost: 120 },
 ];
 
 const skinGoods = [
@@ -153,6 +157,7 @@ let dragonBiteTimer = 0;
 let dragonEggIncubator = null;
 let dragons = [];
 let activeDragonId = "";
+let activeMount = "horse";
 let lightningBootsEquipped = false;
 let equippedArrow = "normalArrow";
 let equippedTool = "";
@@ -225,12 +230,12 @@ function startGame() {
   player = {
     x: 80,
     y: floorY - 72,
-    width: hasDragonAdult ? 78 : hasHorse ? 70 : 48,
-    height: hasDragonAdult ? 88 : hasHorse ? 84 : 72,
+    width: isRidingDragon() ? 78 : isRidingHorse() ? 70 : 48,
+    height: isRidingDragon() ? 88 : isRidingHorse() ? 84 : 72,
     vx: 0,
     vy: 0,
-    speed: (hasDragonAdult ? 5.6 : hasHorse ? 4.8 : 3.6) * (speedPotionOwned ? 2 : 1) * (lightningBootsEquipped ? 1.25 : 1),
-    jumpPower: hasDragonAdult ? -15.5 : hasHorse ? -16.2 : -14.8,
+    speed: (isRidingDragon() ? 5.6 : isRidingHorse() ? 4.8 : 3.6) * (speedPotionOwned ? 2 : 1) * (lightningBootsEquipped ? 1.25 : 1),
+    jumpPower: isRidingDragon() ? -15.5 : isRidingHorse() ? -16.2 : -14.8,
     onGround: true,
     facing: 1,
     hearts: getMaxHearts(),
@@ -325,6 +330,8 @@ function buildEnemy(kind, x, number, index, themeId) {
     hp: maxHp,
     alive: true,
     hurtFlash: 0,
+    hurtKnock: 0,
+    deathFall: 0,
     attackTimer: 0,
     patrolLeft: x - 180,
     patrolRight: x + 190,
@@ -672,7 +679,8 @@ function moveEnemies() {
 
     const distance = player.x + player.width / 2 - (enemy.x + enemy.width / 2);
     const absDistance = Math.abs(distance);
-    const inSight = absDistance < 620;
+    const sightRange = getEnemySightRange(enemy);
+    const inSight = absDistance < sightRange;
     enemy.facing = distance > 0 ? 1 : -1;
 
     if (["drowned", "fish", "shark", "harpooner", "swampWitch", "lavaMage"].includes(enemy.kind)) {
@@ -745,6 +753,13 @@ function canEnemyIgnorePlatformShield(enemy) {
 function getEnemyChaseSpeed(enemy) {
   const bossBonus = enemy.kind === "lavaBoss" ? 0.08 : 0;
   return player.speed * (enemySpeedMultiplier + bossBonus);
+}
+
+function getEnemySightRange(enemy) {
+  if (enemy.kind === "lavaBoss") return 760;
+  if (enemy.kind === "shark" || enemy.kind === "harpooner") return 680;
+  if (enemy.kind === "swampWitch" || enemy.kind === "lavaMage") return 650;
+  return 520;
 }
 
 function getFastestEnemySpeed() {
@@ -1443,9 +1458,11 @@ function damageEnemy(enemy, damage) {
 
   enemy.hp = Math.max(0, enemy.hp - damage);
   enemy.hurtFlash = 10;
+  enemy.hurtKnock = 14;
 
   if (enemy.hp === 0) {
     enemy.alive = false;
+    enemy.deathFall = 24;
     if (monsterXp[enemy.kind]) {
       addExperience(monsterXp[enemy.kind], enemy.x, enemy.y);
     }
@@ -1885,18 +1902,46 @@ function selectDragon(id) {
   if (!dragon) return;
   activeDragonId = dragon.id;
   hasDragonAdult = true;
-  if (player) {
-    player.speed = Math.max(player.speed, 5.6 * (speedPotionOwned ? 2 : 1) * (lightningBootsEquipped ? 1.25 : 1));
-    player.jumpPower = Math.min(player.jumpPower, -15.5);
-    player.width = Math.max(player.width, 78);
-    player.height = Math.max(player.height, 88);
-  }
+  setActiveMount("dragon");
   updateHud();
   renderShop();
 }
 
 function getActiveDragon() {
   return dragons.find((dragon) => dragon.id === activeDragonId && dragon.feedCount >= 10) || null;
+}
+
+function isRidingDragon() {
+  return activeMount === "dragon" && Boolean(getActiveDragon());
+}
+
+function isRidingHorse() {
+  return activeMount === "horse" && hasHorse && !isRidingDragon();
+}
+
+function setActiveMount(type) {
+  activeMount = type;
+  if (player) {
+    player.width = isRidingDragon() ? 78 : isRidingHorse() ? 70 : 48;
+    player.height = isRidingDragon() ? 88 : isRidingHorse() ? 84 : 72;
+    player.speed = (isRidingDragon() ? 5.6 : isRidingHorse() ? 4.8 : 3.6) * (speedPotionOwned ? 2 : 1) * (lightningBootsEquipped ? 1.25 : 1);
+    player.jumpPower = isRidingDragon() ? -15.5 : isRidingHorse() ? -16.2 : -14.8;
+  }
+  updateHud();
+}
+
+function toggleDragonMount() {
+  if (!getActiveDragon()) return;
+  setActiveMount(isRidingDragon() ? "none" : "dragon");
+}
+
+function isNearActiveDragon() {
+  if (!getActiveDragon()) return false;
+  if (isRidingDragon()) return true;
+  if (!player) return false;
+  const dragonX = player.x - 70;
+  const dragonY = player.y + 16;
+  return Math.hypot((player.x + player.width / 2) - (dragonX + 46), (player.y + player.height / 2) - (dragonY + 30)) < 120;
 }
 
 function renderProfessions() {
@@ -2015,16 +2060,19 @@ function buyItem(item) {
   if (!unlimitedCoinsMode) coins -= item.cost;
   if (item.type === "horse") {
     hasHorse = true;
+    if (!isRidingDragon()) setActiveMount("horse");
   } else if (item.type === "armor" && item.item === "goldenArmor") {
     hasGoldenArmor = true;
   } else if (item.type === "mount" && item.item === "redHare") {
     inventory.redDye -= 1;
     hasRedHare = true;
     hasHorse = true;
+    if (!isRidingDragon()) setActiveMount("horse");
   } else if (item.type === "mount" && item.item === "blackHorse") {
     inventory.blackDye -= 1;
     hasBlackHorse = true;
     hasHorse = true;
+    if (!isRidingDragon()) setActiveMount("horse");
   } else if (item.type === "skin" && item.item === "diverSkin") {
     diverSkinOwned = true;
     ownedSkins.diverSkin = true;
@@ -2086,6 +2134,8 @@ function tickTimers() {
 
   for (const enemy of level.enemies) {
     enemy.hurtFlash = Math.max(0, enemy.hurtFlash - 1);
+    enemy.hurtKnock = Math.max(0, enemy.hurtKnock - 1);
+    enemy.deathFall = Math.max(0, enemy.deathFall - 1);
     enemy.attackTimer = Math.max(0, enemy.attackTimer - 1);
     enemy.cagedTimer = Math.max(0, enemy.cagedTimer - 1);
   }
@@ -2132,7 +2182,7 @@ function updateHud() {
     zhaoYunInvincibleTimer > 0 ? ` 千杀无敌${Math.ceil(zhaoYunInvincibleTimer / 60)}秒` :
     zhaoYunSwiftTimer > 0 ? ` 飞速${Math.ceil(zhaoYunSwiftTimer / 60)}秒` :
     "";
-  const mountName = hasRedHare ? "赤兔宝马" : hasBlackHorse ? "黑马" : hasHorse ? "马" : "";
+  const mountName = isRidingDragon() ? getDragonType(getActiveDragon().type).name : isRidingHorse() ? hasRedHare ? "赤兔宝马" : hasBlackHorse ? "黑马" : "马" : "";
   const weaponName = getSpecialWeaponName() || weapons[weaponLevel].name;
   weaponNameElement.textContent = `${mountName ? `${weaponName}+${mountName}` : weaponName}${fireText}${skinBuffText}`;
   menuPlayCount.textContent = playCount;
@@ -2154,6 +2204,7 @@ function getSpecialWeaponName() {
 
 function updateActionButtons() {
   const inGame = gameState === "playing" && Boolean(player);
+  const canToggleDragon = inGame && getActiveDragon() && isNearActiveDragon();
   healButton.classList.toggle("is-hidden", selectedProfession !== "doctor");
   cageButton.classList.toggle("is-hidden", selectedProfession !== "police");
   blackFistButton.classList.toggle("is-hidden", selectedProfession !== "boxer");
@@ -2161,6 +2212,7 @@ function updateActionButtons() {
   roarButton.classList.toggle("is-hidden", selectedSkin !== "zhangFei" && selectedSkin !== "zhangFeiAlt");
   swiftButton.classList.toggle("is-hidden", selectedSkin !== "zhaoYun");
   thousandKillButton.classList.toggle("is-hidden", selectedSkin !== "zhaoYun");
+  mountButton.classList.toggle("is-hidden", !canToggleDragon);
   healButton.classList.toggle("is-active-skill", selectedProfession === "doctor");
   cageButton.classList.toggle("is-active-skill", selectedProfession === "police");
   blackFistButton.classList.toggle("is-active-skill", selectedProfession === "boxer");
@@ -2174,6 +2226,7 @@ function updateActionButtons() {
   roarButton.textContent = zhangFeiRoarCooldown > 0 ? "大吼冷却" : "大吼";
   swiftButton.textContent = zhaoYunSwiftTimer > 0 ? `飞速${Math.ceil(zhaoYunSwiftTimer / 60)}秒` : zhaoYunSwiftCooldown > 0 ? "飞速冷却" : "飞速";
   thousandKillButton.textContent = zhaoYunInvincibleTimer > 0 ? `无敌${Math.ceil(zhaoYunInvincibleTimer / 60)}秒` : zhaoYunInvincibleCooldown > 0 ? "千杀冷却" : "千杀百万";
+  mountButton.textContent = isRidingDragon() ? "下来" : "骑乘";
   healButton.disabled = !inGame || selectedProfession !== "doctor" || player.skillTimer > 0;
   cageButton.disabled = !inGame || selectedProfession !== "police" || player.skillTimer > 0;
   blackFistButton.disabled = !inGame || selectedProfession !== "boxer" || player.skillTimer > 0;
@@ -2181,6 +2234,7 @@ function updateActionButtons() {
   roarButton.disabled = !inGame || (selectedSkin !== "zhangFei" && selectedSkin !== "zhangFeiAlt") || zhangFeiRoarCooldown > 0;
   swiftButton.disabled = !inGame || selectedSkin !== "zhaoYun" || !hasHorse || zhaoYunSwiftCooldown > 0;
   thousandKillButton.disabled = !inGame || selectedSkin !== "zhaoYun" || zhaoYunInvincibleCooldown > 0;
+  mountButton.disabled = !canToggleDragon;
   powerPotionButton.disabled = !inGame || inventory.powerPotion <= 0;
   medkitButton.disabled = !inGame || inventory.medkit <= 0;
 }
@@ -2355,6 +2409,14 @@ function drawScreenDepthOverlay() {
   ctx.fillStyle = "rgba(0, 0, 0, 0.12)";
   ctx.fillRect(0, 0, 18, canvas.height);
   ctx.fillRect(canvas.width - 18, 0, 18, canvas.height);
+  if (gameState === "playing" && player && player.invincible > 0) {
+    const pulse = 0.1 + Math.min(0.2, player.invincible / 220);
+    ctx.fillStyle = `rgba(255, 60, 60, ${pulse})`;
+    ctx.fillRect(0, 0, canvas.width, 18);
+    ctx.fillRect(0, canvas.height - 18, canvas.width, 18);
+    ctx.fillRect(0, 0, 18, canvas.height);
+    ctx.fillRect(canvas.width - 18, 0, 18, canvas.height);
+  }
   ctx.restore();
 }
 
@@ -2885,10 +2947,15 @@ function drawEnemies() {
   ctx.translate(-cameraX, 0);
   for (const enemy of level.enemies) {
     if (!enemy.alive) {
-      drawEnemyHealthBar(enemy);
+      if (enemy.deathFall > 0) drawDefeatedEnemy(enemy);
       continue;
     }
 
+    const knock = enemy.hurtKnock > 0 ? Math.sin(enemy.hurtKnock * 1.4) * 7 : 0;
+    const knockY = enemy.hurtKnock > 0 ? -3 : 0;
+    ctx.save();
+    ctx.translate(-enemy.facing * knock, knockY);
+    drawEnemySightCircle(enemy);
     drawEntityShadow(enemy, enemy.kind === "lavaBoss" ? 1.15 : 0.95);
     if (enemy.kind === "slime") drawSlime(enemy);
     if (enemy.kind === "bat") drawBat(enemy);
@@ -2916,7 +2983,25 @@ function drawEnemies() {
     if (enemy.kind === "lavaBoss") drawLavaBoss(enemy);
     if (enemy.cagedTimer > 0) drawCage(enemy);
     drawEnemyHealthBar(enemy);
+    ctx.restore();
   }
+  ctx.restore();
+}
+
+function drawDefeatedEnemy(enemy) {
+  const fall = Math.max(0, enemy.deathFall / 24);
+  ctx.save();
+  ctx.globalAlpha = 0.32 + fall * 0.58;
+  ctx.translate(enemy.x + enemy.width / 2, enemy.y + enemy.height - 8);
+  ctx.rotate((1 - fall) * 0.18 * enemy.facing);
+  ctx.fillStyle = "rgba(0, 0, 0, 0.24)";
+  ctx.fillRect(-enemy.width / 2, 2, enemy.width, 9);
+  ctx.fillStyle = enemy.kind.includes("lava") ? "#7a1d19" : enemy.kind.includes("swamp") ? "#315c3c" : enemy.kind === "fish" || enemy.kind === "shark" ? "#2f86c9" : "#5e5b62";
+  ctx.fillRect(-enemy.width / 2 + 6, -14, enemy.width - 12, 14);
+  ctx.fillStyle = "#fff8db";
+  ctx.fillRect(enemy.width / 2 - 20, -22 - fall * 12, 14, 12);
+  ctx.fillStyle = "#211b2c";
+  ctx.fillRect(enemy.width / 2 - 15, -18 - fall * 12, 4, 4);
   ctx.restore();
 }
 
@@ -2930,6 +3015,23 @@ function drawAnimals() {
     if (animal.kind === "chicken") drawChicken(animal);
     if (animal.kind === "pig") drawPig(animal);
   }
+  ctx.restore();
+}
+
+function drawEnemySightCircle(enemy) {
+  const radius = getEnemySightRange(enemy) * 0.5;
+  const centerX = enemy.x + enemy.width / 2;
+  const centerY = enemy.y + enemy.height / 2;
+  ctx.save();
+  ctx.globalAlpha = enemy.attackTimer > 0 ? 0.32 : 0.18;
+  ctx.strokeStyle = "#ff3333";
+  ctx.lineWidth = enemy.attackTimer > 0 ? 5 : 3;
+  ctx.beginPath();
+  ctx.ellipse(centerX, centerY, radius, Math.max(42, radius * 0.32), 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.globalAlpha = 0.06;
+  ctx.fillStyle = "#ff3333";
+  ctx.fill();
   ctx.restore();
 }
 
@@ -3504,32 +3606,51 @@ function drawDragonSprite(targetCtx, x, y, typeKey, scale = 1) {
   const dragon = getDragonType(typeKey === "egg" ? "fire" : typeKey);
   const bodyColor = typeKey === "egg" ? "#fff4c7" : dragon.color;
   const darkColor = typeKey === "egg" ? "#8f95a3" : dragon.dark;
+  const wingColor = typeKey === "egg" ? "#ffe7a0" : darkColor;
   targetCtx.save();
   targetCtx.translate(x, y);
   targetCtx.scale(scale, scale);
-  targetCtx.fillStyle = darkColor;
-  targetCtx.fillRect(2, 30, 46, 22);
-  targetCtx.fillRect(32, 14, 18, 22);
-  targetCtx.fillStyle = bodyColor;
-  targetCtx.fillRect(0, 24, 46, 22);
-  targetCtx.fillRect(30, 8, 20, 20);
-  targetCtx.fillStyle = "#fff8db";
-  targetCtx.fillRect(40, 14, 4, 4);
-  targetCtx.fillStyle = darkColor;
-  targetCtx.fillRect(6, 44, 8, 12);
-  targetCtx.fillRect(30, 44, 8, 12);
-  targetCtx.fillStyle = bodyColor;
-  targetCtx.fillRect(-10, 30, 14, 8);
-  targetCtx.fillRect(48, 18, 12, 8);
-  targetCtx.fillStyle = darkColor;
-  targetCtx.fillRect(12, 14, 22, 8);
-  targetCtx.fillRect(16, 8, 14, 8);
+
   if (typeKey === "egg") {
+    targetCtx.fillStyle = darkColor;
+    targetCtx.fillRect(10, 12, 32, 42);
+    targetCtx.fillStyle = bodyColor;
+    targetCtx.fillRect(6, 18, 40, 30);
     targetCtx.fillStyle = "#8ee8ff";
-    targetCtx.fillRect(12, 12, 8, 8);
+    targetCtx.fillRect(12, 18, 8, 8);
     targetCtx.fillStyle = "#ffd34d";
-    targetCtx.fillRect(28, 30, 8, 8);
+    targetCtx.fillRect(29, 34, 9, 9);
+    targetCtx.fillStyle = "rgba(255,255,255,0.38)";
+    targetCtx.fillRect(18, 12, 12, 5);
+    targetCtx.restore();
+    return;
   }
+
+  targetCtx.fillStyle = wingColor;
+  targetCtx.fillRect(8, 12, 22, 12);
+  targetCtx.fillRect(13, 5, 18, 9);
+  targetCtx.fillStyle = darkColor;
+  targetCtx.fillRect(-8, 35, 16, 8);
+  targetCtx.fillRect(5, 44, 9, 12);
+  targetCtx.fillRect(30, 44, 9, 12);
+  targetCtx.fillStyle = bodyColor;
+  targetCtx.fillRect(0, 25, 48, 21);
+  targetCtx.fillRect(31, 10, 21, 20);
+  targetCtx.fillRect(49, 17, 12, 8);
+  addPixelHighlightsTo(targetCtx, 0, 25, 48, 21);
+  targetCtx.fillStyle = darkColor;
+  targetCtx.fillRect(10, 27, 6, 5);
+  targetCtx.fillRect(24, 27, 6, 5);
+  targetCtx.fillRect(38, 27, 6, 5);
+  targetCtx.fillRect(35, 5, 6, 6);
+  targetCtx.fillRect(44, 6, 5, 6);
+  targetCtx.fillStyle = "#fff8db";
+  targetCtx.fillRect(43, 16, 4, 4);
+  targetCtx.fillRect(56, 25, 3, 4);
+  targetCtx.fillStyle = "#211b2c";
+  targetCtx.fillRect(42, 16, 3, 3);
+  targetCtx.fillStyle = "#ffd34d";
+  targetCtx.fillRect(57, 18, 8, 4);
   targetCtx.restore();
 }
 
@@ -3642,7 +3763,10 @@ function drawPlayer() {
   const moving = Math.abs(player.vx) > 0.15 || Math.abs(player.vy) > 0.5;
   const gait = moving ? Math.sin(Date.now() / 85) * 5 : 0;
   const swimKick = isPlayerInRiver() ? Math.sin(Date.now() / 90) * 6 : gait;
-  drawEntityShadow(player, hasDragonAdult || hasHorse ? 1.2 : 1);
+  drawEntityShadow(player, isRidingDragon() || isRidingHorse() ? 1.2 : 1);
+  if (getActiveDragon() && !isRidingDragon()) {
+    drawDragonCompanion(x - 92, y + 16, gait);
+  }
 
   if (selectedSkin === "diverSkin" || (level && level.theme.id === "ocean" && diverSkinOwned && selectedSkin === "knight")) {
     drawSkinSprite(ctx, x, y, "diverSkin", swimKick, player.facing);
@@ -3651,11 +3775,11 @@ function drawPlayer() {
     return;
   }
 
-  if (hasDragonAdult) {
+  if (isRidingDragon()) {
     drawDragonMount(x, y, gait);
   }
 
-  if (hasHorse) {
+  if (isRidingHorse()) {
     ctx.fillStyle = "#8b5a36";
     ctx.fillRect(x - 6, y + 44, 72, 30);
     addPixelHighlights(x - 6, y + 44, 72, 30);
@@ -3669,7 +3793,7 @@ function drawPlayer() {
     ctx.fillRect(x + 58, y + 34, 5, 5);
   }
 
-  const knightY = hasDragonAdult ? y - 4 : hasHorse ? y + 4 : y;
+  const knightY = isRidingDragon() ? y - 4 : isRidingHorse() ? y + 4 : y;
   drawSkinSprite(ctx, x, knightY, selectedSkin, gait, player.facing);
   if (zhangFeiRageTimer > 0 && (selectedSkin === "zhangFei" || selectedSkin === "zhangFeiAlt")) {
     ctx.save();
@@ -3686,19 +3810,68 @@ function drawPlayer() {
 
 function drawDragonMount(x, y, gait) {
   const dragon = getDragonType(getActiveDragon()?.type || "wood");
-  const wing = Math.sin(Date.now() / 95) * 10;
-  ctx.fillStyle = dragon.color;
-  ctx.fillRect(x - 12, y + 42, 90, 30);
-  addPixelHighlights(x - 12, y + 42, 90, 30);
-  ctx.fillRect(x + 44, y + 20, 32, 30);
+  const wing = Math.sin(Date.now() / 95) * 12;
+  const lift = Math.max(0, -player.vy) * 0.25;
+  ctx.save();
+  ctx.translate(0, -lift);
   ctx.fillStyle = dragon.dark;
-  ctx.fillRect(x + 10, y + 28 + wing, 34, 14);
+  ctx.fillRect(x - 30, y + 54, 28, 9);
+  ctx.fillRect(x + 5, y + 31 + wing, 42, 12);
+  ctx.fillRect(x + 10, y + 18 + wing * 0.45, 30, 12);
+  ctx.fillRect(x + 12, y + 72 + Math.max(0, gait), 12, 15);
+  ctx.fillRect(x + 56, y + 72 + Math.max(0, -gait), 12, 15);
+  ctx.fillStyle = dragon.color;
+  ctx.fillRect(x - 14, y + 42, 92, 30);
+  ctx.fillRect(x + 43, y + 20, 32, 31);
+  ctx.fillRect(x + 72, y + 31, 22, 12);
+  addPixelHighlights(x - 14, y + 42, 92, 30);
+  ctx.fillStyle = dragon.dark;
+  ctx.fillRect(x + 4, y + 46, 9, 6);
+  ctx.fillRect(x + 24, y + 46, 9, 6);
+  ctx.fillRect(x + 47, y + 46, 9, 6);
+  ctx.fillRect(x + 50, y + 14, 7, 7);
+  ctx.fillRect(x + 62, y + 15, 6, 7);
   ctx.fillRect(x + 8, y + 70 + Math.max(0, gait), 12, 16);
-  ctx.fillRect(x + 54, y + 70 + Math.max(0, -gait), 12, 16);
+  ctx.fillRect(x + 58, y + 70 + Math.max(0, -gait), 12, 16);
   ctx.fillStyle = "#ffd34d";
-  ctx.fillRect(x + 68, y + 28, 8, 8);
+  ctx.fillRect(x + 68, y + 28, 7, 7);
+  ctx.fillStyle = "#211b2c";
+  ctx.fillRect(x + 69, y + 29, 3, 3);
+  ctx.fillStyle = "#fff8db";
+  ctx.fillRect(x + 84, y + 41, 5, 4);
   ctx.fillStyle = "#ff6b2e";
-  ctx.fillRect(x + 78, y + 34, 16, 8);
+  ctx.fillRect(x + 94, y + 34, 18, 8);
+  ctx.fillStyle = "#ffd34d";
+  ctx.fillRect(x + 102, y + 31, 14, 5);
+  ctx.restore();
+}
+
+function drawDragonCompanion(x, y, gait) {
+  const dragon = getDragonType(getActiveDragon()?.type || "wood");
+  const wing = Math.sin(Date.now() / 130) * 7;
+  ctx.save();
+  ctx.globalAlpha = 0.92;
+  ctx.fillStyle = dragon.dark;
+  ctx.fillRect(x - 12, y + 42, 18, 7);
+  ctx.fillRect(x + 10, y + 24 + wing, 34, 10);
+  ctx.fillRect(x + 6, y + 62 + Math.max(0, gait), 9, 12);
+  ctx.fillRect(x + 48, y + 62 + Math.max(0, -gait), 9, 12);
+  ctx.fillStyle = dragon.color;
+  ctx.fillRect(x, y + 36, 66, 24);
+  ctx.fillRect(x + 44, y + 18, 24, 24);
+  ctx.fillRect(x + 65, y + 27, 17, 10);
+  addPixelHighlights(x, y + 36, 66, 24);
+  ctx.fillStyle = dragon.dark;
+  ctx.fillRect(x + 12, y + 40, 8, 5);
+  ctx.fillRect(x + 31, y + 40, 8, 5);
+  ctx.fillRect(x + 51, y + 12, 7, 7);
+  ctx.fillStyle = "#ffd34d";
+  ctx.fillRect(x + 61, y + 25, 6, 6);
+  ctx.fillStyle = "#211b2c";
+  ctx.fillRect(x + 62, y + 26, 3, 3);
+  ctx.fillStyle = "#ff6b2e";
+  ctx.fillRect(x + 82, y + 29, 12, 5);
+  ctx.restore();
 }
 
 function drawWeapon(knightY) {
@@ -3928,6 +4101,12 @@ if (weaponShopButton) {
 if (exchangeDiamondButton) {
   exchangeDiamondButton.addEventListener("click", exchangeDiamond);
 }
+if (warehouseButton) {
+  warehouseButton.addEventListener("click", () => {
+    renderBackpack();
+    backpackPanel.classList.toggle("is-hidden");
+  });
+}
 healButton.addEventListener("click", useProfessionSkill);
 cageButton.addEventListener("click", useProfessionSkill);
 blackFistButton.addEventListener("click", useProfessionSkill);
@@ -3935,6 +4114,7 @@ rageButton.addEventListener("click", useZhangFeiRage);
 roarButton.addEventListener("click", useZhangFeiRoar);
 swiftButton.addEventListener("click", useZhaoYunSwift);
 thousandKillButton.addEventListener("click", useZhaoYunThousandKill);
+mountButton.addEventListener("click", toggleDragonMount);
 powerPotionButton.addEventListener("click", usePowerPotion);
 medkitButton.addEventListener("click", useMedkit);
 backpackButton.addEventListener("click", () => {
