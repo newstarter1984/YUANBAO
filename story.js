@@ -43,7 +43,28 @@ function storyOwnsChest() {
 function recordStoryAction(action) {
   const s = level && level.story;
   if (!s) return;
-  if (s.type === "meadow") s[action] = true;
+  if (s.type === "meadow" && s.state === "tutorial") {
+    if (action === "jump") s.jump = true;
+    if (action === "attack" && s.jump) { s.attack = true; s.state = "done"; }
+  }
+}
+
+function isFoxTutorial() {
+  const s = level && level.story;
+  return Boolean(s && s.type === "meadow" && ["victory", "tutorial", "done"].includes(s.state));
+}
+
+function damageStoryCage(hitBox) {
+  const s = level && level.story;
+  if (gameState !== "playing" || isBackpackOpen() || !s || s.type !== "meadow" || s.saved || s.state !== "rescue") return false;
+  const cage = { x: level.chest.x - 16, y: floorY - 93, width: 98, height: 93 };
+  if (!touches(hitBox, cage)) return false;
+  s.state = "victory";
+  foxRescued = true;
+  try { localStorage.setItem(foxSaveKey, "yes"); } catch (_) { /* Keep session progress if storage is unavailable. */ }
+  effects.push({ x: cage.x - 80, y: cage.y - 40, width: 220, height: 30, life: 180, kind: "loot", text: "第一关胜利！小狐狸获救！" });
+  refreshStoryHud();
+  return true;
 }
 
 function storyNear(x, y, range = 145) {
@@ -54,8 +75,8 @@ function storyPrompt() {
   const s = level.story;
   if (!s) return null;
   if (s.type === "meadow") {
-    if (s.state === "freed") return { label: "前往海洋", action: "next" };
-    if (!s.saved && storyNear(level.chest.x + 30, floorY - 40)) return { label: "打开笼子", action: "fox" };
+    if (s.state === "victory") return { label: "跟小狐狸学习", action: "learn" };
+    if (s.state === "done") return { label: "前往海洋", action: "next" };
     return null;
   }
   if (s.state === "help" && storyNear(s.crabX, floorY - 32)) return { label: "和螃蟹交谈", action: "guide" };
@@ -73,13 +94,12 @@ function refreshStoryHud() {
   if (!s) return;
   let title, message;
   if (s.type === "meadow") {
-    title = s.saved ? "砾石草原 · 再次冒险" : "伙伴任务 · 救出小狐狸";
-    message = !s.jump ? "先试试跳跃：按空格、↑ 或 W，跳上前方的绿色平台。" :
-      !s.attack ? "跳得好！现在按 J 挥动武器，练习攻击。" :
-      s.state === "freed" ? "小狐狸：谢谢你救了我！前面的大海好像有人在求救，我们去看看吧！" :
-      s.saved ? "跳跃和攻击练习完成！小狐狸已经安全了，这次终点是一只宝箱。" :
-      "练习完成！向右探索，在终点打开笼子，救出小狐狸。不必消灭所有怪物。";
-    if (s.state === "freed") message = "小狐狸：谢谢你救了我！前面的大海好像有人在求救，我们去看看吧！";
+    title = isFoxTutorial() ? "第一关胜利 · 小狐狸的引导" : s.saved ? "砾石草原 · 再次冒险" : "伙伴任务 · 救出小狐狸";
+    message = s.saved ? "小狐狸已经安全了，这次终点是宝箱，可以直接去打开。" :
+      s.state === "victory" ? "小狐狸：谢谢你打破牢笼！你已经赢了！接下来我教你跳跃和攻击。" :
+      s.state === "tutorial" ? (!s.jump ? "小狐狸：跟我跳！按空格、↑ 或 W 试试跳跃，前面有绿色平台。" : "小狐狸：跳得好！现在按 J 挥动武器，练习攻击。") :
+      s.state === "done" ? "小狐狸：你学会啦！我们一起去海洋冒险吧！" :
+      "小狐狸：我在右边终点！不用打败怪物，靠近牢笼按 J 攻击，就能救我出来！";
   } else {
     const copy = {
       help: ["海洋 · 远处的求救声", "螃蟹们：救命呀！鲸鱼被渔网困住了！向右游，来和我们说说话！"],
@@ -121,11 +141,17 @@ function interactStory() {
   if (!prompt) return;
   const s = level.story;
   switch (prompt.action) {
-    case "fox":
-      foxRescued = true;
-      try { localStorage.setItem(foxSaveKey, "yes"); } catch (_) { /* Keep session progress if storage is unavailable. */ }
-      s.state = "freed";
-      level.enemies.forEach(enemy => { enemy.cagedTimer = 600; });
+    case "learn":
+      s.state = "tutorial";
+      s.jump = s.attack = false;
+      player.x = level.worldWidth - 740;
+      player.y = floorY - player.height;
+      player.vx = player.vy = 0;
+      player.onGround = true;
+      player.attackTimer = 0;
+      keys.clear();
+      projectiles = [];
+      effects = [];
       break;
     case "guide": s.state = "guide"; break;
     case "talk": s.state = "offer"; break;
@@ -338,10 +364,16 @@ function drawStoryScene() {
   if (s.type === "meadow") {
     if (!s.saved || s.state === "freed") {
       const x = level.chest.x, y = floorY - 93;
-      drawStoryFox(s.state === "freed" ? player.x - 55 : x + 17, s.state === "freed" ? floorY - 48 : y + 45, s.clock);
+      const free = isFoxTutorial();
+      const hop = s.state === "tutorial" && !s.jump ? Math.max(0, Math.sin(s.clock / 18)) * 45 : 0;
+      drawStoryFox(free ? player.x + 75 : x + 17, free ? floorY - 48 - hop : y + 45, s.clock);
       ctx.fillStyle = "#3c4d57"; ctx.fillRect(x - 16, y, 98, 8); ctx.fillRect(x - 16, floorY - 7, 98, 7);
-      for (let bar = 0; bar < (s.state === "freed" ? 1 : 6); bar += 1) { ctx.fillStyle = "#91a7ab"; ctx.fillRect(x - 12 + bar * 17, y + 8, 5, 78); }
-      drawTinyText(s.state === "freed" ? "获救了！" : "救救我！", x - 25, y - 15, "#ffdfa0");
+      for (let bar = 0; bar < 6; bar += 1) {
+        ctx.fillStyle = "#91a7ab";
+        if (free) { ctx.save(); ctx.translate(x - 12 + bar * 17, floorY - 10); ctx.rotate((bar % 2 ? 1 : -1) * 0.9); ctx.fillRect(0, -24, 5, 28); ctx.restore(); }
+        else ctx.fillRect(x - 12 + bar * 17, y + 8, 5, 78);
+      }
+      drawTinyText(free ? "牢笼已打破" : "按 J 打破牢笼", x - 60, y - 15, "#ffdfa0");
     }
   } else {
     const inside = ["inside", "reward"].includes(s.state);

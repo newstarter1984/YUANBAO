@@ -330,6 +330,7 @@ function buildEnemy(kind, x, number, index, themeId) {
     maxHp,
     hp: maxHp,
     alive: true,
+    alerted: false,
     hurtFlash: 0,
     hurtKnock: 0,
     deathFall: 0,
@@ -526,6 +527,14 @@ function update() {
 
   handleInput();
   movePlayer();
+  if (isFoxTutorial()) {
+    updateStory();
+    tickTimers();
+    updateCamera();
+    draw();
+    animationFrame = requestAnimationFrame(update);
+    return;
+  }
   moveEnemies();
   moveAnimals();
   moveTraps();
@@ -684,7 +693,8 @@ function moveEnemies() {
     const distance = player.x + player.width / 2 - (enemy.x + enemy.width / 2);
     const absDistance = Math.abs(distance);
     const sightRange = getEnemySightRange(enemy);
-    const inSight = absDistance < sightRange;
+    enemy.alerted = enemy.alerted || absDistance < sightRange;
+    const inSight = enemy.alerted;
     enemy.facing = distance > 0 ? 1 : -1;
 
     if (["drowned", "fish", "shark", "harpooner", "swampWitch", "lavaMage"].includes(enemy.kind)) {
@@ -839,7 +849,8 @@ function moveLavaBoss(enemy) {
 
   const distance = player.x + player.width / 2 - (enemy.x + enemy.width / 2);
   const absDistance = Math.abs(distance);
-  const inSight = absDistance < 760;
+  enemy.alerted = enemy.alerted || absDistance < 760;
+  const inSight = enemy.alerted;
   enemy.facing = distance > 0 ? 1 : -1;
 
   if (enemy.bossMode === "emerge") {
@@ -1371,6 +1382,11 @@ function moveProjectiles() {
       continue;
     }
 
+    if (projectile.damage > 0 && damageStoryCage(projectile)) {
+      projectile.rangeLeft = 0;
+      continue;
+    }
+
     for (const enemy of level.enemies) {
       if (enemy.alive && touches(projectile, enemy)) {
         if (projectile.kind === "cage") {
@@ -1402,6 +1418,7 @@ function moveProjectiles() {
 }
 
 function explode(x, y, damage, radius) {
+  if (damage > 0) damageStoryCage({ x: x - radius, y: y - radius, width: radius * 2, height: radius * 2 });
   effects.push({ x: x - radius / 2, y: y - radius / 2, width: radius, height: radius, life: 18, kind: "boom" });
 
   for (const enemy of level.enemies) {
@@ -1421,6 +1438,7 @@ function explode(x, y, damage, radius) {
 }
 
 function damageEnemiesIfHit(hitBox, damage) {
+  if (damage > 0) damageStoryCage(hitBox);
   for (const enemy of level.enemies) {
     if (enemy.alive && touches(hitBox, enemy)) {
       damageEnemy(enemy, damage);
@@ -1434,6 +1452,7 @@ function damageEnemiesIfHit(hitBox, damage) {
 }
 
 function damageEnemy(enemy, damage) {
+  enemy.alerted = true;
   const specialDamage = getSkinSpecialDamage(enemy, damage);
   const usedSpecialDamage = specialDamage > damage;
   damage = specialDamage;
@@ -1675,6 +1694,7 @@ function checkDangerHits() {
 }
 
 function hurtPlayer(amount) {
+  if (isFoxTutorial()) return;
   if (blackFistTimer > 0 || guanYuInvincibleTimer > 0 || zhangFeiRageTimer > 0 || zhaoYunInvincibleTimer > 0 || player.invincible > 0 || gameState !== "playing") return;
 
   playSound("hurt");
