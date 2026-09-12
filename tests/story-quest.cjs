@@ -29,7 +29,12 @@ const { chromium } = require('playwright');
     assert.equal(await page.evaluate(() => level.story.state), 'victory');
     assert.equal(await page.evaluate(() => level.enemies.every(e => e.alive)), true, 'win without killing any monster');
     assert.equal(await page.evaluate(() => localStorage.getItem(foxSaveKey)), 'yes');
-    await page.locator('#storyInteract').click();
+    await page.evaluate(() => update());
+    assert.equal(await page.evaluate(() => gameState), 'menu');
+    assert.match(await page.locator('#resultLabel').textContent(), /第 1 关胜利/);
+    await page.reload();
+    assert.match(await page.locator('#startButton').textContent(), /小狐狸引导/);
+    await page.locator('#startButton').click();
     assert.equal(await page.evaluate(() => level.story.state), 'tutorial');
     const training = await page.evaluate(() => {
       const x = level.enemies[0].x, hp = player.hearts;
@@ -49,6 +54,8 @@ const { chromium } = require('playwright');
     assert.equal(await page.evaluate(() => level.story.attack), true);
     assert.equal(await page.evaluate(() => level.story.state), 'done');
     await page.locator('#storyInteract').click();
+    assert.equal(await page.evaluate(() => gameState), 'menu');
+    await page.locator('#startButton').click();
     assert.equal(await page.evaluate(() => level.story.state), 'help');
     await page.evaluate(() => { player.x = 420; player.y = floorY - player.height; updateStory(); });
     await page.locator('#storyInteract').click();
@@ -94,9 +101,21 @@ const { chromium } = require('playwright');
     await page.locator('#game').screenshot({ path: path.resolve(__dirname, '../quest-ship-preview.png') });
     await page.locator('#storyInteract').click();
     assert.deepEqual(await page.evaluate(() => [inventory.dragonEgg, inventory.beef]), beforeLoot.map(n => n + 1));
-    await page.locator('#storyInteract').click();
+    assert.equal(await page.evaluate(() => gameState), 'menu');
+    assert.match(await page.locator('#menuText').textContent(), /龙蛋 ×1、牛排 ×1/);
+    await page.evaluate(() => interactStory());
+    await page.locator('#startButton').click();
     assert.equal(await page.evaluate(() => level.theme.id), 'desert');
     assert.deepEqual(await page.evaluate(() => [inventory.dragonEgg, inventory.beef]), beforeLoot.map(n => n + 1));
+    for (const number of [3, 4, 5]) {
+      await page.evaluate(n => {
+        currentLevel = n; startGame(); player.x = level.chest.x; player.y = level.chest.y;
+        handleChest(); update();
+      }, number);
+      assert.equal(await page.evaluate(() => gameState), 'menu', `world ${number} returns to menu`);
+      assert.equal(await page.evaluate(() => currentLevel), number + 1);
+      assert.match(await page.locator('#resultLabel').textContent(), new RegExp(`第 ${number} 关胜利`));
+    }
     await page.reload();
     await page.evaluate(() => { currentLevel = 1; startGame(); });
     assert.equal(await page.evaluate(() => level.story.saved), true);
@@ -115,8 +134,10 @@ const { chromium } = require('playwright');
     await live.goto(process.env.GAME_URL || pathToFileURL(path.resolve(__dirname, '../index.html')).href);
     await live.evaluate(() => {
       foxRescued = false; startGame();
-      player.x = level.chest.x - 70; player.y = floorY - player.height; player.facing = 1; attack(); interactStory();
+      player.x = level.chest.x - 70; player.y = floorY - player.height; player.facing = 1; attack();
     });
+    await live.waitForFunction(() => gameState === 'menu');
+    await live.locator('#startButton').click();
     await live.keyboard.down('Space');
     await live.waitForFunction(() => level.story.jump);
     await live.keyboard.up('Space');

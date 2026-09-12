@@ -220,6 +220,8 @@ function playSound() {
 }
 
 function startGame() {
+  pendingVictory = null;
+  backpackPanel.classList.add("is-hidden");
   playCount += 1;
   gameState = "playing";
   mainMenu.classList.add("is-hidden");
@@ -504,6 +506,7 @@ function showMenu(reason) {
 
   level = buildLevel(currentLevel);
   startButton.textContent = `开始第 ${currentLevel} 关：${level.theme.name}`;
+  if (currentLevel === 1 && foxTutorialPending) startButton.textContent = "开始小狐狸引导";
   drawMenuBackdrop();
   updateHud();
   renderShop();
@@ -516,6 +519,7 @@ function showMenu(reason) {
 
 function update() {
   if (gameState !== "playing") return;
+  if (finishPendingVictory()) return;
 
   if (isBackpackOpen()) {
     if (player) player.vx = 0;
@@ -526,6 +530,7 @@ function update() {
   }
 
   handleInput();
+  if (finishPendingVictory()) return;
   movePlayer();
   if (isFoxTutorial()) {
     updateStory();
@@ -540,10 +545,12 @@ function update() {
   moveTraps();
   moveWaveHazard();
   moveProjectiles();
+  if (finishPendingVictory()) return;
   dragonAssistAttack();
   collectStars();
   updateStory();
   handleChest();
+  if (finishPendingVictory()) return;
   checkDangerHits();
   tickTimers();
   updateCamera();
@@ -1544,22 +1551,9 @@ function handleChest() {
     chest.opened = true;
     const drops = rollChestDrops(level.number);
     coins += drops.coins;
-    const cameFromSwamp = level.theme.id === "swamp";
-    currentLevel += 1;
     updateHud();
     renderBackpack();
-    effects.push({ x: chest.x - 4, y: chest.y - 36, width: 150, height: 36, life: 70, kind: "coins", amount: drops.coins });
-    if (cameFromSwamp) {
-      effects.push({ x: chest.x - 26, y: chest.y - 82, width: 210, height: 30, life: 80, kind: "loot", text: "传送到岩浆世界！" });
-    } else if (drops.message) {
-      effects.push({ x: chest.x - 18, y: chest.y - 76, width: 190, height: 30, life: 100, kind: "loot", text: drops.message });
-    }
-    draw();
-    if (cameFromSwamp) {
-      setTimeout(() => enterNextLevelFromPortal(), 450);
-    } else {
-      setTimeout(() => showMenu("win"), 450);
-    }
+    requestLevelVictory(true, `获得 ${drops.coins} 金币！${drops.message || ""} 准备好后点击开始，继续下一关。`);
   }
 }
 
@@ -1694,6 +1688,7 @@ function checkDangerHits() {
 }
 
 function hurtPlayer(amount) {
+  if (pendingVictory) return;
   if (isFoxTutorial()) return;
   if (blackFistTimer > 0 || guanYuInvincibleTimer > 0 || zhangFeiRageTimer > 0 || zhaoYunInvincibleTimer > 0 || player.invincible > 0 || gameState !== "playing") return;
 

@@ -4,6 +4,9 @@ const storyText = document.querySelector("#storyText");
 const storyInteract = document.querySelector("#storyInteract");
 const foxSaveKey = "yuanbao.fox-rescued.v1";
 let foxRescued = false;
+let foxTutorialPending = false;
+let pendingVictory = null;
+try { foxTutorialPending = localStorage.getItem("yuanbao.fox-tutorial-pending") === "yes"; } catch (_) {}
 try { foxRescued = localStorage.getItem(foxSaveKey) === "yes"; } catch (_) { /* Private browsing may disable storage. */ }
 
 function hideStory() {
@@ -15,6 +18,10 @@ function initializeStoryLevel() {
   hideStory();
   if (level.number === 1) {
     level.story = { type: "meadow", state: "rescue", jump: false, attack: false, saved: foxRescued, clock: 0 };
+    if (foxTutorialPending) {
+      level.story.state = "tutorial";
+      level.story.saved = false;
+    }
   } else if (level.theme.id === "ocean") {
     level.story = {
       type: "ocean", state: "help", clock: 0, timer: 0, attacked: false,
@@ -61,9 +68,30 @@ function damageStoryCage(hitBox) {
   if (!touches(hitBox, cage)) return false;
   s.state = "victory";
   foxRescued = true;
+  foxTutorialPending = true;
+  try { localStorage.setItem("yuanbao.fox-tutorial-pending", "yes"); } catch (_) {}
   try { localStorage.setItem(foxSaveKey, "yes"); } catch (_) { /* Keep session progress if storage is unavailable. */ }
   effects.push({ x: cage.x - 80, y: cage.y - 40, width: 220, height: 30, life: 180, kind: "loot", text: "第一关胜利！小狐狸获救！" });
   refreshStoryHud();
+  requestLevelVictory(false, "小狐狸获救了！可以先逛商店，点击开始后跟小狐狸学习跳跃和攻击。");
+  return true;
+}
+
+// Settle after the current attack finishes, before replacing the active level.
+function requestLevelVictory(advance = true, message = "") {
+  if (pendingVictory || gameState !== "playing") return;
+  pendingVictory = { number: level.number, advance, message };
+}
+
+function finishPendingVictory() {
+  if (!pendingVictory) return false;
+  const win = pendingVictory;
+  pendingVictory = null;
+  currentLevel = win.number + (win.advance ? 1 : 0);
+  keys.clear();
+  showMenu("win");
+  resultLabel.textContent = `第 ${win.number} 关胜利！`;
+  if (win.message) menuText.textContent = win.message;
   return true;
 }
 
@@ -166,12 +194,17 @@ function interactStory() {
       s.state = "reward";
       renderBackpack();
       updateHud();
+      requestLevelVictory(true, "沉船寻宝成功！获得龙蛋 ×1、牛排 ×1，已放入背包。准备好后点击开始前往沙漠。");
       break;
     case "next":
-      currentLevel += 1;
-      enterNextLevelFromPortal();
+      if (s.type === "meadow") {
+        foxTutorialPending = false;
+        try { localStorage.removeItem("yuanbao.fox-tutorial-pending"); } catch (_) {}
+      }
+      requestLevelVictory(true, "引导完成！可以先整理装备，点击开始后继续下一关。");
       break;
   }
+  if (finishPendingVictory()) return;
   refreshStoryHud();
 }
 
