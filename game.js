@@ -260,6 +260,7 @@ function startGame() {
     effects.push({ x: player.x - 20, y: player.y - 34, width: 170, height: 30, life: 120, kind: "loot", text: "关羽开局无敌 60 秒！" });
   }
   cameraX = 0;
+  initializeStoryLevel();
   updateHud();
   cancelAnimationFrame(animationFrame);
   update();
@@ -483,6 +484,7 @@ function buildLevel(number) {
 }
 
 function showMenu(reason) {
+  hideStory();
   gameState = "menu";
   cancelAnimationFrame(animationFrame);
 
@@ -531,6 +533,7 @@ function update() {
   moveProjectiles();
   dragonAssistAttack();
   collectStars();
+  updateStory();
   handleChest();
   checkDangerHits();
   tickTimers();
@@ -556,6 +559,7 @@ function handleInput() {
   if ((keys.has("Space") || keys.has("ArrowUp") || keys.has("KeyW")) && player.onGround) {
     player.vy = player.jumpPower;
     player.onGround = false;
+    recordStoryAction("jump");
   }
 
   if ((keys.has("Space") || keys.has("ArrowUp") || keys.has("KeyW")) && isPlayerInRiver()) {
@@ -1118,6 +1122,7 @@ function attack() {
   playSound("attack");
   player.attackTimer = weapon.cooldown;
   player.attacking = 12;
+  recordStoryAction("attack");
 
   if (isSwordWeapon(weapon)) {
     const hitBox = {
@@ -1470,7 +1475,7 @@ function damageEnemy(enemy, damage) {
     if (selectedSkin === "zhaoYun") {
       effects.push({ x: enemy.x + enemy.width / 2 - 12, y: enemy.y + 8, width: 24, height: 24, vy: -7, life: 80, kind: "fallenHead" });
     }
-    if (level.enemies.every((monster) => !monster.alive)) {
+    if (!storyOwnsChest() && level.enemies.every((monster) => !monster.alive)) {
       level.chest.locked = false;
       effects.push({ x: level.chest.x - 42, y: level.chest.y - 42, width: 160, height: 36, life: 110, kind: "unlock" });
     }
@@ -1514,6 +1519,7 @@ function collectStars() {
 }
 
 function handleChest() {
+  if (storyOwnsChest()) return;
   const chest = level.chest;
   if (!chest.opened && !chest.locked && touches(player, chest)) {
     chest.opened = true;
@@ -1573,8 +1579,9 @@ function enterNextLevelFromPortal() {
   player.vy = 0;
   player.onGround = true;
   projectiles = [];
-  effects = [{ x: player.x + 20, y: player.y - 34, width: 170, height: 30, life: 90, kind: "loot", text: "岩浆世界开启！" }];
+  effects = [{ x: player.x + 20, y: player.y - 34, width: 170, height: 30, life: 90, kind: "loot", text: `${level.theme.name}开启！` }];
   cameraX = 0;
+  initializeStoryLevel();
   updateHud();
   draw();
 }
@@ -2263,6 +2270,7 @@ function draw() {
   drawWaveHazard();
   drawTraps();
   drawChest();
+  drawStoryScene();
   drawAnimals();
   drawEnemies();
   drawProjectiles();
@@ -2872,6 +2880,7 @@ function drawTraps() {
 }
 
 function drawChest() {
+  if (storyOwnsChest()) return;
   const chest = level.chest;
   ctx.save();
   ctx.translate(-cameraX, 0);

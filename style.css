@@ -498,6 +498,32 @@ button:disabled {
   min-width: 74px;
 }
 
+.story-hud {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #142f35;
+  color: #f1faf7;
+  border-bottom: 3px solid #81c9bc;
+}
+.story-hud > div { min-width: 0; }
+.story-hud strong { color: #ffe18c; font-size: 16px; }
+.story-hud p { margin: 5px 0 0; font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; }
+.story-hud button { flex-shrink: 0; max-width: 42%; white-space: normal; padding: 10px; }
+.story-hud .story-interact-at-ship {
+  position: absolute;
+  z-index: 2;
+  transform: translate(-50%, -100%);
+  max-width: 155px;
+  font-size: 14px;
+  box-shadow: 0 3px 0 #122c35;
+}
+.story-hud .story-interact-at-ship:active:not(:disabled) {
+  transform: translate(-50%, -100%) translateY(3px);
+}
+
 .controls {
   display: grid;
   grid-template-columns: repeat(5, 1fr);

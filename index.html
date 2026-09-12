@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>元宝的星星大冒险</title>
-    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="style.css?v=20260912-rescue-quest" />
   </head>
   <body>
     <main class="game-shell">
@@ -58,6 +58,10 @@
       </section>
 
       <section class="stage-wrap" aria-label="游戏舞台">
+        <div id="storyHud" class="story-hud is-hidden">
+          <div><strong id="storyTitle"></strong><p id="storyText" aria-live="polite"></p></div>
+          <button id="storyInteract" type="button" class="is-hidden"></button>
+        </div>
         <canvas id="game" width="960" height="540"></canvas>
         <div id="mainMenu" class="main-menu">
           <div class="menu-hero">
@@ -174,6 +178,7 @@
       </section>
     </main>
 
-    <script src="game.js?v=20260902-warehouse-dragon-polish"></script>
+    <script src="story.js?v=20260912-rescue-quest"></script>
+    <script src="game.js?v=20260912-rescue-quest"></script>
   </body>
 </html>
