@@ -107,7 +107,7 @@ function storyPrompt() {
     if (s.state === "done") return { label: "前往海洋", action: "next" };
     return null;
   }
-  if (s.state === "help" && storyNear(s.crabX, floorY - 32)) return { label: "和螃蟹交谈", action: "guide" };
+  if (s.state === "help") return { label: "跟螃蟹走", action: "guide" };
   if (s.state === "thanks" && storyNear(s.whaleX + 100, s.whaleY + 45, 300)) return { label: "听鲸鱼说话", action: "talk" };
   if (s.state === "offer" && storyNear(s.whaleX + 100, s.whaleY + 45, 300)) return { label: "跟鲸鱼去寻宝", action: "ride" };
   if (s.state === "cave" && storyNear(s.shipX + 180, floorY - 70, 140)) return { label: "进入沉船", action: "enter" };
@@ -130,7 +130,7 @@ function refreshStoryHud() {
       "小狐狸：我在右边终点！不用打败怪物，靠近牢笼按 J 攻击，就能救我出来！";
   } else {
     const copy = {
-      help: ["海洋 · 远处的求救声", "螃蟹们：救命呀！鲸鱼被渔网困住了！向右游，来和我们说说话！"],
+      help: ["海洋 · 远处的求救声", "螃蟹们：救命呀！鲸鱼被渔网困住了！往右边来，我们带你过去！"],
       guide: ["跟随螃蟹", "螃蟹：请保护我们，我们带你去！按住空格、↑ 或 W 向上游，松开慢慢下潜。"],
       battle: ["救援鲸鱼", s.attacked ? `螃蟹正在剪网：${Math.round((1 - s.net) * 100)}%。挡住鲨鱼，给它们争取时间！` : "鲸鱼被围住了！先用 J 攻击鲨鱼，螃蟹会趁机剪开渔网。"],
       freed: ["鲸鱼加入战斗", "鲸鱼：我自由了！我们一起赶走鲨鱼！"],
@@ -228,13 +228,16 @@ function updateStory() {
   s.clock += 1;
   if (s.type === "ocean") {
     player.y = Math.max(80, player.y);
+    // Swimming above the crabs must not block the invitation or the route.
+    if (s.state === "help" && player.x + player.width >= s.crabX - 220) s.state = "guide";
     if (s.state === "guide") {
-      if (s.crabX - player.x < 300) s.crabX = Math.min(1300, s.crabX + 2.2);
+      if (s.crabX - player.x < 300) {
+        const guideSpeed = Math.max(2.2, Math.min(8, getPlayerMoveSpeed() * 1.15));
+        s.crabX = Math.min(1300, s.crabX + guideSpeed);
+      }
       if (s.crabX >= 1280 && player.x > 1040) beginWhaleBattle();
     }
-    if (["help", "guide"].includes(s.state)) player.x = Math.min(player.x, s.crabX + 100);
     if (s.state === "battle" || s.state === "freed") {
-      player.x = Math.min(player.x, 2150);
       const sharks = level.enemies.filter(e => e.questShark);
       if (sharks.some(e => e.hp < e.maxHp)) s.attacked = true;
       if (s.attacked && s.state === "battle") {

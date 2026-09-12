@@ -57,7 +57,7 @@ const { chromium } = require('playwright');
     assert.equal(await page.evaluate(() => gameState), 'menu');
     await page.locator('#startButton').click();
     assert.equal(await page.evaluate(() => level.story.state), 'help');
-    await page.evaluate(() => { player.x = 420; player.y = floorY - player.height; updateStory(); });
+    await page.evaluate(() => { player.x = 160; player.y = floorY - player.height; updateStory(); });
     await page.locator('#storyInteract').click();
     assert.equal(await page.evaluate(() => level.story.state), 'guide');
     await page.evaluate(() => {
@@ -121,13 +121,28 @@ const { chromium } = require('playwright');
     assert.equal(await page.evaluate(() => level.story.saved), true);
     assert.equal(await page.evaluate(() => storyOwnsChest()), false, 'replay restores original chest');
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.evaluate(() => { currentLevel = 2; startGame(); player.x = 420; updateStory(); draw(); });
+    await page.evaluate(() => { currentLevel = 2; startGame(); player.x = 160; updateStory(); draw(); });
     const layout = await page.evaluate(() => {
       const text = storyText.getBoundingClientRect(), button = storyInteract.getBoundingClientRect(), hud = storyHud.getBoundingClientRect();
       return { noOverlap: text.right <= button.left, fits: button.right <= hud.right, textFits: storyText.scrollWidth <= storyText.clientWidth };
     });
     assert.deepEqual(layout, { noOverlap: true, fits: true, textFits: true });
     await page.locator('.stage-wrap').screenshot({ path: path.resolve(__dirname, '../quest-mobile-preview.png') });
+    for (const surface of [true, false]) {
+      const route = await page.evaluate(swimHigh => {
+        currentLevel = 2; startGame();
+        if (swimHigh) { player.y = 90; keys.add('Space'); }
+        keys.add('ArrowRight');
+        let frames = 0;
+        while (level.story.state !== 'battle' && frames < 1000) { update(); frames++; }
+        keys.clear();
+        const result = { state: level.story.state, crossedOldWall: player.x > 540, sharks: level.enemies.length };
+        player.x = 2300; updateStory();
+        result.noBattleWall = player.x === 2300;
+        return result;
+      }, surface);
+      assert.deepEqual(route, { state: 'battle', crossedOldWall: true, sharks: 3, noBattleWall: true }, `automatic crab guide at ${surface ? 'surface' : 'seabed'}`);
+    }
     assert.deepEqual(errors, []);
     const live = await browser.newPage({ viewport: { width: 1280, height: 900 } });
     live.on('pageerror', error => errors.push(error.message));
