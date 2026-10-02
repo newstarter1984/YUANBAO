@@ -121,7 +121,7 @@ const skinGoods = [
 ];
 
 const dragonTypes = [
-  { key: "gold", name: "金龙", color: "#ffd34d", dark: "#8f6b18", skill: "召唤金属攻击怪物" },
+  { key: "gold", name: "金龙", color: "#ffd34d", dark: "#8f6b18", skill: "没有五行龙技" },
   { key: "wood", name: "木龙", color: "#43c46b", dark: "#1f6b3f", skill: "召唤藤蔓缠住怪物" },
   { key: "water", name: "水龙", color: "#52c7ff", dark: "#126aa6", skill: "吐出冰霜" },
   { key: "fire", name: "火龙", color: "#ff5a2e", dark: "#7a1d19", skill: "吐出火焰" },
@@ -158,6 +158,8 @@ let dragonEggIncubator = null;
 let dragons = [];
 let activeDragonId = "";
 let activeMount = "horse";
+let dragonRestX = 80;
+let dragonRestY = floorY - 76;
 let lightningBootsEquipped = false;
 let equippedArrow = "normalArrow";
 let equippedTool = "";
@@ -607,8 +609,12 @@ function handleInput() {
     player.vy = -5.8;
   }
 
-  if (hasDragonAdult && (keys.has("Space") || keys.has("ArrowUp") || keys.has("KeyW")) && !player.onGround) {
-    player.vy = Math.max(player.vy - 0.42, -7.2);
+  if (isRidingDragon() && (keys.has("Space") || keys.has("ArrowUp") || keys.has("KeyW")) && !player.onGround) {
+    player.vy = Math.max(player.vy - 1.18, -8.8);
+  }
+
+  if (isRidingDragon() && (keys.has("ArrowDown") || keys.has("KeyS")) && !player.onGround) {
+    player.vy = Math.min(player.vy + 0.7, 7.5);
   }
 
   if (keys.has("KeyJ")) attack();
@@ -1012,15 +1018,17 @@ function moveAnimals() {
 function dragonAssistAttack() {
   const activeDragon = getActiveDragon();
   if (!hasDragonAdult || !activeDragon || !player || dragonAttackTimer > 0) return;
+  if (activeDragon.type === "gold") return;
 
-  const playerCenter = player.x + player.width / 2;
+  const dragonCenterX = isRidingDragon() ? player.x + player.width / 2 : dragonRestX + 48;
+  const dragonCenterY = isRidingDragon() ? player.y + player.height / 2 : dragonRestY + 38;
   let target = null;
   let bestDistance = Infinity;
   for (const enemy of level.enemies) {
     if (!enemy.alive || enemy.kind === "lavaBoss" && enemy.bossMode === "hidden") continue;
     const enemyCenter = enemy.x + enemy.width / 2;
-    const distance = Math.abs(enemyCenter - playerCenter);
-    if (distance < 430 && Math.abs(enemy.y - player.y) < 190 && distance < bestDistance) {
+    const distance = Math.abs(enemyCenter - dragonCenterX);
+    if (distance < 430 && Math.abs(enemy.y - dragonCenterY) < 190 && distance < bestDistance) {
       target = enemy;
       bestDistance = distance;
     }
@@ -1037,9 +1045,9 @@ function dragonAssistAttack() {
     target.cagedTimer = Math.max(target.cagedTimer, 180);
   }
   effects.push({
-    x: Math.min(player.x, target.x),
-    y: Math.min(player.y, target.y) + 18,
-    width: Math.abs(target.x - player.x) + target.width,
+    x: Math.min(dragonCenterX, target.x),
+    y: Math.min(dragonCenterY, target.y) + 18,
+    width: Math.abs(target.x - dragonCenterX) + target.width,
     height: 22,
     life: 18,
     kind: `dragon-${activeDragon.type}`,
@@ -1986,15 +1994,26 @@ function setActiveMount(type) {
 
 function toggleDragonMount() {
   if (!getActiveDragon()) return;
-  setActiveMount(isRidingDragon() ? "none" : "dragon");
+  if (isRidingDragon()) {
+    dragonRestX = player.x + player.facing * 76;
+    dragonRestY = Math.min(floorY - 76, player.y + 18);
+    setActiveMount("none");
+  } else if (isNearActiveDragon()) {
+    setActiveMount("dragon");
+    if (player) {
+      player.vy = -5.8;
+      player.onGround = false;
+      effects.push({ x: player.x - 30, y: player.y - 34, width: 240, height: 30, life: 120, kind: "loot", text: "按住跳跃上升，S 或 ↓ 下降" });
+    }
+  }
 }
 
 function isNearActiveDragon() {
   if (!getActiveDragon()) return false;
   if (isRidingDragon()) return true;
   if (!player) return false;
-  const dragonX = player.x - 70;
-  const dragonY = player.y + 16;
+  const dragonX = dragonRestX;
+  const dragonY = dragonRestY;
   return Math.hypot((player.x + player.width / 2) - (dragonX + 46), (player.y + player.height / 2) - (dragonY + 30)) < 120;
 }
 
@@ -3682,31 +3701,71 @@ function drawDragonSprite(targetCtx, x, y, typeKey, scale = 1) {
     return;
   }
 
-  targetCtx.fillStyle = wingColor;
-  targetCtx.fillRect(8, 12, 22, 12);
-  targetCtx.fillRect(13, 5, 18, 9);
-  targetCtx.fillStyle = darkColor;
-  targetCtx.fillRect(-8, 35, 16, 8);
-  targetCtx.fillRect(5, 44, 9, 12);
-  targetCtx.fillRect(30, 44, 9, 12);
-  targetCtx.fillStyle = bodyColor;
-  targetCtx.fillRect(0, 25, 48, 21);
-  targetCtx.fillRect(31, 10, 21, 20);
-  targetCtx.fillRect(49, 17, 12, 8);
-  addPixelHighlightsTo(targetCtx, 0, 25, 48, 21);
-  targetCtx.fillStyle = darkColor;
-  targetCtx.fillRect(10, 27, 6, 5);
-  targetCtx.fillRect(24, 27, 6, 5);
-  targetCtx.fillRect(38, 27, 6, 5);
-  targetCtx.fillRect(35, 5, 6, 6);
-  targetCtx.fillRect(44, 6, 5, 6);
-  targetCtx.fillStyle = "#fff8db";
-  targetCtx.fillRect(43, 16, 4, 4);
-  targetCtx.fillRect(56, 25, 3, 4);
-  targetCtx.fillStyle = "#211b2c";
-  targetCtx.fillRect(42, 16, 3, 3);
-  targetCtx.fillStyle = "#ffd34d";
-  targetCtx.fillRect(57, 18, 8, 4);
+  drawDragonShape(targetCtx, 0, 0, bodyColor, darkColor, wingColor, 0.72, false, false, 1);
+  targetCtx.restore();
+}
+
+function dragonPolygon(targetCtx, points, color) {
+  targetCtx.fillStyle = color;
+  targetCtx.beginPath();
+  points.forEach(([px, py], index) => index ? targetCtx.lineTo(px, py) : targetCtx.moveTo(px, py));
+  targetCtx.closePath();
+  targetCtx.fill();
+}
+
+function drawDragonShape(targetCtx, x, y, body, dark, wing, scale, flying, saddled, facing = 1) {
+  targetCtx.save();
+  targetCtx.translate(x + (facing < 0 ? 126 * scale : 0), y);
+  targetCtx.scale(scale * facing, scale);
+  const flap = flying ? Math.sin(Date.now() / 90) * 12 : Math.sin(Date.now() / 170) * 3;
+  dragonPolygon(targetCtx, [[10,55],[-22,47],[-48,30],[-39,56],[-62,63],[-28,66],[7,64]], dark);
+  dragonPolygon(targetCtx, [[-46,34],[-55,17],[-36,31],[-31,15],[-22,45]], body);
+  dragonPolygon(targetCtx, [[34,42],[18,4 + flap],[55,22 + flap],[77,-8 + flap],[82,43]], dark);
+  dragonPolygon(targetCtx, [[39,38],[28,13 + flap],[54,28 + flap],[72,5 + flap],[73,40]], wing);
+  targetCtx.fillStyle = body;
+  targetCtx.fillRect(5, 42, 82, 31);
+  targetCtx.fillRect(20, 35, 55, 42);
+  targetCtx.fillStyle = dark;
+  targetCtx.fillRect(14, 66, 61, 8);
+  targetCtx.fillRect(24, 48, 9, 7);
+  targetCtx.fillRect(45, 47, 9, 7);
+  targetCtx.fillRect(66, 49, 9, 7);
+  targetCtx.fillStyle = body;
+  targetCtx.fillRect(69, 27, 25, 36);
+  targetCtx.fillRect(82, 19, 31, 31);
+  targetCtx.fillRect(105, 30, 28, 15);
+  targetCtx.fillStyle = dark;
+  targetCtx.fillRect(84, 13, 8, 12);
+  targetCtx.fillRect(101, 11, 8, 13);
+  dragonPolygon(targetCtx, [[87,14],[87,1],[96,15]], "#fff1b8");
+  dragonPolygon(targetCtx, [[103,13],[110,0],[111,18]], "#fff1b8");
+  targetCtx.fillRect(104, 42, 29, 5);
+  targetCtx.fillRect(112, 48, 18, 7);
+  targetCtx.fillStyle = "#fff4d0";
+  targetCtx.fillRect(111, 43, 5, 5);
+  targetCtx.fillRect(122, 43, 5, 5);
+  targetCtx.fillStyle = "#ffe45e";
+  targetCtx.fillRect(102, 27, 7, 7);
+  targetCtx.fillStyle = "#17151d";
+  targetCtx.fillRect(104, 28, 3, 3);
+  targetCtx.fillRect(127, 34, 4, 3);
+  const legY = flying ? 66 : 72;
+  for (const legX of [16, 39, 62, 78]) {
+    targetCtx.fillStyle = dark;
+    targetCtx.fillRect(legX, legY, 10, flying ? 12 : 22);
+    targetCtx.fillStyle = "#fff1b8";
+    targetCtx.fillRect(legX + 5, legY + (flying ? 9 : 19), 10, 4);
+  }
+  if (saddled) {
+    targetCtx.fillStyle = "#6d321f";
+    targetCtx.fillRect(39, 35, 31, 13);
+    targetCtx.fillStyle = "#e3ae45";
+    targetCtx.fillRect(43, 32, 23, 6);
+    targetCtx.fillRect(52, 44, 5, 30);
+    targetCtx.strokeStyle = "#e3ae45";
+    targetCtx.lineWidth = 3;
+    targetCtx.beginPath(); targetCtx.moveTo(65, 37); targetCtx.lineTo(100, 32); targetCtx.stroke();
+  }
   targetCtx.restore();
 }
 
@@ -3821,7 +3880,7 @@ function drawPlayer() {
   const swimKick = isPlayerInRiver() ? Math.sin(Date.now() / 90) * 6 : gait;
   drawEntityShadow(player, isRidingDragon() || isRidingHorse() ? 1.2 : 1);
   if (getActiveDragon() && !isRidingDragon()) {
-    drawDragonCompanion(x - 92, y + 16, gait);
+    drawDragonCompanion(dragonRestX, dragonRestY, gait);
   }
 
   if (selectedSkin === "diverSkin" || (level && level.theme.id === "ocean" && diverSkinOwned && selectedSkin === "knight")) {
@@ -3866,67 +3925,14 @@ function drawPlayer() {
 
 function drawDragonMount(x, y, gait) {
   const dragon = getDragonType(getActiveDragon()?.type || "wood");
-  const wing = Math.sin(Date.now() / 95) * 12;
-  const lift = Math.max(0, -player.vy) * 0.25;
-  ctx.save();
-  ctx.translate(0, -lift);
-  ctx.fillStyle = dragon.dark;
-  ctx.fillRect(x - 30, y + 54, 28, 9);
-  ctx.fillRect(x + 5, y + 31 + wing, 42, 12);
-  ctx.fillRect(x + 10, y + 18 + wing * 0.45, 30, 12);
-  ctx.fillRect(x + 12, y + 72 + Math.max(0, gait), 12, 15);
-  ctx.fillRect(x + 56, y + 72 + Math.max(0, -gait), 12, 15);
-  ctx.fillStyle = dragon.color;
-  ctx.fillRect(x - 14, y + 42, 92, 30);
-  ctx.fillRect(x + 43, y + 20, 32, 31);
-  ctx.fillRect(x + 72, y + 31, 22, 12);
-  addPixelHighlights(x - 14, y + 42, 92, 30);
-  ctx.fillStyle = dragon.dark;
-  ctx.fillRect(x + 4, y + 46, 9, 6);
-  ctx.fillRect(x + 24, y + 46, 9, 6);
-  ctx.fillRect(x + 47, y + 46, 9, 6);
-  ctx.fillRect(x + 50, y + 14, 7, 7);
-  ctx.fillRect(x + 62, y + 15, 6, 7);
-  ctx.fillRect(x + 8, y + 70 + Math.max(0, gait), 12, 16);
-  ctx.fillRect(x + 58, y + 70 + Math.max(0, -gait), 12, 16);
-  ctx.fillStyle = "#ffd34d";
-  ctx.fillRect(x + 68, y + 28, 7, 7);
-  ctx.fillStyle = "#211b2c";
-  ctx.fillRect(x + 69, y + 29, 3, 3);
-  ctx.fillStyle = "#fff8db";
-  ctx.fillRect(x + 84, y + 41, 5, 4);
-  ctx.fillStyle = "#ff6b2e";
-  ctx.fillRect(x + 94, y + 34, 18, 8);
-  ctx.fillStyle = "#ffd34d";
-  ctx.fillRect(x + 102, y + 31, 14, 5);
-  ctx.restore();
+  drawDragonShape(ctx, x - 32, y + 20, dragon.color, dragon.dark, dragon.dark, 1, !player.onGround, true, player.facing);
 }
 
 function drawDragonCompanion(x, y, gait) {
   const dragon = getDragonType(getActiveDragon()?.type || "wood");
-  const wing = Math.sin(Date.now() / 130) * 7;
   ctx.save();
   ctx.globalAlpha = 0.92;
-  ctx.fillStyle = dragon.dark;
-  ctx.fillRect(x - 12, y + 42, 18, 7);
-  ctx.fillRect(x + 10, y + 24 + wing, 34, 10);
-  ctx.fillRect(x + 6, y + 62 + Math.max(0, gait), 9, 12);
-  ctx.fillRect(x + 48, y + 62 + Math.max(0, -gait), 9, 12);
-  ctx.fillStyle = dragon.color;
-  ctx.fillRect(x, y + 36, 66, 24);
-  ctx.fillRect(x + 44, y + 18, 24, 24);
-  ctx.fillRect(x + 65, y + 27, 17, 10);
-  addPixelHighlights(x, y + 36, 66, 24);
-  ctx.fillStyle = dragon.dark;
-  ctx.fillRect(x + 12, y + 40, 8, 5);
-  ctx.fillRect(x + 31, y + 40, 8, 5);
-  ctx.fillRect(x + 51, y + 12, 7, 7);
-  ctx.fillStyle = "#ffd34d";
-  ctx.fillRect(x + 61, y + 25, 6, 6);
-  ctx.fillStyle = "#211b2c";
-  ctx.fillRect(x + 62, y + 26, 3, 3);
-  ctx.fillStyle = "#ff6b2e";
-  ctx.fillRect(x + 82, y + 29, 12, 5);
+  drawDragonShape(ctx, x, y, dragon.color, dragon.dark, dragon.dark, 0.76, false, false, 1);
   ctx.restore();
 }
 

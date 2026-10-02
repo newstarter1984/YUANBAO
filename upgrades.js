@@ -32,7 +32,7 @@ function getSaveData() {
     version: 2, savedAt: Date.now(), gameMode, currentLevel, checkpointLevel, checkpointX,
     coins, diamonds, experience, heroLevel, playCount, weaponLevel,
     ownedWeapons, specialWeaponIndexes, hasHorse, hasRedHare, hasBlackHorse, hasGoldenArmor,
-    hasDragonAdult, dragonFeedCount, dragonEggIncubator, dragons, activeDragonId, activeMount,
+    hasDragonAdult, dragonFeedCount, dragonEggIncubator, dragons, activeDragonId, activeMount, dragonRestX, dragonRestY,
     lightningBootsEquipped, equippedArrow, equippedTool, diverSkinOwned, selectedSkin,
     ownedSkins, selectedProfession, speedPotionOwned, inventory,
     foxRescued: typeof foxRescued === "boolean" ? foxRescued : false,
@@ -57,6 +57,7 @@ function applySaveData(data) {
   dragonFeedCount = Number(data.dragonFeedCount) || 0; dragonEggIncubator = data.dragonEggIncubator || null;
   dragons = Array.isArray(data.dragons) ? data.dragons : []; activeDragonId = data.activeDragonId || "";
   activeMount = data.activeMount || "horse"; lightningBootsEquipped = Boolean(data.lightningBootsEquipped);
+  dragonRestX = Number(data.dragonRestX) || 80; dragonRestY = Number(data.dragonRestY) || floorY - 76;
   equippedArrow = data.equippedArrow || "normalArrow"; equippedTool = data.equippedTool || "";
   diverSkinOwned = Boolean(data.diverSkinOwned); selectedSkin = data.selectedSkin || "knight";
   ownedSkins = { ...ownedSkins, ...(data.ownedSkins || {}) }; selectedProfession = data.selectedProfession || "doctor";
@@ -140,8 +141,9 @@ function updateAdventureSystems() {
   }
   autoSaveClock += 1;
   if (autoSaveClock >= 600) { autoSaveClock = 0; saveGame(); }
-  dragonSkillButton.textContent = dragonSkillCooldown > 0 ? `龙技冷却 ${Math.ceil(dragonSkillCooldown / 60)}秒` : "五行龙技";
-  dragonSkillButton.disabled = !getActiveDragon() || dragonSkillCooldown > 0;
+  const activeDragon = getActiveDragon();
+  dragonSkillButton.textContent = activeDragon?.type === "gold" ? "金龙无龙技" : dragonSkillCooldown > 0 ? `龙技冷却 ${Math.ceil(dragonSkillCooldown / 60)}秒` : "五行龙技";
+  dragonSkillButton.disabled = !activeDragon || activeDragon.type === "gold" || dragonSkillCooldown > 0;
 }
 
 function useDragonSkill() {
@@ -149,10 +151,9 @@ function useDragonSkill() {
   const dragon = getActiveDragon();
   if (!dragon || dragon.feedCount < 10) return;
   const type = dragon.type;
+  if (type === "gold") return;
   const centerX = player.x + player.width / 2;
-  if (type === "gold") {
-    coins += 20; effects.push({ x: player.x, y: player.y - 30, width: 140, height: 28, life: 70, kind: "loot", text: "金龙发现 20 金币！" });
-  } else if (type === "wood" || type === "earth") {
+  if (type === "wood" || type === "earth") {
     level.platforms.push({ x: Math.min(level.worldWidth - 190, player.x + player.facing * 105), y: Math.min(floorY - 80, player.y + 45), width: type === "wood" ? 190 : 140, height: 20, temporary: 600 });
     effects.push({ x: centerX, y: player.y, width: 160, height: 34, life: 70, kind: "loot", text: type === "wood" ? "藤蔓桥生长！" : "岩石平台升起！" });
   } else if (type === "water") {
