@@ -160,6 +160,7 @@ let activeDragonId = "";
 let activeMount = "horse";
 let dragonRestX = 80;
 let dragonRestY = floorY - 76;
+let dragonRestLevel = 1;
 let lightningBootsEquipped = false;
 let equippedArrow = "normalArrow";
 let equippedTool = "";
@@ -1997,6 +1998,7 @@ function toggleDragonMount() {
   if (isRidingDragon()) {
     dragonRestX = player.x + player.facing * 76;
     dragonRestY = Math.min(floorY - 76, player.y + 18);
+    dragonRestLevel = currentLevel;
     setActiveMount("none");
   } else if (isNearActiveDragon()) {
     setActiveMount("dragon");
@@ -3713,13 +3715,18 @@ function dragonPolygon(targetCtx, points, color) {
   targetCtx.fill();
 }
 
-function drawDragonShape(targetCtx, x, y, body, dark, wing, scale, flying, saddled, facing = 1) {
+function drawDragonShape(targetCtx, x, y, body, dark, wing, scale, flying, saddled, facing = 1, moving = false) {
   targetCtx.save();
-  targetCtx.translate(x + (facing < 0 ? 126 * scale : 0), y);
+  const motionTime = Date.now();
+  const walkCycle = moving && !flying ? Math.sin(motionTime / 85) : 0;
+  const bodyBob = flying ? Math.sin(motionTime / 150) * 4 : moving ? Math.abs(walkCycle) * -3 : Math.sin(motionTime / 420) * 1.5;
+  targetCtx.translate(x + (facing < 0 ? 126 * scale : 0), y + bodyBob);
   targetCtx.scale(scale * facing, scale);
-  const flap = flying ? Math.sin(Date.now() / 90) * 12 : Math.sin(Date.now() / 170) * 3;
-  dragonPolygon(targetCtx, [[10,55],[-22,47],[-48,30],[-39,56],[-62,63],[-28,66],[7,64]], dark);
-  dragonPolygon(targetCtx, [[-46,34],[-55,17],[-36,31],[-31,15],[-22,45]], body);
+  const flap = flying ? Math.sin(motionTime / 70) * 24 : Math.sin(motionTime / 210) * 4;
+  const tailSway = flying || moving ? Math.sin(motionTime / 110) * 8 : Math.sin(motionTime / 360) * 3;
+  const headBob = flying ? Math.sin(motionTime / 115) * 3 : moving ? walkCycle * 2 : 0;
+  dragonPolygon(targetCtx, [[10,55],[-22,47],[-48,30 + tailSway],[-39,56 + tailSway],[-62,63 + tailSway],[-28,66],[7,64]], dark);
+  dragonPolygon(targetCtx, [[-46,34 + tailSway],[-55,17 + tailSway],[-36,31 + tailSway],[-31,15 + tailSway],[-22,45]], body);
   dragonPolygon(targetCtx, [[34,42],[18,4 + flap],[55,22 + flap],[77,-8 + flap],[82,43]], dark);
   dragonPolygon(targetCtx, [[39,38],[28,13 + flap],[54,28 + flap],[72,5 + flap],[73,40]], wing);
   targetCtx.fillStyle = body;
@@ -3731,31 +3738,33 @@ function drawDragonShape(targetCtx, x, y, body, dark, wing, scale, flying, saddl
   targetCtx.fillRect(45, 47, 9, 7);
   targetCtx.fillRect(66, 49, 9, 7);
   targetCtx.fillStyle = body;
-  targetCtx.fillRect(69, 27, 25, 36);
-  targetCtx.fillRect(82, 19, 31, 31);
-  targetCtx.fillRect(105, 30, 28, 15);
+  targetCtx.fillRect(69, 27 + headBob, 25, 36);
+  targetCtx.fillRect(82, 19 + headBob, 31, 31);
+  targetCtx.fillRect(105, 30 + headBob, 28, 15);
   targetCtx.fillStyle = dark;
-  targetCtx.fillRect(84, 13, 8, 12);
-  targetCtx.fillRect(101, 11, 8, 13);
-  dragonPolygon(targetCtx, [[87,14],[87,1],[96,15]], "#fff1b8");
-  dragonPolygon(targetCtx, [[103,13],[110,0],[111,18]], "#fff1b8");
-  targetCtx.fillRect(104, 42, 29, 5);
-  targetCtx.fillRect(112, 48, 18, 7);
+  targetCtx.fillRect(84, 13 + headBob, 8, 12);
+  targetCtx.fillRect(101, 11 + headBob, 8, 13);
+  dragonPolygon(targetCtx, [[87,14 + headBob],[87,1 + headBob],[96,15 + headBob]], "#fff1b8");
+  dragonPolygon(targetCtx, [[103,13 + headBob],[110,0 + headBob],[111,18 + headBob]], "#fff1b8");
+  targetCtx.fillRect(104, 42 + headBob, 29, 5);
+  targetCtx.fillRect(112, 48 + headBob, 18, 7);
   targetCtx.fillStyle = "#fff4d0";
-  targetCtx.fillRect(111, 43, 5, 5);
-  targetCtx.fillRect(122, 43, 5, 5);
+  targetCtx.fillRect(111, 43 + headBob, 5, 5);
+  targetCtx.fillRect(122, 43 + headBob, 5, 5);
   targetCtx.fillStyle = "#ffe45e";
-  targetCtx.fillRect(102, 27, 7, 7);
+  targetCtx.fillRect(102, 27 + headBob, 7, 7);
   targetCtx.fillStyle = "#17151d";
-  targetCtx.fillRect(104, 28, 3, 3);
-  targetCtx.fillRect(127, 34, 4, 3);
+  targetCtx.fillRect(104, 28 + headBob, 3, 3);
+  targetCtx.fillRect(127, 34 + headBob, 4, 3);
   const legY = flying ? 66 : 72;
-  for (const legX of [16, 39, 62, 78]) {
+  [16, 39, 62, 78].forEach((legX, index) => {
+    const stride = moving && !flying ? (index % 2 === 0 ? walkCycle : -walkCycle) * 8 : 0;
+    const lift = moving && !flying ? Math.max(0, index % 2 === 0 ? walkCycle : -walkCycle) * 5 : 0;
     targetCtx.fillStyle = dark;
-    targetCtx.fillRect(legX, legY, 10, flying ? 12 : 22);
+    targetCtx.fillRect(legX + stride, legY - lift, 10, flying ? 12 : 22);
     targetCtx.fillStyle = "#fff1b8";
-    targetCtx.fillRect(legX + 5, legY + (flying ? 9 : 19), 10, 4);
-  }
+    targetCtx.fillRect(legX + stride + 5, legY - lift + (flying ? 9 : 19), 10, 4);
+  });
   if (saddled) {
     targetCtx.fillStyle = "#6d321f";
     targetCtx.fillRect(39, 35, 31, 13);
@@ -3925,7 +3934,7 @@ function drawPlayer() {
 
 function drawDragonMount(x, y, gait) {
   const dragon = getDragonType(getActiveDragon()?.type || "wood");
-  drawDragonShape(ctx, x - 32, y + 20, dragon.color, dragon.dark, dragon.dark, 1, !player.onGround, true, player.facing);
+  drawDragonShape(ctx, x - 32, y + 20, dragon.color, dragon.dark, dragon.dark, 1, !player.onGround, true, player.facing, Math.abs(player.vx) > 0.15);
 }
 
 function drawDragonCompanion(x, y, gait) {

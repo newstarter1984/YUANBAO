@@ -32,7 +32,7 @@ function getSaveData() {
     version: 2, savedAt: Date.now(), gameMode, currentLevel, checkpointLevel, checkpointX,
     coins, diamonds, experience, heroLevel, playCount, weaponLevel,
     ownedWeapons, specialWeaponIndexes, hasHorse, hasRedHare, hasBlackHorse, hasGoldenArmor,
-    hasDragonAdult, dragonFeedCount, dragonEggIncubator, dragons, activeDragonId, activeMount, dragonRestX, dragonRestY,
+    hasDragonAdult, dragonFeedCount, dragonEggIncubator, dragons, activeDragonId, activeMount, dragonRestX, dragonRestY, dragonRestLevel,
     lightningBootsEquipped, equippedArrow, equippedTool, diverSkinOwned, selectedSkin,
     ownedSkins, selectedProfession, speedPotionOwned, inventory,
     foxRescued: typeof foxRescued === "boolean" ? foxRescued : false,
@@ -58,6 +58,7 @@ function applySaveData(data) {
   dragons = Array.isArray(data.dragons) ? data.dragons : []; activeDragonId = data.activeDragonId || "";
   activeMount = data.activeMount || "horse"; lightningBootsEquipped = Boolean(data.lightningBootsEquipped);
   dragonRestX = Number(data.dragonRestX) || 80; dragonRestY = Number(data.dragonRestY) || floorY - 76;
+  dragonRestLevel = Number(data.dragonRestLevel) || currentLevel;
   equippedArrow = data.equippedArrow || "normalArrow"; equippedTool = data.equippedTool || "";
   diverSkinOwned = Boolean(data.diverSkinOwned); selectedSkin = data.selectedSkin || "knight";
   ownedSkins = { ...ownedSkins, ...(data.ownedSkins || {}) }; selectedProfession = data.selectedProfession || "doctor";
@@ -199,6 +200,11 @@ function initializeUpgradeRun() {
   if (checkpointLevel === currentLevel && checkpointX > 80) {
     player.x = Math.min(level.worldWidth - player.width - 20, checkpointX);
     effects.push({ x: player.x, y: player.y - 30, width: 170, height: 28, life: 90, kind: "loot", text: "从检查点继续" });
+  }
+  if (!isRidingDragon() && dragonRestLevel !== currentLevel) {
+    dragonRestLevel = currentLevel;
+    dragonRestX = player.x - 100;
+    dragonRestY = floorY - 76;
   }
   objectiveHud.classList.remove("is-hidden"); saveGame("冒险已开始");
 }
