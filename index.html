@@ -58,6 +58,11 @@
       </section>
 
       <section class="stage-wrap" aria-label="游戏舞台">
+        <div id="objectiveHud" class="objective-hud is-hidden" aria-live="polite">
+          <span>当前目标</span>
+          <strong id="objectiveText">向右探索</strong>
+          <small id="checkpointText">起点</small>
+        </div>
         <div id="storyHud" class="story-hud is-hidden">
           <div><strong id="storyTitle"></strong><p id="storyText" aria-live="polite"></p></div>
           <button id="storyInteract" type="button" class="is-hidden"></button>
@@ -87,6 +92,11 @@
             <p id="resultLabel" class="result-label">准备冒险</p>
             <h2>主界面</h2>
             <p id="menuText">打败小怪，打开宝箱，攒金币升级武器。</p>
+            <div class="mode-panel" aria-label="游戏模式">
+              <button id="adventureModeButton" type="button">冒险模式</button>
+              <button id="creativeModeButton" type="button">创造模式</button>
+              <p id="modeHint">冒险模式：正常金币与掉落，成长会自动保存。</p>
+            </div>
             <div class="profession-panel">
               <h3>选择职业</h3>
               <div id="professionChoices" class="profession-choices"></div>
@@ -114,6 +124,13 @@
           </div>
 
           <button id="startButton" class="start-button" type="button">开始游戏</button>
+          <div class="save-actions">
+            <button id="continueButton" type="button">继续冒险</button>
+            <button id="dragonHomeButton" type="button">龙之家</button>
+            <button id="exportSaveButton" type="button">导出存档</button>
+            <button id="importSaveButton" type="button">导入存档</button>
+            <span id="saveStatus">尚未存档</span>
+          </div>
         </div>
         <div class="game-actions">
           <button id="healButton" type="button">回复</button>
@@ -124,8 +141,24 @@
           <button id="swiftButton" type="button">飞速</button>
           <button id="thousandKillButton" type="button">千杀百万</button>
           <button id="mountButton" type="button">骑乘</button>
+          <button id="dragonSkillButton" type="button">五行龙技</button>
           <button id="powerPotionButton" type="button">力量药水</button>
           <button id="medkitButton" type="button">医疗包</button>
+        </div>
+        <div id="touchControls" class="touch-controls" aria-label="触屏操作">
+          <div><button data-hold="ArrowLeft" type="button">←</button><button data-hold="ArrowRight" type="button">→</button></div>
+          <div><button data-hold="Space" type="button">跳</button><button data-tap="KeyJ" type="button">攻击</button><button data-tap="KeyK" type="button">手雷</button></div>
+        </div>
+        <div id="pausePanel" class="pause-panel is-hidden">
+          <h3>游戏暂停</h3>
+          <p>按 Esc 或点击按钮继续。</p>
+          <button id="resumeButton" type="button">继续游戏</button>
+          <button id="returnMenuButton" type="button">保存并返回首页</button>
+        </div>
+        <div id="dragonHomePanel" class="dragon-home-panel is-hidden">
+          <div class="backpack-header"><h3>元宝的龙之家</h3><button id="closeDragonHomeButton" type="button">关闭</button></div>
+          <p>这里记录一起冒险的伙伴与小龙。成年龙可以在关卡中施展五行技能。</p>
+          <div id="dragonHomeContent" class="dragon-home-content"></div>
         </div>
         <button id="backpackButton" class="backpack-button" type="button">背包</button>
         <div id="backpackPanel" class="backpack-panel is-hidden">
@@ -179,6 +212,7 @@
     </main>
 
     <script src="story.js?v=20260912-ocean-guide-v4"></script>
-    <script src="game.js?v=20260912-victory-menu-v3"></script>
+    <script src="game.js?v=20261002-adventure-upgrade"></script>
+    <script src="upgrades.js?v=20261002-adventure-upgrade"></script>
   </body>
 </html>

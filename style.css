@@ -524,6 +524,47 @@ button:disabled {
   transform: translate(-50%, -100%) translateY(3px);
 }
 
+.objective-hud {
+  position: absolute;
+  z-index: 4;
+  top: 12px;
+  left: 12px;
+  max-width: min(430px, calc(100% - 24px));
+  padding: 9px 12px;
+  border: 3px solid var(--line);
+  background: rgba(255, 244, 199, 0.94);
+  box-shadow: 4px 4px 0 rgba(11, 10, 18, 0.8);
+}
+.objective-hud span, .objective-hud small { display: block; font-weight: 900; }
+.objective-hud:has(+ .story-hud:not(.is-hidden)) { top: 82px; }
+.objective-hud span { color: #a64032; font-size: 12px; }
+.objective-hud strong { display: block; margin: 2px 0; }
+.objective-hud small { color: #45646d; }
+
+.mode-panel { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
+.mode-panel p { grid-column: 1 / -1; padding: 8px; border: 3px solid var(--line); background: #fffdf0; }
+.mode-panel button.is-selected { background: var(--green); }
+
+.save-actions { grid-column: 1; grid-row: 3; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.save-actions button { min-height: 40px; padding: 6px 9px; background: #8ee8ff; }
+.save-actions span { color: #fff8db; font-weight: 900; text-shadow: 0 2px #211b2c; }
+
+.pause-panel, .dragon-home-panel {
+  position: absolute; z-index: 12; inset: 50% auto auto 50%; transform: translate(-50%, -50%);
+  width: min(560px, calc(100% - 28px)); max-height: calc(100% - 28px); overflow: auto;
+  padding: 18px; border: 5px solid var(--line); background: var(--panel); box-shadow: 9px 9px 0 #0b0a12;
+}
+.pause-panel { text-align: center; }
+.pause-panel h3, .dragon-home-panel h3 { margin: 0 0 8px; font-size: 28px; }
+.dragon-home-content { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+.dragon-card { padding: 10px; border: 4px solid var(--line); background: #fffdf0; }
+.dragon-card strong, .dragon-card span { display: block; }
+.dragon-card.is-active { background: #c9fbff; }
+.touch-controls { display: none; position: absolute; z-index: 5; left: 12px; right: 12px; bottom: 70px; justify-content: space-between; pointer-events: none; }
+.touch-controls > div { display: flex; gap: 8px; }
+.touch-controls button { pointer-events: auto; min-width: 58px; min-height: 58px; opacity: 0.86; touch-action: none; }
+.main-menu:not(.is-hidden) ~ .touch-controls { display: none; }
+
 .controls {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
@@ -584,6 +625,9 @@ button:disabled {
     padding: 12px;
   }
 
+  .save-actions { grid-column: 1; grid-row: auto; }
+  .dragon-home-content { grid-template-columns: 1fr; }
+
   .profession-choices {
     grid-template-columns: 1fr;
   }
@@ -599,6 +643,8 @@ button:disabled {
     max-width: none;
     margin-top: 8px;
   }
+
+  .touch-controls { display: flex; }
 
   .menu-panel,
   .shop-panel,

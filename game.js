@@ -51,11 +51,11 @@ const gravity = 0.75;
 const floorY = 454;
 const starValue = 6;
 const experienceNeeded = 10;
-const unlimitedCoinsMode = true;
+let unlimitedCoinsMode = false;
 const basePlayerHealth = 100;
 const maxBoostedHealth = 1000;
 const enemySpeedMultiplier = 0.68;
-const chestDropChanceBonus = 0.1;
+const chestDropChanceBonus = 0;
 
 const worldThemes = [
   { id: "gravel", name: "砾石草原", next: "海洋" },
@@ -215,6 +215,11 @@ let currentLevel = 1;
 let cameraX = 0;
 let gameState = "menu";
 let animationFrame;
+let lastFrameTime = 0;
+let frameAccumulator = 0;
+const fixedStepMs = 1000 / 60;
+let jumpBufferFrames = 0;
+let coyoteFrames = 0;
 function playSound() {
   // Sound is intentionally disabled.
 }
@@ -265,6 +270,9 @@ function startGame() {
   initializeStoryLevel();
   updateHud();
   cancelAnimationFrame(animationFrame);
+  lastFrameTime = 0;
+  frameAccumulator = 0;
+  if (typeof initializeUpgradeRun === "function") initializeUpgradeRun();
   update();
 }
 
@@ -517,7 +525,7 @@ function showMenu(reason) {
   mainMenu.classList.remove("is-hidden");
 }
 
-function update() {
+function update(frameTime = performance.now()) {
   if (gameState !== "playing") return;
   if (finishPendingVictory()) return;
 
@@ -525,9 +533,19 @@ function update() {
     if (player) player.vx = 0;
     draw();
     drawPauseOverlay();
+    lastFrameTime = frameTime;
     animationFrame = requestAnimationFrame(update);
     return;
   }
+
+  if (!lastFrameTime) lastFrameTime = frameTime;
+  frameAccumulator += Math.min(100, frameTime - lastFrameTime);
+  lastFrameTime = frameTime;
+  if (frameAccumulator < fixedStepMs) {
+    animationFrame = requestAnimationFrame(update);
+    return;
+  }
+  frameAccumulator -= fixedStepMs;
 
   handleInput();
   if (finishPendingVictory()) return;
@@ -572,9 +590,16 @@ function handleInput() {
     player.facing = 1;
   }
 
-  if ((keys.has("Space") || keys.has("ArrowUp") || keys.has("KeyW")) && player.onGround) {
+  const wantsJump = keys.has("Space") || keys.has("ArrowUp") || keys.has("KeyW");
+  if (wantsJump) jumpBufferFrames = Math.max(jumpBufferFrames, 7);
+  else jumpBufferFrames = Math.max(0, jumpBufferFrames - 1);
+  coyoteFrames = player.onGround ? 7 : Math.max(0, coyoteFrames - 1);
+
+  if (jumpBufferFrames > 0 && coyoteFrames > 0) {
     player.vy = player.jumpPower;
     player.onGround = false;
+    jumpBufferFrames = 0;
+    coyoteFrames = 0;
     recordStoryAction("jump");
   }
 
@@ -676,6 +701,13 @@ function movePlayer() {
     player.y = floorY - player.height;
     player.vy = 0;
     player.onGround = true;
+  }
+
+  if (player.onGround && jumpBufferFrames > 0) {
+    player.vy = player.jumpPower;
+    player.onGround = false;
+    jumpBufferFrames = 0;
+    recordStoryAction("jump");
   }
 
   player.x = Math.max(18, Math.min(level.worldWidth - player.width - 18, player.x));
@@ -1632,7 +1664,7 @@ function rollChestDrops(levelNumber) {
     }
   }
 
-  if (Math.random() < boostDropChance(0.06)) {
+  if (Math.random() < boostDropChance(0.001)) {
     inventory.dragonEgg += 1;
     drops.push("龙蛋");
   }
