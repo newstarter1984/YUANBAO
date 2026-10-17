@@ -121,11 +121,11 @@ const skinGoods = [
 ];
 
 const dragonTypes = [
-  { key: "gold", name: "金龙", color: "#f4b928", light: "#fff2a1", dark: "#7a4c0b", belly: "#fff0b8", wing: "#e28a22", accent: "#fffbd1", skill: "没有五行龙技" },
-  { key: "wood", name: "木龙", color: "#2fbf68", light: "#a8f08e", dark: "#164c35", belly: "#d6d487", wing: "#247c4d", accent: "#d9ff72", skill: "召唤藤蔓缠住怪物" },
-  { key: "water", name: "水龙", color: "#2e9eea", light: "#b8f5ff", dark: "#114b91", belly: "#d6fbff", wing: "#4dc8e8", accent: "#eaffff", skill: "吐出冰霜" },
-  { key: "fire", name: "火龙", color: "#ed3d24", light: "#ffb13b", dark: "#66151c", belly: "#ffd071", wing: "#9d2232", accent: "#fff09b", skill: "吐出火焰" },
-  { key: "earth", name: "土龙", color: "#a96b32", light: "#e2b46d", dark: "#49301f", belly: "#dfc18e", wing: "#70513c", accent: "#f3dfae", skill: "召唤地刺" },
+  { key: "gold", name: "金龙", color: "#f4b928", light: "#fff2a1", dark: "#7a4c0b", belly: "#fff0b8", wing: "#e28a22", accent: "#fffbd1", skill: "金爪三连击" },
+  { key: "wood", name: "木龙", color: "#2fbf68", light: "#a8f08e", dark: "#164c35", belly: "#d6d487", wing: "#247c4d", accent: "#d9ff72", skill: "藤蔓追踪缠绕" },
+  { key: "water", name: "水龙", color: "#2e9eea", light: "#b8f5ff", dark: "#114b91", belly: "#d6fbff", wing: "#4dc8e8", accent: "#eaffff", skill: "寒霜吐息减速" },
+  { key: "fire", name: "火龙", color: "#ed3d24", light: "#ffb13b", dark: "#66151c", belly: "#ffd071", wing: "#9d2232", accent: "#fff09b", skill: "烈焰吐息爆炸" },
+  { key: "earth", name: "土龙", color: "#a96b32", light: "#e2b46d", dark: "#49301f", belly: "#dfc18e", wing: "#70513c", accent: "#f3dfae", skill: "震地岩刺群攻" },
 ];
 
 const professions = {
@@ -1019,7 +1019,6 @@ function moveAnimals() {
 function dragonAssistAttack() {
   const activeDragon = getActiveDragon();
   if (!hasDragonAdult || !activeDragon || !player || dragonAttackTimer > 0) return;
-  if (activeDragon.type === "gold") return;
 
   const dragonCenterX = isRidingDragon() ? player.x + player.width / 2 : dragonRestX + 48;
   const dragonCenterY = isRidingDragon() ? player.y + player.height / 2 : dragonRestY + 38;
@@ -1036,22 +1035,35 @@ function dragonAssistAttack() {
   }
 
   if (!target) return;
-  dragonAttackTimer = 84;
+  dragonAttackTimer = activeDragon.type === "gold" ? 68 : 84;
   if (dragonBiteTimer <= 0) {
     target.cagedTimer = Math.max(target.cagedTimer, 600);
     dragonBiteTimer = 360;
     effects.push({ x: target.x - 8, y: target.y - 28, width: target.width + 16, height: 34, life: 80, kind: "loot", text: "龙咬住了怪物！" });
   }
-  if (activeDragon.type === "wood") {
-    target.cagedTimer = Math.max(target.cagedTimer, 180);
+  const attackStyle = activeDragon.type === "fire" ? "flame" : activeDragon.type === "water" ? "frost" : activeDragon.type === "wood" ? "roots" : activeDragon.type === "earth" ? "quake" : "claw";
+  if (activeDragon.type === "wood") target.cagedTimer = Math.max(target.cagedTimer, 210);
+  if (activeDragon.type === "water") target.cagedTimer = Math.max(target.cagedTimer, 110);
+  if (activeDragon.type === "earth") {
+    for (const enemy of level.enemies) {
+      if (enemy.alive && Math.abs(enemy.x - target.x) < 115) damageEnemy(enemy, getDragonSkillDamage(activeDragon.type) * 0.55);
+    }
+  }
+  if (activeDragon.type === "fire") {
+    for (const enemy of level.enemies) {
+      if (enemy !== target && enemy.alive && Math.hypot(enemy.x - target.x, enemy.y - target.y) < 105) damageEnemy(enemy, getDragonSkillDamage(activeDragon.type) * 0.45);
+    }
   }
   effects.push({
     x: Math.min(dragonCenterX, target.x),
     y: Math.min(dragonCenterY, target.y) + 18,
     width: Math.abs(target.x - dragonCenterX) + target.width,
     height: 22,
-    life: 18,
-    kind: `dragon-${activeDragon.type}`,
+    life: 26,
+    kind: "dragonAttack",
+    dragonType: activeDragon.type,
+    attackStyle,
+    direction: target.x >= dragonCenterX ? 1 : -1,
   });
   damageEnemy(target, getDragonSkillDamage(activeDragon.type));
 }
@@ -3714,7 +3726,7 @@ function dragonPolygon(targetCtx, points, color) {
   targetCtx.fill();
 }
 
-function drawDragonShape(targetCtx, x, y, dragon, scale, flying, saddled, facing = 1, moving = false) {
+function drawDragonShape(targetCtx, x, y, dragon, scale, flying, saddled, facing = 1, moving = false, attacking = false) {
   const body = dragon.color;
   const dark = dragon.dark;
   const wing = dragon.wing || dragon.dark;
@@ -3730,9 +3742,11 @@ function drawDragonShape(targetCtx, x, y, dragon, scale, flying, saddled, facing
   const flap = flying ? Math.sin(motionTime / 70) * 24 : Math.sin(motionTime / 210) * 4;
   const tailSway = flying || moving ? Math.sin(motionTime / 110) * 8 : Math.sin(motionTime / 360) * 3;
   const headBob = flying ? Math.sin(motionTime / 115) * 3 : moving ? walkCycle * 2 : 0;
+  const jawDrop = attacking ? 9 + Math.sin(motionTime / 45) * 2 : 0;
   dragonPolygon(targetCtx, [[10,55],[-22,47],[-48,30 + tailSway],[-39,56 + tailSway],[-62,63 + tailSway],[-28,66],[7,64]], dark);
   dragonPolygon(targetCtx, [[-46,34 + tailSway],[-55,17 + tailSway],[-36,31 + tailSway],[-31,15 + tailSway],[-22,45]], body);
   dragonPolygon(targetCtx, [[34,42],[18,4 + flap],[55,22 + flap],[77,-8 + flap],[82,43]], dark);
+  dragonPolygon(targetCtx, [[29,43],[6,15 - flap * 0.35],[39,27 - flap * 0.2],[55,7 - flap * 0.25],[61,43]], dark);
   const wingGradient = targetCtx.createLinearGradient(28, 4 + flap, 73, 42);
   wingGradient.addColorStop(0, light);
   wingGradient.addColorStop(0.46, wing);
@@ -3746,6 +3760,9 @@ function drawDragonShape(targetCtx, x, y, dragon, scale, flying, saddled, facing
   targetCtx.moveTo(54, 28 + flap); targetCtx.lineTo(73, 40);
   targetCtx.stroke();
   targetCtx.globalAlpha = 1;
+  targetCtx.strokeStyle = dark;
+  targetCtx.lineWidth = 3;
+  targetCtx.strokeRect(7, 43, 79, 30);
   const bodyGradient = targetCtx.createLinearGradient(8, 34, 82, 76);
   bodyGradient.addColorStop(0, light);
   bodyGradient.addColorStop(0.38, body);
@@ -3768,10 +3785,16 @@ function drawDragonShape(targetCtx, x, y, dragon, scale, flying, saddled, facing
   dragonPolygon(targetCtx, [[87,14 + headBob],[87,1 + headBob],[96,15 + headBob]], accent);
   dragonPolygon(targetCtx, [[103,13 + headBob],[110,0 + headBob],[111,18 + headBob]], accent);
   targetCtx.fillRect(104, 42 + headBob, 29, 5);
-  targetCtx.fillRect(112, 48 + headBob, 18, 7);
+  targetCtx.fillRect(110, 48 + headBob + jawDrop, 21, 7);
+  targetCtx.fillStyle = "#3b1018";
+  targetCtx.fillRect(109, 45 + headBob, 22, Math.max(2, jawDrop));
   targetCtx.fillStyle = belly;
   targetCtx.fillRect(111, 43 + headBob, 5, 5);
   targetCtx.fillRect(122, 43 + headBob, 5, 5);
+  if (attacking) {
+    dragonPolygon(targetCtx, [[112,47 + headBob],[116,54 + headBob + jawDrop],[120,47 + headBob]], "#fffbe8");
+    dragonPolygon(targetCtx, [[122,47 + headBob],[126,54 + headBob + jawDrop],[130,47 + headBob]], "#fffbe8");
+  }
   targetCtx.save();
   targetCtx.shadowColor = accent;
   targetCtx.shadowBlur = 8;
@@ -3781,6 +3804,10 @@ function drawDragonShape(targetCtx, x, y, dragon, scale, flying, saddled, facing
   targetCtx.fillStyle = "#17151d";
   targetCtx.fillRect(104, 28 + headBob, 3, 3);
   targetCtx.fillRect(127, 34 + headBob, 4, 3);
+  targetCtx.fillStyle = accent;
+  targetCtx.globalAlpha = attacking ? 0.85 : 0.35;
+  targetCtx.fillRect(130, 32 + headBob, attacking ? 10 : 5, 3);
+  targetCtx.globalAlpha = 1;
   drawDragonSurfaceDetails(targetCtx, dragon, headBob, flap);
   const legY = flying ? 66 : 72;
   [16, 39, 62, 78].forEach((legX, index) => {
@@ -4009,14 +4036,14 @@ function drawPlayer() {
 
 function drawDragonMount(x, y, gait) {
   const dragon = getDragonType(getActiveDragon()?.type || "wood");
-  drawDragonShape(ctx, x - 32, y + 20, dragon, 1, !player.onGround, true, player.facing, Math.abs(player.vx) > 0.15);
+  drawDragonShape(ctx, x - 32, y + 20, dragon, 1, !player.onGround, true, player.facing, Math.abs(player.vx) > 0.15, dragonAttackTimer > 58);
 }
 
 function drawDragonCompanion(x, y, gait) {
   const dragon = getDragonType(getActiveDragon()?.type || "wood");
   ctx.save();
   ctx.globalAlpha = 0.92;
-  drawDragonShape(ctx, x, y, dragon, 0.76, false, false, 1);
+  drawDragonShape(ctx, x, y, dragon, 0.76, false, false, 1, dragonAttackTimer > 58);
   ctx.restore();
 }
 
@@ -4149,27 +4176,55 @@ function drawEffects() {
     if (effect.kind === "coins") drawTinyText(`+${effect.amount || level.reward} 金币`, effect.x, effect.y - (42 - effect.life), "#ffd34d");
     if (effect.kind === "starCoins") drawTinyText(`+${starValue} 金币`, effect.x, effect.y - (42 - effect.life), "#ffd34d");
     if (effect.kind === "loot") drawTinyText(effect.text, effect.x, effect.y - Math.max(0, 42 - effect.life), "#fff29a");
-    if (effect.kind === "dragonFire" || effect.kind.startsWith("dragon-")) {
-      const type = effect.kind.replace("dragon-", "");
+    if (effect.kind === "dragonFire" || effect.kind.startsWith("dragon-") || effect.kind === "dragonAttack") {
+      const type = effect.dragonType || effect.kind.replace("dragon-", "");
+      const progress = 1 - effect.life / 26;
+      const centerY = effect.y + effect.height / 2;
       ctx.fillStyle =
         type === "water" ? "#8ee8ff" :
         type === "earth" ? "#b98235" :
         type === "wood" ? "#43c46b" :
         type === "gold" ? "#ffd34d" :
         "#ff6b2e";
-      ctx.fillRect(effect.x, effect.y, effect.width, effect.height);
+      ctx.globalAlpha = Math.max(0.2, effect.life / 26);
+      if (effect.attackStyle === "claw") {
+        ctx.strokeStyle = "#fff4a8";
+        ctx.lineWidth = 7;
+        for (let slash = 0; slash < 3; slash += 1) {
+          ctx.beginPath();
+          ctx.moveTo(effect.x + effect.width * 0.55, effect.y - 18 + slash * 15);
+          ctx.quadraticCurveTo(effect.x + effect.width * 0.78, centerY - 20 + slash * 8, effect.x + effect.width, centerY + slash * 7);
+          ctx.stroke();
+        }
+      } else if (effect.attackStyle === "quake") {
+        ctx.fillRect(effect.x, centerY + 7, effect.width, 8);
+        for (let spike = effect.x + 18; spike < effect.x + effect.width; spike += 30) {
+          const rise = 18 + Math.sin(progress * Math.PI) * 34;
+          dragonPolygon(ctx, [[spike,centerY + 8],[spike + 8,centerY - rise],[spike + 17,centerY + 8]], "#e2b46d");
+        }
+      } else if (effect.attackStyle === "roots") {
+        ctx.strokeStyle = "#73dc70";
+        ctx.lineWidth = 7;
+        ctx.beginPath(); ctx.moveTo(effect.x, centerY); ctx.bezierCurveTo(effect.x + effect.width * .3, centerY - 35, effect.x + effect.width * .65, centerY + 35, effect.x + effect.width, centerY); ctx.stroke();
+        for (let leaf = 0; leaf < 5; leaf += 1) ctx.fillRect(effect.x + 25 + leaf * effect.width / 6, centerY - 13 + (leaf % 2) * 20, 13, 8);
+      } else {
+        const streamHeight = effect.attackStyle === "frost" ? 18 : 26;
+        dragonPolygon(ctx, [[effect.x,centerY],[effect.x + effect.width * .72,centerY - streamHeight],[effect.x + effect.width,centerY],[effect.x + effect.width * .72,centerY + streamHeight]], ctx.fillStyle);
+      }
       ctx.fillStyle =
         type === "water" ? "#f1fdff" :
         type === "earth" ? "#5b3a1e" :
         type === "wood" ? "#164d2f" :
         type === "gold" ? "#fff29a" :
         "#ffd34d";
-      ctx.fillRect(effect.x + 16, effect.y + 5, Math.max(20, effect.width - 32), 7);
-      if (type === "earth" || type === "gold") {
-        for (let spike = effect.x + 18; spike < effect.x + effect.width - 10; spike += 34) {
-          ctx.fillRect(spike, effect.y - 16, 10, 22);
+      if (effect.attackStyle === "flame" || effect.attackStyle === "frost") {
+        for (let spark = 0; spark < 7; spark += 1) {
+          const sx = effect.x + 18 + spark * Math.max(12, effect.width - 35) / 7;
+          const sy = centerY + Math.sin(spark * 2.1 + effect.life) * 13;
+          ctx.fillRect(sx, sy, 7, 7);
         }
       }
+      ctx.globalAlpha = 1;
     }
     if (effect.kind === "magicCast" || effect.kind === "magicHit") {
       ctx.fillStyle = "#9b5cff";
