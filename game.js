@@ -1,6 +1,8 @@
 const canvas = document.querySelector("#game");
 const ctx = canvas.getContext("2d");
 ctx.imageSmoothingEnabled = false;
+const emberKnightImage = new Image();
+emberKnightImage.src = "assets/ember-knight.gif?v=20261017";
 
 const levelNumberElement = document.querySelector("#levelNumber");
 const themeNameElement = document.querySelector("#themeName");
@@ -132,6 +134,7 @@ const professions = {
   doctor: { name: "医生", button: "回复", description: "点击回复，生命 +100，可叠到 1000。" },
   police: { name: "警察", button: "牢笼", description: "发射牢笼，困住怪物 10 秒。" },
   boxer: { name: "黑拳", button: "黑拳", description: "短时间内所有伤害无效。" },
+  emberKnight: { name: "烈焰勇士", button: "烈焰斩", description: "挥动火焰剑冲击前方，造成范围伤害。", portrait: "assets/ember-knight.gif?v=20261017" },
 };
 
 let player;
@@ -177,6 +180,7 @@ let ownedSkins = {
   luBu: false,
   zhangFeiAlt: false,
   zhaoYun: false,
+  emberKnight: true,
 };
 let selectedProfession = "doctor";
 let speedPotionOwned = false;
@@ -1294,6 +1298,21 @@ function useProfessionSkill() {
     effects.push({ x: player.x - 10, y: player.y - 28, width: 100, height: 30, life: 70, kind: "blackFist" });
   }
 
+  if (selectedProfession === "emberKnight") {
+    const reach = 190;
+    const hitBox = {
+      x: player.facing > 0 ? player.x + 18 : player.x - reach + 34,
+      y: player.y - 18,
+      width: reach,
+      height: 104,
+    };
+    player.skillTimer = 210;
+    player.attacking = 24;
+    player.vx = 8 * player.facing;
+    damageEnemiesIfHit(hitBox, getAttackDamage(68));
+    effects.push({ ...hitBox, life: 28, kind: "emberSlash", direction: player.facing });
+  }
+
   updateHud();
 }
 
@@ -2039,9 +2058,22 @@ function renderProfessions() {
     const button = document.createElement("button");
     button.type = "button";
     button.className = id === selectedProfession ? "is-selected" : "";
-    button.innerHTML = `<strong>${profession.name}</strong><span>${profession.description}</span>`;
+    if (profession.portrait) {
+      const portrait = document.createElement("img");
+      portrait.src = profession.portrait;
+      portrait.alt = "烈焰勇士动画";
+      portrait.width = 72;
+      portrait.height = 72;
+      portrait.style.cssText = "object-fit:contain;image-rendering:pixelated;float:left;margin-right:8px";
+      button.append(portrait);
+    }
+    const copy = document.createElement("span");
+    copy.innerHTML = `<strong>${profession.name}</strong><span>${profession.description}</span>`;
+    button.append(copy);
     button.addEventListener("click", () => {
       selectedProfession = id;
+      if (id === "emberKnight") selectedSkin = "emberKnight";
+      else if (selectedSkin === "emberKnight") selectedSkin = "knight";
       updateHud();
       renderProfessions();
     });
@@ -2292,7 +2324,7 @@ function getSpecialWeaponName() {
 function updateActionButtons() {
   const inGame = gameState === "playing" && Boolean(player);
   const canToggleDragon = inGame && getActiveDragon() && isNearActiveDragon();
-  healButton.classList.toggle("is-hidden", selectedProfession !== "doctor");
+  healButton.classList.toggle("is-hidden", selectedProfession !== "doctor" && selectedProfession !== "emberKnight");
   cageButton.classList.toggle("is-hidden", selectedProfession !== "police");
   blackFistButton.classList.toggle("is-hidden", selectedProfession !== "boxer");
   rageButton.classList.toggle("is-hidden", selectedSkin !== "zhangFei" && selectedSkin !== "zhangFeiAlt");
@@ -2300,13 +2332,13 @@ function updateActionButtons() {
   swiftButton.classList.toggle("is-hidden", selectedSkin !== "zhaoYun");
   thousandKillButton.classList.toggle("is-hidden", selectedSkin !== "zhaoYun");
   mountButton.classList.toggle("is-hidden", !canToggleDragon);
-  healButton.classList.toggle("is-active-skill", selectedProfession === "doctor");
+  healButton.classList.toggle("is-active-skill", selectedProfession === "doctor" || selectedProfession === "emberKnight");
   cageButton.classList.toggle("is-active-skill", selectedProfession === "police");
   blackFistButton.classList.toggle("is-active-skill", selectedProfession === "boxer");
   rageButton.classList.toggle("is-active-skill", zhangFeiRageTimer > 0);
   swiftButton.classList.toggle("is-active-skill", zhaoYunSwiftTimer > 0);
   thousandKillButton.classList.toggle("is-active-skill", zhaoYunInvincibleTimer > 0);
-  healButton.textContent = player && player.skillTimer > 0 && selectedProfession === "doctor" ? "回复冷却中" : "回复";
+  healButton.textContent = selectedProfession === "emberKnight" ? (player && player.skillTimer > 0 ? "烈焰斩冷却" : "烈焰斩") : player && player.skillTimer > 0 ? "回复冷却中" : "回复";
   cageButton.textContent = player && player.skillTimer > 0 && selectedProfession === "police" ? "牢笼冷却中" : "牢笼";
   blackFistButton.textContent = blackFistTimer > 0 ? "黑拳生效中" : player && player.skillTimer > 0 && selectedProfession === "boxer" ? "黑拳冷却中" : "黑拳";
   rageButton.textContent = zhangFeiRageTimer > 0 ? `狂怒${Math.ceil(zhangFeiRageTimer / 60)}秒` : zhangFeiRageCooldown > 0 ? "狂怒冷却" : "狂怒";
@@ -2314,7 +2346,7 @@ function updateActionButtons() {
   swiftButton.textContent = zhaoYunSwiftTimer > 0 ? `飞速${Math.ceil(zhaoYunSwiftTimer / 60)}秒` : zhaoYunSwiftCooldown > 0 ? "飞速冷却" : "飞速";
   thousandKillButton.textContent = zhaoYunInvincibleTimer > 0 ? `无敌${Math.ceil(zhaoYunInvincibleTimer / 60)}秒` : zhaoYunInvincibleCooldown > 0 ? "千杀冷却" : "千杀百万";
   mountButton.textContent = isRidingDragon() ? "下来" : "骑乘";
-  healButton.disabled = !inGame || selectedProfession !== "doctor" || player.skillTimer > 0;
+  healButton.disabled = !inGame || (selectedProfession !== "doctor" && selectedProfession !== "emberKnight") || player.skillTimer > 0;
   cageButton.disabled = !inGame || selectedProfession !== "police" || player.skillTimer > 0;
   blackFistButton.disabled = !inGame || selectedProfession !== "boxer" || player.skillTimer > 0;
   rageButton.disabled = !inGame || (selectedSkin !== "zhangFei" && selectedSkin !== "zhangFeiAlt") || zhangFeiRageCooldown > 0;
@@ -4019,6 +4051,12 @@ function drawPlayer() {
     ctx.fillRect(x + 58, y + 34, 5, 5);
   }
 
+  if (selectedSkin === "emberKnight") {
+    drawEmberKnight(x, isRidingDragon() ? y - 18 : isRidingHorse() ? y - 8 : y, player.facing, player.attacking > 0);
+    ctx.restore();
+    return;
+  }
+
   const knightY = isRidingDragon() ? y - 4 : isRidingHorse() ? y + 4 : y;
   drawSkinSprite(ctx, x, knightY, selectedSkin, gait, player.facing);
   if (zhangFeiRageTimer > 0 && (selectedSkin === "zhangFei" || selectedSkin === "zhangFeiAlt")) {
@@ -4031,6 +4069,32 @@ function drawPlayer() {
     ctx.fillRect(x + 12, knightY + 2, 30, 5);
   }
   drawWeapon(knightY);
+  ctx.restore();
+}
+
+function drawEmberKnight(x, y, facing, attacking) {
+  ctx.save();
+  const drawWidth = attacking ? 104 : 96;
+  const drawHeight = attacking ? 106 : 98;
+  const bob = Math.abs(player.vx) > 0.15 ? Math.sin(Date.now() / 85) * 2 : Math.sin(Date.now() / 320);
+  ctx.translate(x + player.width / 2, y + 38 + bob);
+  ctx.scale(facing, 1);
+  if (attacking) {
+    ctx.globalAlpha = 0.32;
+    ctx.fillStyle = "#ff6a1f";
+    ctx.beginPath();
+    ctx.arc(14, 8, 50, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+  if (emberKnightImage.complete && emberKnightImage.naturalWidth > 0) {
+    ctx.drawImage(emberKnightImage, 48, 48, 168, 172, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+  } else {
+    ctx.fillStyle = "#f06a1b";
+    ctx.fillRect(-20, -34, 40, 62);
+    ctx.fillStyle = "#ffd34d";
+    ctx.fillRect(-12, -28, 24, 12);
+  }
   ctx.restore();
 }
 
@@ -4161,6 +4225,35 @@ function drawEffects() {
       ctx.fillRect(effect.x + 10, effect.y + 8, Math.max(12, effect.width - 20), 8);
       ctx.fillStyle = "#7a1d19";
       ctx.fillRect(effect.x + 20, effect.y + 24, Math.max(8, effect.width - 34), 8);
+    }
+
+    if (effect.kind === "emberSlash") {
+      const fade = Math.max(0.08, effect.life / 28);
+      ctx.save();
+      ctx.globalAlpha = fade;
+      ctx.translate(effect.direction < 0 ? effect.x + effect.width : effect.x, effect.y + effect.height / 2);
+      ctx.scale(effect.direction || 1, 1);
+      const flameGradient = ctx.createLinearGradient(0, 0, effect.width, 0);
+      flameGradient.addColorStop(0, "#fff6a1");
+      flameGradient.addColorStop(0.42, "#ff8a22");
+      flameGradient.addColorStop(1, "rgba(190,35,18,0.1)");
+      ctx.strokeStyle = flameGradient;
+      ctx.lineWidth = 16;
+      ctx.beginPath();
+      ctx.moveTo(12, 24);
+      ctx.quadraticCurveTo(effect.width * 0.5, -54, effect.width - 4, -5);
+      ctx.stroke();
+      ctx.lineWidth = 5;
+      ctx.strokeStyle = "#fff9d6";
+      ctx.beginPath();
+      ctx.moveTo(18, 19);
+      ctx.quadraticCurveTo(effect.width * 0.52, -40, effect.width - 12, -3);
+      ctx.stroke();
+      for (let spark = 0; spark < 6; spark += 1) {
+        ctx.fillStyle = spark % 2 ? "#ffd34d" : "#ff5a2e";
+        ctx.fillRect(34 + spark * 24, -28 + Math.sin(effect.life + spark) * 22, 8, 8);
+      }
+      ctx.restore();
     }
 
     if (effect.kind === "fallenHead") {
