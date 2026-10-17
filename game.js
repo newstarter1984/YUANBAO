@@ -134,7 +134,7 @@ const professions = {
   doctor: { name: "医生", button: "回复", description: "点击回复，生命 +100，可叠到 1000。" },
   police: { name: "警察", button: "牢笼", description: "发射牢笼，困住怪物 10 秒。" },
   boxer: { name: "黑拳", button: "黑拳", description: "短时间内所有伤害无效。" },
-  emberKnight: { name: "烈焰勇士", button: "烈焰斩", description: "挥动火焰剑冲击前方，造成范围伤害。", portrait: "assets/ember-knight.gif?v=20261017" },
+  emberKnight: { name: "烈焰勇士", button: "炼狱斩", description: "挥动火焰剑冲击前方，造成范围伤害。", portrait: "assets/ember-knight.gif?v=20261017" },
 };
 
 let player;
@@ -183,6 +183,8 @@ let ownedSkins = {
   emberKnight: true,
 };
 let selectedProfession = "doctor";
+let emberMountTimer = 0;
+let emberDismountTimer = 0;
 let speedPotionOwned = false;
 let powerBoostTimer = 0;
 let fireResistTimer = 0;
@@ -2030,8 +2032,10 @@ function toggleDragonMount() {
     dragonRestX = player.x + player.facing * 76;
     dragonRestY = Math.min(floorY - 76, player.y + 18);
     dragonRestLevel = currentLevel;
+    if (selectedSkin === "emberKnight") emberDismountTimer = 22;
     setActiveMount("none");
   } else if (isNearActiveDragon()) {
+    if (selectedSkin === "emberKnight") emberMountTimer = 34;
     setActiveMount("dragon");
     if (player) {
       player.vy = -5.8;
@@ -2236,6 +2240,8 @@ function tickTimers() {
   player.grenadeTimer = Math.max(0, player.grenadeTimer - 1);
   player.skillTimer = Math.max(0, player.skillTimer - 1);
   player.attacking = Math.max(0, player.attacking - 1);
+  emberMountTimer = Math.max(0, emberMountTimer - 1);
+  emberDismountTimer = Math.max(0, emberDismountTimer - 1);
   player.invincible = Math.max(0, player.invincible - 1);
   powerBoostTimer = Math.max(0, powerBoostTimer - 1);
   fireResistTimer = Math.max(0, fireResistTimer - 1);
@@ -2338,7 +2344,7 @@ function updateActionButtons() {
   rageButton.classList.toggle("is-active-skill", zhangFeiRageTimer > 0);
   swiftButton.classList.toggle("is-active-skill", zhaoYunSwiftTimer > 0);
   thousandKillButton.classList.toggle("is-active-skill", zhaoYunInvincibleTimer > 0);
-  healButton.textContent = selectedProfession === "emberKnight" ? (player && player.skillTimer > 0 ? "烈焰斩冷却" : "烈焰斩") : player && player.skillTimer > 0 ? "回复冷却中" : "回复";
+  healButton.textContent = selectedProfession === "emberKnight" ? (player && player.skillTimer > 0 ? "炼狱斩冷却" : "炼狱斩") : player && player.skillTimer > 0 ? "回复冷却中" : "回复";
   cageButton.textContent = player && player.skillTimer > 0 && selectedProfession === "police" ? "牢笼冷却中" : "牢笼";
   blackFistButton.textContent = blackFistTimer > 0 ? "黑拳生效中" : player && player.skillTimer > 0 && selectedProfession === "boxer" ? "黑拳冷却中" : "黑拳";
   rageButton.textContent = zhangFeiRageTimer > 0 ? `狂怒${Math.ceil(zhangFeiRageTimer / 60)}秒` : zhangFeiRageCooldown > 0 ? "狂怒冷却" : "狂怒";
@@ -4052,7 +4058,7 @@ function drawPlayer() {
   }
 
   if (selectedSkin === "emberKnight") {
-    drawEmberKnight(x, isRidingDragon() ? y - 18 : isRidingHorse() ? y - 8 : y, player.facing, player.attacking > 0);
+    drawEmberKnight(x, isRidingDragon() ? y - 18 : isRidingHorse() ? y - 8 : y, player.facing, player.attacking);
     ctx.restore();
     return;
   }
@@ -4072,13 +4078,44 @@ function drawPlayer() {
   ctx.restore();
 }
 
-function drawEmberKnight(x, y, facing, attacking) {
+function drawEmberKnight(x, y, facing, attackFrames) {
   ctx.save();
+  const now = Date.now();
+  const walking = player.onGround && Math.abs(player.vx) > 0.15 && !isRidingDragon() && !isRidingHorse();
+  const jumping = !player.onGround && !isRidingDragon();
+  const walkPhase = Math.sin(now / 72);
+  const attackMax = attackFrames > 12 ? 24 : 12;
+  const attackProgress = attackFrames > 0 ? 1 - attackFrames / attackMax : 0;
+  const attacking = attackFrames > 0;
   const drawWidth = attacking ? 104 : 96;
   const drawHeight = attacking ? 106 : 98;
-  const bob = Math.abs(player.vx) > 0.15 ? Math.sin(Date.now() / 85) * 2 : Math.sin(Date.now() / 320);
-  ctx.translate(x + player.width / 2, y + 38 + bob);
+  let offsetX = walking ? walkPhase * 3 : 0;
+  let offsetY = walking ? -Math.abs(walkPhase) * 5 : Math.sin(now / 320);
+  let rotation = walking ? walkPhase * 0.045 : 0;
+
+  if (jumping) {
+    offsetY -= 8;
+    rotation = Math.max(-0.2, Math.min(0.2, player.vy * 0.018));
+  }
+  if (emberMountTimer > 0) {
+    const mountProgress = 1 - emberMountTimer / 34;
+    offsetX -= facing * (1 - mountProgress) * 72;
+    offsetY += (1 - mountProgress) * 30 - Math.sin(mountProgress * Math.PI) * 66;
+    rotation -= facing * (1 - mountProgress) * 0.22;
+  }
+  if (emberDismountTimer > 0) {
+    const dismountProgress = 1 - emberDismountTimer / 22;
+    offsetX += facing * dismountProgress * 34;
+    offsetY -= Math.sin(dismountProgress * Math.PI) * 30;
+    rotation += facing * 0.12 * Math.sin(dismountProgress * Math.PI);
+  }
+  if (attacking) rotation -= facing * Math.sin(attackProgress * Math.PI) * 0.13;
+
+  ctx.translate(x + player.width / 2 + offsetX, y + 38 + offsetY);
   ctx.scale(facing, 1);
+  ctx.rotate(rotation * facing);
+  if (walking) ctx.scale(1 + Math.abs(walkPhase) * 0.035, 1 - Math.abs(walkPhase) * 0.025);
+  if (jumping) ctx.scale(0.94, 1.07);
   if (attacking) {
     ctx.globalAlpha = 0.32;
     ctx.fillStyle = "#ff6a1f";
@@ -4095,6 +4132,28 @@ function drawEmberKnight(x, y, facing, attacking) {
     ctx.fillStyle = "#ffd34d";
     ctx.fillRect(-12, -28, 24, 12);
   }
+  if (attacking) drawEmberSwordSwing(attackProgress);
+  ctx.restore();
+}
+
+function drawEmberSwordSwing(progress) {
+  ctx.save();
+  const swing = -1.65 + Math.min(1, progress * 1.35) * 2.35;
+  ctx.translate(2, 7);
+  ctx.rotate(swing);
+  const blade = ctx.createLinearGradient(8, 0, 70, 0);
+  blade.addColorStop(0, "#ff6a1f");
+  blade.addColorStop(0.35, "#ffd34d");
+  blade.addColorStop(1, "#fffbe2");
+  ctx.shadowColor = "#ff5a1f";
+  ctx.shadowBlur = 14;
+  ctx.fillStyle = blade;
+  ctx.fillRect(5, -4, 65, 9);
+  dragonPolygon(ctx, [[70,-7],[82,0],[70,7]], "#fffbe2");
+  ctx.fillStyle = "#5a2415";
+  ctx.fillRect(-6, -6, 14, 12);
+  ctx.fillStyle = "#f4b928";
+  ctx.fillRect(2, -11, 6, 22);
   ctx.restore();
 }
 
