@@ -37,6 +37,8 @@ const oceanWreckImage = new Image();
 oceanWreckImage.src = "assets/ocean-wreck.png?v=20261018";
 const lavaDungeonImage = new Image();
 lavaDungeonImage.src = "assets/lava-dungeon.gif?v=20261018";
+const lavaReaperImage = new Image();
+lavaReaperImage.src = "assets/lava-reaper/reaper.gif?v=20261018";
 const lavaHoundFrames = Array.from({ length: 8 }, (_, index) => {
   const image = new Image(); image.src = `assets/lava-hound/frame-${index}.png?v=20261018`; return image;
 });
@@ -445,6 +447,7 @@ function enemySize(kind, number, index) {
     lavaSoldier: [64, 70],
     lavaBeast: [90, 76],
     lavaSlime: [66, 44],
+    lavaReaper: [66, 78],
     lavaAxeGuard: [86, 86],
     lavaBoss: [208, 186],
     arenaDragon: [250, 190],
@@ -555,6 +558,14 @@ function buildLevel(number) {
   }
 
   if (theme.id === "lava") {
+    [250, 500, 745].forEach((x, index) => {
+      const reaper = buildEnemy("lavaReaper", x, number, index, theme.id);
+      reaper.hp = reaper.maxHp = 85 + index * 18;
+      reaper.y = reaper.baseY = floorY - reaper.height;
+      reaper.patrolLeft = Math.max(80, x - 150);
+      reaper.patrolRight = Math.min(worldWidth - 140, x + 170);
+      enemies.push(reaper);
+    });
     const boss = buildEnemy("lavaBoss", worldWidth - 300, number, enemyCount + 2, theme.id);
     boss.patrolLeft = worldWidth - 760;
     boss.patrolRight = worldWidth - 230;
@@ -3772,6 +3783,7 @@ function drawEnemies() {
     if (enemy.kind === "lavaSoldier") drawLavaSoldier(enemy);
     if (enemy.kind === "lavaBeast") drawLavaBeast(enemy);
     if (enemy.kind === "lavaSlime") drawLavaSlime(enemy);
+    if (enemy.kind === "lavaReaper") drawLavaReaper(enemy);
     if (enemy.kind === "lavaAxeGuard") drawLavaAxeGuard(enemy);
     if (enemy.kind === "lavaBoss") drawLavaBoss(enemy);
     if (enemy.kind === "arenaDragon") drawArenaDragonBoss(enemy);
@@ -4344,6 +4356,38 @@ function drawLavaSlime(enemy) {
   ctx.translate(enemy.x + enemy.width / 2, enemy.y + enemy.height);
   ctx.scale(enemy.facing, 1);
   ctx.drawImage(frame, -48, -58, 96, 62);
+  ctx.restore();
+}
+
+const lavaReaperBuffer = document.createElement("canvas");
+lavaReaperBuffer.width = 100;
+lavaReaperBuffer.height = 110;
+let lavaReaperBufferTick = -1;
+function drawLavaReaper(enemy) {
+  if (!lavaReaperImage.complete || !lavaReaperImage.naturalWidth) return;
+  const tick = Math.floor(Date.now() / 100);
+  if (lavaReaperBufferTick !== tick) {
+    lavaReaperBufferTick = tick;
+    const bufferCtx = lavaReaperBuffer.getContext("2d", { willReadFrequently: true });
+    bufferCtx.imageSmoothingEnabled = false;
+    bufferCtx.clearRect(0, 0, 100, 110);
+    bufferCtx.drawImage(lavaReaperImage, 80, 160, 100, 110, 0, 0, 100, 110);
+    const pixels = bufferCtx.getImageData(0, 0, 100, 110);
+    for (let index = 0; index < pixels.data.length; index += 4) {
+      const red = pixels.data[index], green = pixels.data[index + 1], blue = pixels.data[index + 2];
+      const backdrop =
+        (Math.abs(red - 72) <= 3 && Math.abs(green - 68) <= 3 && Math.abs(blue - 86) <= 3) ||
+        (Math.abs(red - 91) <= 3 && Math.abs(green - 87) <= 3 && Math.abs(blue - 104) <= 3);
+      if (backdrop) pixels.data[index + 3] = 0;
+    }
+    bufferCtx.putImageData(pixels, 0, 0);
+  }
+  const attacking = enemy.attackTimer > 34;
+  ctx.save();
+  ctx.translate(enemy.x + enemy.width / 2, enemy.y + enemy.height);
+  ctx.scale(enemy.facing, 1);
+  if (attacking) ctx.rotate(-0.08);
+  ctx.drawImage(lavaReaperBuffer, -enemy.width * 0.66, -enemy.height * 1.1, enemy.width * 1.32, enemy.height * 1.1);
   ctx.restore();
 }
 
