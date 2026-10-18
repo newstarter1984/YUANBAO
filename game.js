@@ -8,6 +8,12 @@ const blueMageFrames = Array.from({ length: 8 }, (_, index) => {
   image.src = `assets/blue-mage/frame-${index}.png?v=20261018`;
   return image;
 });
+const swampLickerFrames = Array.from({ length: 4 }, (_, index) => {
+  const image = new Image(); image.src = `assets/swamp-licker/frame-${index}.png?v=20261018`; return image;
+});
+const foxHelperFrames = Array.from({ length: 7 }, (_, index) => {
+  const image = new Image(); image.src = `assets/fox-helper/frame-${index}.png?v=20261018`; return image;
+});
 const dwarfWarriorImage = new Image();
 dwarfWarriorImage.src = "assets/dwarf-warrior.gif?v=20261018";
 const dwarfWarriorFrames = Object.fromEntries(
@@ -183,6 +189,11 @@ let hasDragonAdult = false;
 let dragonFeedCount = 0;
 let dragonAttackTimer = 0;
 let dragonBiteTimer = 0;
+let dragonAttackTargetX = 0;
+let dragonAttackTargetY = 0;
+let foxHelperX = 90;
+let foxHelperY = floorY - 48;
+let foxHelperAttackTimer = 0;
 let dragonEggIncubator = null;
 let dragons = [];
 let activeDragonId = "";
@@ -322,7 +333,7 @@ function enemyKindsForTheme(themeId) {
   if (themeId === "town") return ["skeleton"];
   if (themeId === "ocean") return ["fish", "crab", "fish", "shark", "harpooner"];
   if (themeId === "desert") return ["mummy", "scorpion", "sandGolem", "scarab"];
-  if (themeId === "swamp") return ["swampFrog", "swampWitch", "mudBeast"];
+  if (themeId === "swamp") return ["swampLicker", "swampFrog", "swampWitch", "mudBeast"];
   if (themeId === "lava") return ["lavaMage", "lavaKnight", "lavaBlade", "lavaSoldier", "lavaBeast", "lavaSlime"];
   if (themeId === "gravel") return ["slime"];
   return ["slime", "bat", "guard", "brute"];
@@ -342,6 +353,7 @@ function enemySize(kind, number, index) {
     sandGolem: [88, 82],
     scarab: [54, 34],
     swampFrog: [70, 48],
+    swampLicker: [78, 54],
     swampWitch: [66, 76],
     mudBeast: [86, 70],
     lavaMage: [66, 76],
@@ -620,6 +632,7 @@ function update(frameTime = performance.now()) {
   moveEnemies();
   updateTown();
   moveAnimals();
+  updateFoxHelper();
   moveTraps();
   moveWaveHazard();
   moveProjectiles();
@@ -1078,6 +1091,20 @@ function moveAnimals() {
   }
 }
 
+function updateFoxHelper() {
+  if (typeof foxRescued !== "boolean" || !foxRescued || !player) return;
+  foxHelperAttackTimer = Math.max(0, foxHelperAttackTimer - 1);
+  const desiredX = player.x - player.facing * 86;
+  foxHelperX += (desiredX - foxHelperX) * 0.1;
+  foxHelperY += (floorY - 48 - foxHelperY) * 0.16;
+  const target = level.enemies.find(enemy => enemy.alive && Math.hypot(enemy.x - foxHelperX, enemy.y - foxHelperY) < 150);
+  if (target && foxHelperAttackTimer <= 0) {
+    foxHelperAttackTimer = 90;
+    damageEnemy(target, getAttackDamage(14));
+    effects.push({ x: target.x - 8, y: target.y - 10, width: target.width + 16, height: 30, life: 20, kind: "claw" });
+  }
+}
+
 function dragonAssistAttack() {
   const activeDragon = getActiveDragon();
   if (!hasDragonAdult || !activeDragon || !player || dragonAttackTimer > 0) return;
@@ -1098,6 +1125,8 @@ function dragonAssistAttack() {
 
   if (!target) return;
   dragonAttackTimer = activeDragon.type === "gold" ? 68 : 84;
+  dragonAttackTargetX = target.x + target.width / 2;
+  dragonAttackTargetY = target.y + target.height / 2;
   if (dragonBiteTimer <= 0) {
     target.cagedTimer = Math.max(target.cagedTimer, 600);
     dragonBiteTimer = 360;
@@ -2469,6 +2498,7 @@ function draw() {
   drawChest();
   drawStoryScene();
   drawAnimals();
+  drawFoxHelper();
   drawEnemies();
   drawProjectiles();
   drawPlayer();
@@ -3026,15 +3056,15 @@ function drawTownDecor() {
   // Street houses and warm windows.
   for (let x = 120; x < level.worldWidth; x += 720) {
     ctx.fillStyle = "#3d2d35";
-    ctx.fillRect(x, 180, 480, floorY - 180);
+    ctx.fillRect(x, 258, 480, floorY - 258);
     ctx.fillStyle = x % 1440 === 120 ? "#8b4d3d" : "#527286";
-    ctx.fillRect(x + 18, 204, 444, floorY - 204);
+    ctx.fillRect(x + 18, 278, 444, floorY - 278);
     ctx.fillStyle = "#2b2028";
-    for (let roofX = x - 18; roofX < x + 490; roofX += 42) ctx.fillRect(roofX, 164 + ((roofX / 42) % 2) * 5, 48, 26);
+    for (let roofX = x - 18; roofX < x + 490; roofX += 42) ctx.fillRect(roofX, 242 + ((roofX / 42) % 2) * 5, 48, 26);
     ctx.fillStyle = night ? "#ffd978" : "#bce8f2";
     for (let wx = x + 52; wx < x + 410; wx += 118) {
-      ctx.fillRect(wx, 240, 54, 54);
-      ctx.fillStyle = "#574539"; ctx.fillRect(wx + 24, 240, 6, 54); ctx.fillRect(wx, 264, 54, 6);
+      ctx.fillRect(wx, 298, 54, 46);
+      ctx.fillStyle = "#574539"; ctx.fillRect(wx + 24, 298, 6, 46); ctx.fillRect(wx, 319, 54, 6);
       ctx.fillStyle = night ? "#ffd978" : "#bce8f2";
     }
     ctx.fillStyle = "#503526";
@@ -3043,9 +3073,9 @@ function drawTownDecor() {
 
   // Rented house shown as a cutaway room with two residents and a bed.
   const h = town.house;
-  ctx.fillStyle = "#2f2428"; ctx.fillRect(h.x - 18, 118, h.width + 36, 306);
-  ctx.fillStyle = "#a9764b"; ctx.fillRect(h.x, 136, h.width, 280);
-  ctx.fillStyle = "#d8c79d"; ctx.fillRect(h.x + 22, 155, h.width - 44, 176);
+  ctx.fillStyle = "#2f2428"; ctx.fillRect(h.x - 18, 210, h.width + 36, 214);
+  ctx.fillStyle = "#a9764b"; ctx.fillRect(h.x, 226, h.width, 190);
+  ctx.fillStyle = "#d8c79d"; ctx.fillRect(h.x + 22, 240, h.width - 44, 91);
   ctx.fillStyle = "#704626";
   for (let y = 334; y < 416; y += 18) ctx.fillRect(h.x + 12, y, h.width - 24, 5);
   ctx.fillStyle = "#51465d"; ctx.fillRect(h.x + 365, 326, 188, 78);
@@ -3053,7 +3083,7 @@ function drawTownDecor() {
   ctx.fillStyle = "#86a8c8"; ctx.fillRect(h.x + 442, 333, 96, 58);
   ctx.fillStyle = townHouseRented ? "#54bf72" : "#b75050";
   ctx.fillRect(h.x + 250, floorY - 100, 72, 100);
-  drawTinyText(townHouseRented ? "我的房子" : "出租 600 金币", h.x + 202, 128, "#fff4c7");
+  drawTinyText(townHouseRented ? "我的房子" : "出租 600 金币", h.x + 202, 205, "#fff4c7");
 
   for (const npc of town.npcs) {
     if (npc.indoor && !townHouseRented) continue;
@@ -3274,6 +3304,7 @@ function drawEnemies() {
     if (enemy.kind === "sandGolem") drawSandGolem(enemy);
     if (enemy.kind === "scarab") drawScarab(enemy);
     if (enemy.kind === "swampFrog") drawSwampFrog(enemy);
+    if (enemy.kind === "swampLicker") drawSwampLicker(enemy);
     if (enemy.kind === "swampWitch") drawSwampWitch(enemy);
     if (enemy.kind === "mudBeast") drawMudBeast(enemy);
     if (enemy.kind === "lavaMage") drawLavaMage(enemy);
@@ -3634,6 +3665,29 @@ function drawSwampFrog(enemy) {
   ctx.fillRect(enemy.x + enemy.width - 26, enemy.y + 10, 6, 6);
   ctx.fillStyle = "#d94f66";
   ctx.fillRect(enemy.x + 28, enemy.y + enemy.height - 16, enemy.width - 56, 6);
+}
+
+function drawSwampLicker(enemy) {
+  const frame = swampLickerFrames[Math.floor(Date.now() / 120 + enemy.phase) % swampLickerFrames.length];
+  ctx.save();
+  ctx.translate(enemy.x + enemy.width / 2, enemy.y + enemy.height);
+  ctx.scale(enemy.facing, 1);
+  if (frame && frame.complete && frame.naturalWidth > 0) ctx.drawImage(frame, -50, -80, 100, 80);
+  else { ctx.fillStyle = "#735043"; ctx.fillRect(-30, -50, 60, 50); }
+  ctx.restore();
+}
+
+function drawFoxHelper() {
+  if (typeof foxRescued !== "boolean" || !foxRescued || !player) return;
+  const moving = Math.abs(player.vx) > 0.15;
+  const attacking = foxHelperAttackTimer > 70;
+  const frameIndex = attacking ? 5 : moving ? Math.floor(Date.now() / 110) % 5 : 0;
+  const frame = foxHelperFrames[frameIndex];
+  ctx.save();
+  ctx.translate(-cameraX + foxHelperX + 40, foxHelperY + 48);
+  ctx.scale(player.facing, 1);
+  if (frame && frame.complete && frame.naturalWidth > 0) ctx.drawImage(frame, -50, -72, 100, 80);
+  ctx.restore();
 }
 
 function drawSwampWitch(enemy) {
@@ -4098,6 +4152,13 @@ function drawDragonPixelSprite(targetCtx, x, y, dragon, scale, flying, saddled, 
   targetCtx.translate(x + (facing < 0 ? 120 * scale : 0), y + bob);
   targetCtx.scale(scale * facing, scale);
   targetCtx.drawImage(source, -30, -42, 180, 160);
+  if (attacking) {
+    const chomp = Math.floor(Date.now() / 75) % 2;
+    targetCtx.fillStyle = "#4a1720";
+    targetCtx.fillRect(102, 52, 34, 8 + chomp * 8);
+    targetCtx.fillStyle = "#fffdf0";
+    for (let tooth = 0; tooth < 4; tooth += 1) targetCtx.fillRect(105 + tooth * 8, 50 + chomp * 7, 5, 7);
+  }
   if (saddled) {
     targetCtx.fillStyle = "#5b2b1d";
     targetCtx.fillRect(42, 47, 38, 10);
@@ -4291,6 +4352,7 @@ function drawPlayer() {
 
   if (isRidingDragon()) {
     drawDragonMount(x, y, gait);
+    drawDragonRiderLegs(x, y, player.facing);
   }
 
   if (isRidingHorse()) {
@@ -4434,14 +4496,45 @@ function drawDwarfWarrior(x, y, facing, attackFrames) {
 
 function drawDragonMount(x, y, gait) {
   const dragon = getDragonType(getActiveDragon()?.type || "wood");
-  drawDragonShape(ctx, x - 32, y + 20, dragon, 1, !player.onGround, true, player.facing, Math.abs(player.vx) > 0.15, dragonAttackTimer > 58);
+  drawDragonShape(ctx, x - 48, y + 5, dragon, 1.28, !player.onGround, true, player.facing, Math.abs(player.vx) > 0.15, dragonAttackTimer > 52);
 }
 
 function drawDragonCompanion(x, y, gait) {
   const dragon = getDragonType(getActiveDragon()?.type || "wood");
+  let drawX = x;
+  let drawY = y;
+  let facing = 1;
+  let flying = false;
+  let biting = false;
+  if (dragonAttackTimer > 0 && dragonAttackTargetX) {
+    const duration = getActiveDragon()?.type === "gold" ? 68 : 84;
+    const progress = Math.max(0, Math.min(1, 1 - dragonAttackTimer / duration));
+    const travel = progress < 0.42 ? progress / 0.42 : progress < 0.68 ? 1 : Math.max(0, (1 - progress) / 0.32);
+    const eased = travel * travel * (3 - 2 * travel);
+    drawX = x + (dragonAttackTargetX - x - 70) * eased;
+    drawY = y + (dragonAttackTargetY - y - 55) * eased - Math.sin(eased * Math.PI) * 72;
+    facing = dragonAttackTargetX >= x ? 1 : -1;
+    flying = travel > 0.04 && travel < 0.98;
+    biting = progress >= 0.4 && progress <= 0.72;
+  }
   ctx.save();
   ctx.globalAlpha = 0.92;
-  drawDragonShape(ctx, x, y, dragon, 0.76, false, false, 1, dragonAttackTimer > 58);
+  drawDragonShape(ctx, drawX, drawY, dragon, 1.02, flying, false, facing, !flying, biting);
+  ctx.restore();
+}
+
+function drawDragonRiderLegs(x, y, facing) {
+  ctx.save();
+  ctx.translate(x + player.width / 2, y + 50);
+  ctx.scale(facing, 1);
+  ctx.fillStyle = selectedSkin === "blueMage" ? "#234f95" : selectedSkin === "dwarfWarrior" ? "#5b7187" : "#8f95a3";
+  ctx.fillRect(-31, -3, 24, 9);
+  ctx.fillRect(7, -3, 24, 9);
+  ctx.fillRect(-34, 4, 10, 24);
+  ctx.fillRect(24, 4, 10, 24);
+  ctx.fillStyle = "#38271e";
+  ctx.fillRect(-37, 24, 15, 8);
+  ctx.fillRect(22, 24, 15, 8);
   ctx.restore();
 }
 
