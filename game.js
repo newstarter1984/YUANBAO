@@ -2185,9 +2185,19 @@ function createDragonPreviewCanvas(typeKey) {
   preview.className = "skin-preview-canvas";
   const previewCtx = preview.getContext("2d");
   previewCtx.imageSmoothingEnabled = false;
-  previewCtx.fillStyle = "#fffdf0";
-  previewCtx.fillRect(0, 0, preview.width, preview.height);
-  drawDragonSprite(previewCtx, 7, 18, typeKey, 0.6);
+  const renderPreview = () => {
+    previewCtx.clearRect(0, 0, preview.width, preview.height);
+    previewCtx.fillStyle = "#fffdf0";
+    previewCtx.fillRect(0, 0, preview.width, preview.height);
+    drawDragonSprite(previewCtx, 7, 18, typeKey, 0.6);
+  };
+  renderPreview();
+  if (typeKey !== "egg") {
+    const previewFrames = dragonSpriteFrames[typeKey]?.idle || [];
+    for (const frame of previewFrames) {
+      if (!frame.complete || frame.naturalWidth <= 0) frame.addEventListener("load", renderPreview, { once: true });
+    }
+  }
   return preview;
 }
 
@@ -4435,6 +4445,9 @@ function dragonPolygon(targetCtx, points, color) {
 
 function drawDragonShape(targetCtx, x, y, dragon, scale, flying, saddled, facing = 1, moving = false, attacking = false) {
   if (drawDragonPixelSprite(targetCtx, x, y, dragon, scale, flying, saddled, facing, moving, attacking)) return;
+  // Every five-element dragon has a supplied pixel animation. While it is loading,
+  // leave the frame empty instead of flashing the old generated dragon model.
+  if (dragonSpriteFrames[dragon.key]) return;
   const body = dragon.color;
   const dark = dragon.dark;
   const wing = dragon.wing || dragon.dark;

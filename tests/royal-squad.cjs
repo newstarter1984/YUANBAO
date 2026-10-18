@@ -70,8 +70,22 @@ const { chromium } = require(playwrightPath);
     assert.equal(result.joined.state, "menu");
     assert.ok(["shield", "archer", "spearman"].includes(result.joined.companion));
     assert.deepEqual(result.dismount, { mount: "none", y: 382, ground: true, restY: 378 });
+    await page.waitForFunction(() => dragonSpriteFrames.wood.idle.every(frame => frame.complete && frame.naturalWidth > 0));
+    const previewPixels = await page.evaluate(() => {
+      shopMode = "dragons";
+      renderShop();
+      const previews = [...document.querySelectorAll("#shopItems canvas")];
+      const canvas = previews[previews.length - 1];
+      const pixels = canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height).data;
+      let colored = 0;
+      for (let index = 0; index < pixels.length; index += 4) {
+        if (pixels[index + 3] > 0 && !(pixels[index] > 245 && pixels[index + 1] > 245 && pixels[index + 2] > 235)) colored += 1;
+      }
+      return colored;
+    });
+    assert.ok(previewPixels > 80, "dragon library redraws the supplied pixel dragon after its frames load");
     assert.deepEqual(errors, []);
-    console.log("PASS: royal letter, forced duel, apology, companion, and dragon dismount.");
+    console.log("PASS: royal story, companion, dragon dismount, and pixel-dragon preview.");
   } finally {
     await browser.close();
   }
