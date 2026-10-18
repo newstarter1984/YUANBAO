@@ -38,6 +38,7 @@ function getSaveData() {
     ownedSkins, selectedProfession, speedPotionOwned, inventory,
     foxRescued: typeof foxRescued === "boolean" ? foxRescued : false,
     foxTutorialPending: typeof foxTutorialPending === "boolean" ? foxTutorialPending : false,
+    royalCompanion: typeof royalCompanion === "string" ? royalCompanion : "",
   };
 }
 
@@ -69,6 +70,7 @@ function applySaveData(data) {
   speedPotionOwned = Boolean(data.speedPotionOwned); inventory = { ...inventory, ...(data.inventory || {}) };
   if (typeof foxRescued === "boolean") foxRescued = Boolean(data.foxRescued);
   if (typeof foxTutorialPending === "boolean") foxTutorialPending = Boolean(data.foxTutorialPending);
+  if (typeof royalCompanion === "string") royalCompanion = ["shield", "archer", "spearman"].includes(data.royalCompanion) ? data.royalCompanion : "";
   level = buildLevel(currentLevel);
   startButton.textContent = `开始第 ${currentLevel} 关：${level.theme.name}`;
   syncModeUi(); renderProfessions(); renderBackpack(); renderShop(); updateHud();
@@ -120,8 +122,21 @@ function getWorldObjective() {
   if (!level) return "准备下一次冒险";
   if (level.story) {
     if (level.story.type === "meadow") return level.story.saved ? "打开终点宝箱" : "找到并救出小狼";
-    const oceanObjectives = { battle: "击败抓住鲸鱼的三条鳄鱼", rescued: "打开沉船旁的金色宝箱" };
-    return oceanObjectives[level.story.state] || "完成海洋救援";
+    if (level.story.type === "town") return "与镇民交谈，租房并安全度过黑夜";
+    if (level.story.type === "ocean") {
+      const oceanObjectives = { battle: "击败抓住鲸鱼的三条鳄鱼", rescued: "打开沉船旁的金色宝箱" };
+      return oceanObjectives[level.story.state] || "完成海洋救援";
+    }
+    if (level.story.type === "royal") {
+      const royalObjectives = {
+        letter: "打开国王来信",
+        summons: "前往铠甲训练场",
+        duel: "击败皇家战队的决斗对手",
+        apology: "接受皇家战队的道歉与新伙伴",
+        joined: "皇家战队章节完成",
+      };
+      return royalObjectives[level.story.state] || "查清皇家战队的误会";
+    }
   }
   if (level.theme.id === "desert") return "穿过流沙，击败守卫并进入金字塔";
   if (level.theme.id === "swamp") return "净化沼泽怪物，开启传送门";
@@ -179,7 +194,8 @@ function useDragonSkill() {
 function renderDragonHome() {
   dragonHomeContent.innerHTML = "";
   const friend = document.createElement("div"); friend.className = "dragon-card";
-  friend.innerHTML = `<strong>伙伴墙</strong><span>${typeof foxRescued === "boolean" && foxRescued ? "🐺 小狼已获救" : "继续冒险，寻找小狼"}</span>`;
+  const royalName = royalCompanion === "archer" ? "皇家弓箭手" : royalCompanion === "spearman" ? "皇家长枪兵" : royalCompanion === "shield" ? "皇家盾兵" : "";
+  friend.innerHTML = `<strong>伙伴墙</strong><span>${typeof foxRescued === "boolean" && foxRescued ? "🐺 小狼已获救" : "继续冒险，寻找小狼"}${royalName ? ` · 🛡️ ${royalName}已加入` : ""}</span>`;
   dragonHomeContent.append(friend);
   if (!dragons.length) {
     const empty = document.createElement("div"); empty.className = "dragon-card"; empty.innerHTML = "<strong>温暖的空巢</strong><span>海洋沉船中藏着第一颗龙蛋。</span>"; dragonHomeContent.append(empty);

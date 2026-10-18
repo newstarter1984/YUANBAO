@@ -18,6 +18,16 @@ const townReferenceImage = new Image();
 townReferenceImage.src = "assets/town-reference.png?v=20261018";
 const armorArenaImage = new Image();
 armorArenaImage.src = "assets/armor-arena-clean.png?v=20261018";
+const royalSoldierImages = {
+  shield: new Image(),
+  archer: new Image(),
+  spearman: new Image(),
+};
+royalSoldierImages.shield.src = "assets/royal-squad/shield-guard.gif?v=20261018";
+royalSoldierImages.archer.src = "assets/royal-squad/elite-archer.gif?v=20261018";
+royalSoldierImages.spearman.src = "assets/royal-squad/royal-spearman.gif?v=20261018";
+const royalCampImage = new Image();
+royalCampImage.src = "assets/royal-squad/camp-empty.png?v=20261018";
 const arenaAllyImages = ["mage", "warrior", "priest"].map(name => {
   const image = new Image(); image.src = `assets/arena-allies/${name}.png?v=20261018`; return image;
 });
@@ -149,7 +159,8 @@ const worldThemes = [
   { id: "desert", name: "沙漠", next: "沼泽" },
   { id: "swamp", name: "沼泽", next: "岩浆世界" },
   { id: "lava", name: "岩浆世界", next: "铠甲竞技场" },
-  { id: "arena", name: "铠甲竞技场", next: "全部通关" },
+  { id: "arena", name: "铠甲竞技场", next: "皇家战队" },
+  { id: "royal", name: "皇家战队", next: "全部通关" },
 ];
 
 const monsterXp = {
@@ -306,6 +317,10 @@ let inventory = {
 };
 let currentLevel = 1;
 let arenaAllies = [];
+let royalCompanion = "";
+let royalCompanionX = 90;
+let royalCompanionY = floorY - 74;
+let royalCompanionAttackTimer = 0;
 let townHouseRented = false;
 try { townHouseRented = localStorage.getItem("yuanbao.town-house-rented.v1") === "yes"; } catch (_) {}
 let cameraX = 0;
@@ -386,7 +401,7 @@ function getTheme(number) {
 }
 
 function enemyKindsForTheme(themeId) {
-  if (themeId === "arena") return [];
+  if (themeId === "arena" || themeId === "royal") return [];
   if (themeId === "town") return ["skeleton"];
   if (themeId === "ocean") return ["fish", "crab", "fish", "shark", "harpooner"];
   if (themeId === "desert") return ["mummy", "scorpion", "sandGolem", "scarab"];
@@ -422,6 +437,7 @@ function enemySize(kind, number, index) {
     lavaAxeGuard: [86, 86],
     lavaBoss: [208, 186],
     arenaDragon: [250, 190],
+    royalDuelist: [72, 80],
     skeleton: [54, 68],
   };
   const [baseWidth, baseHeight] = table[kind] || [58, 58];
@@ -481,9 +497,9 @@ function getBossHp() {
 
 function buildLevel(number) {
   const theme = getTheme(number);
-  const worldWidth = theme.id === "arena" ? 960 : theme.id === "ocean" || theme.id === "lava" ? 1200 : 3800 + number * 850;
-  const enemyCount = theme.id === "arena" || theme.id === "lava" ? 0 : theme.id === "town" ? 6 : theme.id === "swamp" ? 5 + number : 4 + number;
-  const platforms = theme.id === "ocean" || theme.id === "town" ? [] : [
+  const worldWidth = theme.id === "arena" ? 960 : ["ocean", "lava", "royal"].includes(theme.id) ? 1200 : 3800 + number * 850;
+  const enemyCount = ["arena", "lava", "royal"].includes(theme.id) ? 0 : theme.id === "town" ? 6 : theme.id === "swamp" ? 5 + number : 4 + number;
+  const platforms = ["ocean", "town", "royal"].includes(theme.id) ? [] : [
     { x: 210, y: 378, width: 150, height: 20 },
     { x: 520, y: 320, width: 160, height: 20 },
     { x: 900, y: 370, width: 160, height: 20 },
@@ -499,12 +515,12 @@ function buildLevel(number) {
   if (theme.id === "lava") {
     platforms.length = 0;
   }
-  if (theme.id === "arena") {
+  if (theme.id === "arena" || theme.id === "royal") {
     platforms.length = 0;
   }
 
   const stars = [];
-  for (let i = 0; i < (theme.id === "arena" ? 0 : 5 + number); i += 1) {
+  for (let i = 0; i < (["arena", "royal"].includes(theme.id) ? 0 : 5 + number); i += 1) {
     stars.push({ x: 260 + i * 360, y: theme.id === "ocean" ? 160 + (i % 3) * 72 : i % 2 === 0 ? 332 : 254, size: 24, collected: false });
   }
 
@@ -536,7 +552,7 @@ function buildLevel(number) {
 
   const river = theme.id === "ocean"
     ? { x: 0, y: 74, width: worldWidth, height: floorY + 100 }
-    : theme.id === "arena" ? { x: -1000, y: floorY, width: 0, height: 0 }
+    : ["arena", "royal"].includes(theme.id) ? { x: -1000, y: floorY, width: 0, height: 0 }
     : theme.id === "town" ? { x: -1000, y: floorY, width: 0, height: 0 }
     : { x: Math.floor(worldWidth * 0.48), y: floorY - 36, width: 270 + number * 35, height: 78 };
 
@@ -545,7 +561,7 @@ function buildLevel(number) {
   }
 
   const spikeTraps = [];
-  for (let i = 0; i < (["ocean", "arena", "lava"].includes(theme.id) ? 0 : 3 + number); i += 1) {
+  for (let i = 0; i < (["ocean", "arena", "lava", "royal"].includes(theme.id) ? 0 : 3 + number); i += 1) {
     spikeTraps.push({ x: 760 + i * 430, y: 78, width: 76, height: 38, state: "idle", timer: 0, vy: 0, originalY: 78 });
   }
 
@@ -616,6 +632,18 @@ function buildLevel(number) {
     coral,
     waveHazard,
     town,
+    royalGuards: theme.id === "royal" ? [
+      { x: 90, y: floorY - 76, type: "spearman", facing: 1 },
+      { x: 175, y: floorY - 76, type: "spearman", facing: 1 },
+      { x: 920, y: floorY - 76, type: "spearman", facing: -1 },
+      { x: 1010, y: floorY - 76, type: "spearman", facing: -1 },
+      { x: 280, y: floorY - 76, type: "shield", facing: 1 },
+      { x: 830, y: floorY - 76, type: "shield", facing: -1 },
+      { x: 405, y: floorY - 76, type: "archer", facing: 1 },
+      { x: 710, y: floorY - 76, type: "archer", facing: -1 },
+      { x: 150, y: 165, type: "spearman", facing: 1 },
+      { x: 970, y: 165, type: "spearman", facing: -1 },
+    ] : [],
     chest: {
       x: worldWidth - 150,
       y: floorY - 62,
@@ -643,7 +671,7 @@ function showMenu(reason) {
   } else {
     const nextTheme = getTheme(currentLevel);
     resultLabel.textContent = "准备冒险";
-    menuText.textContent = `当前世界：${nextTheme.name}。依次挑战月影小镇、砾石草原、海洋、沙漠、沼泽、岩浆世界，最后进入铠甲竞技场。`;
+    menuText.textContent = `当前世界：${nextTheme.name}。依次挑战月影小镇、砾石草原、海洋、沙漠、沼泽、岩浆世界、铠甲竞技场，最后进入皇家战队。`;
   }
 
   level = buildLevel(currentLevel);
@@ -701,6 +729,7 @@ function update(frameTime = performance.now()) {
   updateTown();
   moveAnimals();
   updateFoxHelper();
+  updateRoyalCompanion();
   moveTraps();
   moveWaveHazard();
   moveProjectiles();
@@ -877,6 +906,10 @@ function moveEnemies() {
       moveArenaDragonBoss(enemy);
       continue;
     }
+    if (enemy.kind === "royalDuelist") {
+      moveRoyalDuelist(enemy);
+      continue;
+    }
 
     const distance = player.x + player.width / 2 - (enemy.x + enemy.width / 2);
     const absDistance = Math.abs(distance);
@@ -962,10 +995,51 @@ function updateArenaBattle() {
       effects.push({ x: boss.x + 30 + index * 18, y: boss.y + 70, width: 22, height: 18, life: 10, kind: "claw" });
       if (boss.hp === 0) {
         boss.alive = false;
-        requestLevelVictory(false, "巨龙已经被四人小队击败！《元宝的星星大冒险》全部通关！");
+        requestLevelVictory(true, "巨龙已经被四人小队击败！国王的信使送来了一封信，下一站是皇家战队。 ");
       }
     }
   });
+}
+
+function moveRoyalDuelist(enemy) {
+  enemy.attackTimer = Math.max(0, enemy.attackTimer - 1);
+  const dx = player.x + player.width / 2 - (enemy.x + enemy.width / 2);
+  const distance = Math.abs(dx);
+  enemy.facing = dx >= 0 ? 1 : -1;
+  const attackRange = enemy.soldierType === "archer" ? 340 : enemy.soldierType === "spearman" ? 118 : 92;
+  if (distance > attackRange * 0.72) enemy.x += Math.sign(dx) * (enemy.soldierType === "shield" ? 1.6 : 2.1);
+  enemy.x = Math.max(120, Math.min(level.worldWidth - 180, enemy.x));
+  enemy.leapWave += 0.16;
+  enemy.y = enemy.baseY - Math.abs(Math.sin(enemy.leapWave)) * 4;
+  if (distance <= attackRange && enemy.attackTimer === 0) {
+    enemy.attackTimer = enemy.soldierType === "archer" ? 95 : 64;
+    if (enemy.soldierType === "archer") {
+      projectiles.push({ x: enemy.x + 22, y: enemy.y + 28, width: 20, height: 8, vx: enemy.facing * 7, vy: 0, damage: 38, rangeLeft: 520, kind: "arrow", owner: "enemy" });
+    } else {
+      hurtPlayer(enemy.soldierType === "spearman" ? 44 : 32);
+      effects.push({ x: enemy.x + enemy.facing * 22, y: enemy.y + 12, width: 74, height: 54, life: 12, kind: "claw" });
+    }
+  }
+}
+
+function updateRoyalCompanion() {
+  if (!royalCompanion || !player || !level || level.theme.id === "royal") return;
+  royalCompanionAttackTimer = Math.max(0, royalCompanionAttackTimer - 1);
+  const targetX = player.x - player.facing * 88;
+  royalCompanionX += (targetX - royalCompanionX) * 0.13;
+  royalCompanionY += (floorY - 76 - royalCompanionY) * 0.2;
+  let target = null;
+  let best = 260;
+  for (const enemy of level.enemies) {
+    if (!enemy.alive) continue;
+    const distance = Math.abs(enemy.x - royalCompanionX);
+    if (distance < best) { best = distance; target = enemy; }
+  }
+  if (target && royalCompanionAttackTimer === 0) {
+    royalCompanionAttackTimer = 72;
+    damageEnemy(target, getAttackDamage(14));
+    effects.push({ x: target.x, y: target.y + 8, width: target.width, height: 30, life: 14, kind: "claw" });
+  }
 }
 
 function updateTown() {
@@ -1687,7 +1761,7 @@ function damageEnemy(enemy, damage) {
     }
     effects.push({ x: enemy.x, y: enemy.y, width: enemy.width, height: enemy.height, life: 24, kind: "poof" });
     if (enemy.kind === "arenaDragon") {
-      requestLevelVictory(false, "巨龙已经被四人小队击败！《元宝的星星大冒险》全部通关！");
+      requestLevelVictory(true, "巨龙已经被四人小队击败！国王的信使送来了一封信，下一站是皇家战队。 ");
     }
     if (selectedSkin === "zhaoYun") {
       effects.push({ x: enemy.x + enemy.width / 2 - 12, y: enemy.y + 8, width: 24, height: 24, vy: -7, life: 80, kind: "fallenHead" });
@@ -2206,11 +2280,15 @@ function setActiveMount(type) {
 function toggleDragonMount() {
   if (!getActiveDragon() || getActiveDragon().down) return;
   if (isRidingDragon()) {
-    dragonRestX = player.x + player.facing * 76;
-    dragonRestY = Math.min(floorY - 76, player.y + 18);
+    dragonRestX = Math.max(20, Math.min(level.worldWidth - 170, player.x + player.facing * 92));
+    dragonRestY = floorY - 76;
     dragonRestLevel = currentLevel;
     characterDismountTimer = 22;
     setActiveMount("none");
+    player.y = floorY - player.height;
+    player.vy = 0;
+    player.onGround = true;
+    effects.push({ x: player.x - 20, y: player.y - 34, width: 170, height: 30, life: 70, kind: "loot", text: "已经安全下龙" });
   } else if (isNearActiveDragon()) {
     characterMountTimer = 34;
     setActiveMount("dragon");
@@ -2286,7 +2364,8 @@ function renderBackpack() {
   if (backpackWeaponSlot) backpackWeaponSlot.textContent = getSpecialWeaponName() || weapons[weaponLevel].name;
   if (backpackCompanionSlot) {
     const activeDragon = getActiveDragon();
-    backpackCompanionSlot.textContent = activeDragon && !activeDragon.down ? getDragonType(activeDragon.type).name : (foxRescued ? "小狼" : "无");
+    const royalName = royalCompanion === "archer" ? "皇家弓箭手" : royalCompanion === "spearman" ? "皇家长枪兵" : royalCompanion === "shield" ? "皇家盾兵" : "";
+    backpackCompanionSlot.textContent = activeDragon && !activeDragon.down ? getDragonType(activeDragon.type).name : royalName || (foxRescued ? "小狼" : "无");
   }
   const rows = [
     { key: "stinkSock", icon: "🧦", name: "臭袜子", count: inventory.stinkSock, action: "卖出", onClick: () => sellTreasure("stinkSock", 1) },
@@ -2533,7 +2612,7 @@ function getSpecialWeaponName() {
 
 function updateActionButtons() {
   const inGame = gameState === "playing" && Boolean(player);
-  const canToggleDragon = inGame && getActiveDragon() && isNearActiveDragon();
+  const canToggleDragon = inGame && getActiveDragon() && (isRidingDragon() || isNearActiveDragon());
   healButton.classList.toggle("is-hidden", !["doctor", "blueMage", "dwarfWarrior"].includes(selectedProfession));
   cageButton.classList.toggle("is-hidden", selectedProfession !== "police");
   blackFistButton.classList.toggle("is-hidden", selectedProfession !== "boxer");
@@ -2599,6 +2678,7 @@ function draw() {
   drawStoryScene();
   drawAnimals();
   drawFoxHelper();
+  drawRoyalCompanion();
   drawEnemies();
   drawArenaAllies();
   drawProjectiles();
@@ -2881,6 +2961,7 @@ function drawSky() {
   const townNight = themeId === "town" && level.town && level.town.isNight;
   ctx.fillStyle =
     themeId === "town" ? (townNight ? "#171a35" : "#75b8df") :
+    themeId === "royal" ? "#8fc65a" :
     themeId === "ocean" ? "#72cce8" :
     themeId === "desert" ? "#f2b866" :
     themeId === "lava" ? "#3a1620" :
@@ -2889,6 +2970,7 @@ function drawSky() {
   ctx.fillRect(cameraX, 0, canvas.width, canvas.height);
   ctx.fillStyle =
     themeId === "town" ? (townNight ? "#29284b" : "#a8d7e9") :
+    themeId === "royal" ? "#6fa63b" :
     themeId === "ocean" ? "#55b7d9" :
     themeId === "desert" ? "#d89047" :
     themeId === "lava" ? "#5c1d22" :
@@ -3097,6 +3179,8 @@ function drawThemeDecor() {
     ctx.fillRect(250, 238, 72, 68);
   }
 
+  if (level.theme.id === "royal") drawRoyalCamp();
+
   if (level.theme.id === "ocean") {
     if (oceanWreckImage.complete && oceanWreckImage.naturalWidth) {
       ctx.save();
@@ -3155,6 +3239,105 @@ function drawThemeDecor() {
     }
   }
 
+}
+
+const royalSpriteBuffers = {};
+const royalSpriteCrops = {
+  shield: { sx: 170, sy: 82, sw: 120, sh: 138 },
+  archer: { sx: 188, sy: 55, sw: 108, sh: 132 },
+  spearman: { sx: 215, sy: 42, sw: 116, sh: 150 },
+};
+
+function drawRoyalSoldier(type, x, y, width = 68, height = 84, facing = 1) {
+  const source = royalSoldierImages[type];
+  const crop = royalSpriteCrops[type];
+  if (!source?.complete || !source.naturalWidth || !crop) return;
+  const buffer = royalSpriteBuffers[type] || (royalSpriteBuffers[type] = document.createElement("canvas"));
+  const animationTick = Math.floor(Date.now() / 95);
+  if (buffer.royalAnimationTick !== animationTick) {
+    buffer.royalAnimationTick = animationTick;
+    buffer.width = crop.sw;
+    buffer.height = crop.sh;
+    const bufferCtx = buffer.getContext("2d", { willReadFrequently: true });
+    bufferCtx.imageSmoothingEnabled = false;
+    bufferCtx.clearRect(0, 0, crop.sw, crop.sh);
+    bufferCtx.drawImage(source, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, crop.sw, crop.sh);
+    const pixels = bufferCtx.getImageData(0, 0, crop.sw, crop.sh);
+    const backgroundColors = [
+      [55, 53, 64], [91, 87, 104], [47, 47, 46], [72, 68, 86],
+      [65, 62, 73], [59, 59, 57], [51, 51, 50],
+    ];
+    for (let i = 0; i < pixels.data.length; i += 4) {
+      const r = pixels.data[i], g = pixels.data[i + 1], b = pixels.data[i + 2];
+      const isBackdrop = backgroundColors.some(([br, bg, bb]) => Math.abs(r - br) <= 4 && Math.abs(g - bg) <= 4 && Math.abs(b - bb) <= 4);
+      if (isBackdrop) pixels.data[i + 3] = 0;
+    }
+    bufferCtx.putImageData(pixels, 0, 0);
+  }
+  ctx.save();
+  ctx.translate(x + width / 2, y + height);
+  ctx.scale(facing, 1);
+  ctx.drawImage(buffer, -width / 2, -height, width, height);
+  ctx.restore();
+}
+
+function drawRoyalCamp() {
+  if (royalCampImage.complete && royalCampImage.naturalWidth) {
+    const sourceHeight = Math.min(600, royalCampImage.naturalHeight);
+    ctx.drawImage(royalCampImage, 0, 0, royalCampImage.naturalWidth, sourceHeight, 0, 0, level.worldWidth, 540);
+    ctx.fillStyle = "rgba(232, 208, 165, 0.72)";
+    ctx.fillRect(326, 224, 548, 178);
+    ctx.strokeStyle = "#8a5a31"; ctx.lineWidth = 8; ctx.strokeRect(326, 224, 548, 178);
+    ctx.strokeStyle = "#fff0bf"; ctx.lineWidth = 3; ctx.setLineDash([14, 10]);
+    ctx.strokeRect(344, 242, 512, 142); ctx.setLineDash([]);
+    drawTinyText(level.story?.state === "duel" ? "铠甲训练场 · 正在决斗" : "皇家战队训练营", 486, 216, "#fff4c7");
+    for (const guard of level.royalGuards || []) {
+      const bounce = Math.sin(Date.now() / 180 + guard.x * 0.03) * 2;
+      drawRoyalSoldier(guard.type, guard.x, guard.y + bounce, 66, 82, guard.facing);
+    }
+    return;
+  }
+  // Rebuild the supplied camp without its painted-in people, then place animated soldiers separately.
+  ctx.fillStyle = "#6fa63b"; ctx.fillRect(0, 74, level.worldWidth, floorY - 74);
+  ctx.fillStyle = "#e8d0a5"; ctx.fillRect(455, 74, 300, floorY - 74);
+  ctx.fillStyle = "#d6b987";
+  for (let y = 105; y < floorY; y += 42) ctx.fillRect(470 + (y % 3) * 22, y, 34, 5);
+
+  ctx.fillStyle = "#76502c";
+  for (let x = 18; x < level.worldWidth - 18; x += 28) {
+    if (x > 530 && x < 670) continue;
+    ctx.fillRect(x, 86, 21, 45); ctx.fillRect(x, 410, 21, 44);
+    ctx.beginPath(); ctx.moveTo(x, 86); ctx.lineTo(x + 10, 68); ctx.lineTo(x + 21, 86); ctx.fill();
+  }
+  ctx.fillRect(18, 108, 28, 322); ctx.fillRect(level.worldWidth - 46, 108, 28, 322);
+
+  const drawTent = (x, y, w, color) => {
+    ctx.fillStyle = "rgba(0,0,0,.22)"; ctx.fillRect(x + 12, y + 65, w, 12);
+    ctx.fillStyle = color; ctx.beginPath(); ctx.moveTo(x, y + 65); ctx.lineTo(x + w / 2, y); ctx.lineTo(x + w, y + 65); ctx.fill();
+    ctx.fillStyle = "#f2e1be"; ctx.fillRect(x + 14, y + 48, w - 28, 34);
+    ctx.fillStyle = "#4b3528"; ctx.fillRect(x + w / 2 - 15, y + 54, 30, 28);
+  };
+  drawTent(92, 178, 200, "#397dcc");
+  drawTent(900, 178, 200, "#397dcc");
+  drawTent(70, 326, 160, "#efe0bd");
+  drawTent(970, 326, 160, "#efe0bd");
+
+  ctx.fillStyle = "#8a5a31"; ctx.fillRect(490, 82, 220, 42);
+  ctx.fillStyle = "#4b301e"; ctx.fillRect(520, 109, 160, 34);
+  ctx.fillStyle = "#77a9db"; ctx.fillRect(575, 52, 9, 46);
+  ctx.fillStyle = "#f5e1b7"; ctx.fillRect(584, 55, 72, 24);
+  ctx.fillStyle = "#326fbc"; ctx.fillRect(584, 55, 38, 24);
+
+  ctx.strokeStyle = "#8a5a31"; ctx.lineWidth = 8;
+  ctx.strokeRect(330, 215, 540, 184);
+  ctx.strokeStyle = "#f7dfab"; ctx.lineWidth = 3; ctx.setLineDash([14, 10]);
+  ctx.strokeRect(347, 232, 506, 150); ctx.setLineDash([]);
+  drawTinyText(level.story?.state === "duel" ? "铠甲训练场 · 正在决斗" : "皇家战队训练营", 486, 205, "#fff4c7");
+
+  for (const guard of level.royalGuards || []) {
+    const bounce = Math.sin(Date.now() / 180 + guard.x * 0.03) * 2;
+    drawRoyalSoldier(guard.type, guard.x, guard.y + bounce, 66, 82, guard.facing);
+  }
 }
 
 function drawArenaCrowdCheer(offsetX) {
@@ -3449,6 +3632,7 @@ function drawEnemies() {
     if (enemy.kind === "lavaAxeGuard") drawLavaAxeGuard(enemy);
     if (enemy.kind === "lavaBoss") drawLavaBoss(enemy);
     if (enemy.kind === "arenaDragon") drawArenaDragonBoss(enemy);
+    if (enemy.kind === "royalDuelist") drawRoyalDuelist(enemy);
     if (enemy.cagedTimer > 0) drawCage(enemy);
     drawEnemyHealthBar(enemy);
     ctx.restore();
@@ -3492,6 +3676,11 @@ function drawArenaAllies() {
     }
   });
   ctx.restore();
+}
+
+function drawRoyalDuelist(enemy) {
+  drawRoyalSoldier(enemy.soldierType || "shield", enemy.x, enemy.y, enemy.width, enemy.height, enemy.facing);
+  drawTinyText(enemy.soldierType === "archer" ? "皇家弓箭手" : enemy.soldierType === "spearman" ? "皇家长枪兵" : "皇家盾兵", enemy.x - 14, enemy.y - 10, "#ffe08a");
 }
 
 function drawSkeleton(enemy) {
@@ -3850,6 +4039,16 @@ function drawFoxHelper() {
   ctx.translate(-cameraX + foxHelperX + 40, foxHelperY + 48);
   ctx.scale(player.facing, 1);
   if (frame && frame.complete && frame.naturalWidth > 0) ctx.drawImage(frame, -52, -58, 104, 68);
+  ctx.restore();
+}
+
+function drawRoyalCompanion() {
+  if (!royalCompanion || !player || level?.theme.id === "royal") return;
+  ctx.save();
+  ctx.translate(-cameraX, 0);
+  const facing = player.facing;
+  const attacking = royalCompanionAttackTimer > 52;
+  drawRoyalSoldier(royalCompanion, royalCompanionX, royalCompanionY + (attacking ? -4 : 0), 62, 78, facing);
   ctx.restore();
 }
 
@@ -5036,12 +5235,13 @@ function drawTinyText(text, x, y, color) {
 
 window.addEventListener("keydown", (event) => {
   keys.add(event.code);
-  if (["ArrowLeft", "ArrowRight", "ArrowUp", "Space", "KeyJ", "KeyK", "KeyU", "KeyI", "KeyO", "KeyP", "Enter"].includes(event.code)) event.preventDefault();
+  if (["ArrowLeft", "ArrowRight", "ArrowUp", "Space", "KeyJ", "KeyK", "KeyR", "KeyU", "KeyI", "KeyO", "KeyP", "Enter"].includes(event.code)) event.preventDefault();
   if (event.code === "KeyK") throwGrenade();
   if (event.code === "KeyU") useZhangFeiRage();
   if (event.code === "KeyI") useZhangFeiRoar();
   if (event.code === "KeyO") useZhaoYunSwift();
   if (event.code === "KeyP") useZhaoYunThousandKill();
+  if (event.code === "KeyR" && !event.repeat) toggleDragonMount();
   if (event.code === "Enter" && gameState === "menu") startGame();
 });
 

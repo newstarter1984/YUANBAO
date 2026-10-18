@@ -35,6 +35,17 @@ function initializeStoryLevel() {
     level.stars = [];
     level.chest = { x: 1010, y: floorY - 62, width: 76, height: 58, opened: false, locked: true };
     beginWhaleBattle();
+  } else if (level.theme.id === "royal") {
+    level.enemies = [];
+    level.stars = [];
+    level.story = {
+      type: "royal",
+      state: royalCompanion ? "joined" : "letter",
+      clock: 0,
+      summonsTimer: 0,
+      forced: false,
+      duelistType: ["shield", "archer", "spearman"][Math.floor(Math.random() * 3)],
+    };
   }
   refreshStoryHud();
 }
@@ -110,6 +121,12 @@ function storyPrompt() {
     if (s.state === "done") return { label: "前往海洋", action: "next" };
     return null;
   }
+  if (s.type === "royal") {
+    if (s.state === "letter") return { label: "打开国王来信", action: "openRoyalLetter" };
+    if (s.state === "summons") return { label: "前往铠甲训练场", action: "enterRoyalDuel" };
+    if (s.state === "apology") return { label: "接受皇家伙伴", action: "acceptRoyalCompanion" };
+    return null;
+  }
   if (s.state === "rescued" && storyNear(level.chest.x + 38, floorY - 45, 150)) return { label: "打开沉船里的金色宝箱", action: "treasure" };
   return null;
 }
@@ -145,6 +162,14 @@ function refreshStoryHud() {
       rescued: ["鲸鱼获救", "沉船旁的金色宝箱已经出现。打开它就会返回主界面。"],
     };
     [title, message] = copy[s.state];
+  } else if (s.type === "royal") {
+    const typeName = s.duelistType === "archer" ? "皇家弓箭手" : s.duelistType === "spearman" ? "皇家长枪兵" : "皇家盾兵";
+    title = "终章 · 皇家战队";
+    message = s.state === "letter" ? "你收到一封盖着王印的短笺。打开它，看看国王为什么召见你。" :
+      s.state === "summons" ? `国王来信：皇家战队误以为你带走了小狼。请到铠甲训练场说明真相。${Math.ceil(s.summonsTimer / 60)} 秒后卫兵会来带你过去。` :
+      s.state === "duel" ? `${s.forced ? "你被卫兵带进了训练场！" : "你走进了训练场。"}先和${typeName}公平格斗，证明你的勇气。` :
+      s.state === "apology" ? `皇家战队发现抓走小狼的命令是错误的。${typeName}向你和小狼道歉，并愿意成为你的伙伴。` :
+      `皇家战队已经改正错误，${typeName}成为了你的伙伴，会在之后的地图里跟随并帮助你战斗。`;
   }
   storyTitle.textContent = title;
   if (storyText.textContent !== message) storyText.textContent = message;
@@ -239,6 +264,24 @@ function interactStory() {
       }
       requestLevelVictory(true, "引导完成！可以先整理装备，点击开始后继续下一关。");
       break;
+    case "openRoyalLetter":
+      s.state = "summons";
+      s.summonsTimer = 900;
+      effects.push({ x: player.x - 70, y: player.y - 55, width: 230, height: 30, life: 150, kind: "loot", text: "国王召见：15 秒内前往训练场" });
+      break;
+    case "enterRoyalDuel":
+      beginRoyalDuel(false);
+      break;
+    case "acceptRoyalCompanion":
+      royalCompanion = s.duelistType;
+      royalCompanionX = player.x - 80;
+      royalCompanionY = floorY - 76;
+      s.state = "joined";
+      renderBackpack();
+      updateHud();
+      if (typeof saveGame === "function") saveGame("皇家伙伴已加入");
+      requestLevelVictory(false, "皇家战队已经道歉，一名皇家士兵成为了你的新伙伴！终章完成。");
+      break;
   }
   if (finishPendingVictory()) return;
   refreshStoryHud();
@@ -258,6 +301,29 @@ function beginWhaleBattle() {
   updateHud();
 }
 
+function beginRoyalDuel(forced) {
+  const s = level.story;
+  if (!s || s.type !== "royal" || s.state === "duel") return;
+  s.state = "duel";
+  s.forced = forced;
+  level.enemies = [];
+  const opponent = buildEnemy("royalDuelist", 790, level.number, 0, "royal");
+  opponent.soldierType = s.duelistType;
+  opponent.hp = opponent.maxHp = Math.max(180, getAttackDamage(weapons[weaponLevel].damage) * 12);
+  opponent.y = opponent.baseY = floorY - opponent.height;
+  opponent.patrolLeft = 330;
+  opponent.patrolRight = 890;
+  level.enemies.push(opponent);
+  player.x = 320;
+  player.y = floorY - player.height;
+  player.vx = player.vy = 0;
+  player.onGround = true;
+  keys.clear();
+  projectiles = [];
+  effects.push({ x: player.x - 40, y: player.y - 44, width: 260, height: 30, life: 150, kind: "loot", text: forced ? "卫兵把你带进了训练场！" : "皇家格斗开始！" });
+  updateHud();
+}
+
 function updateStory() {
   const s = level.story;
   if (!s) return;
@@ -272,6 +338,16 @@ function updateStory() {
       s.state = "rescued";
       level.chest.locked = false;
       effects.push({ x: level.chest.x - 70, y: level.chest.y - 35, width: 220, height: 30, life: 140, kind: "loot", text: "金色宝箱出现了！" });
+    }
+  }
+  if (s.type === "royal") {
+    if (s.state === "summons") {
+      s.summonsTimer -= 1;
+      if (s.summonsTimer <= 0) beginRoyalDuel(true);
+    } else if (s.state === "duel" && level.enemies.every(enemy => !enemy.alive)) {
+      s.state = "apology";
+      projectiles = [];
+      effects.push({ x: player.x - 60, y: player.y - 50, width: 260, height: 30, life: 180, kind: "loot", text: "误会解开了：皇家战队向你道歉" });
     }
   }
   refreshStoryHud();
