@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>元宝的星星大冒险</title>
-    <link rel="stylesheet" href="style.css?v=20261018-final-dragon" />
+    <link rel="stylesheet" href="style.css?v=20261018-map-switch" />
   </head>
   <body>
     <main class="game-shell">
@@ -162,7 +162,16 @@
           <div id="dragonHomeContent" class="dragon-home-content"></div>
         </div>
         <button id="attackButton" class="combat-button is-hidden" type="button">攻击</button>
+        <button id="mapSwitchButton" class="map-switch-button is-hidden" type="button">切换地图</button>
         <button id="backpackButton" class="backpack-button" type="button">背包</button>
+        <div id="mapSwitchPanel" class="map-switch-panel is-hidden">
+          <div class="backpack-header">
+            <h3>创造模式地图</h3>
+            <button id="closeMapSwitchButton" type="button">关闭</button>
+          </div>
+          <p>选择后会立刻进入地图，不用按顺序通关。</p>
+          <div id="inGameWorldButtons" class="in-game-world-buttons"></div>
+        </div>
         <div id="backpackPanel" class="backpack-panel is-hidden">
           <div class="backpack-header">
             <h3>冒险背包</h3>
@@ -202,7 +211,7 @@
     </main>
 
     <script src="story.js?v=20261018-crocodile-rescue"></script>
-    <script src="game.js?v=20261018-crocodile-rescue"></script>
+    <script src="game.js?v=20261018-map-switch"></script>
     <script src="upgrades.js?v=20261018-crocodile-rescue"></script>
   </body>
 </html>

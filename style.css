@@ -418,7 +418,9 @@ button:disabled {
 
 .game-actions.is-hidden,
 .backpack-button.is-hidden,
-.combat-button.is-hidden {
+.combat-button.is-hidden,
+.map-switch-button.is-hidden,
+.map-switch-panel.is-hidden {
   display: none;
 }
 
@@ -456,6 +458,42 @@ button:disabled {
 .combat-button:active:not(:disabled) {
   background: #ff6b50;
 }
+
+.map-switch-button {
+  position: absolute;
+  z-index: 9;
+  right: 260px;
+  bottom: 12px;
+  min-width: 132px;
+  min-height: 58px;
+  background: #ffd34d;
+  color: #211b2c;
+  font-size: 18px;
+}
+
+.map-switch-panel {
+  position: absolute;
+  z-index: 24;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(610px, calc(100% - 34px));
+  max-height: calc(100% - 28px);
+  overflow-y: auto;
+  padding: 18px;
+  border: 6px solid #211b2c;
+  background: #fff4c7;
+  box-shadow: 10px 10px 0 rgba(0, 0, 0, 0.35);
+}
+
+.in-game-world-buttons {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.in-game-world-buttons button { min-height: 54px; }
+.in-game-world-buttons button.is-current { background: #45d06f; }
 
 .backpack-panel {
   position: absolute;
@@ -770,6 +808,22 @@ button:disabled {
   }
 
   .touch-controls { display: flex; }
+
+  .map-switch-button {
+    left: 12px;
+    right: auto;
+    bottom: 82px;
+    min-width: 118px;
+    min-height: 48px;
+  }
+
+  .map-switch-panel { padding: 12px; }
+  .map-switch-panel .backpack-header h3 { font-size: 17px; }
+  .map-switch-panel .backpack-header button { min-height: 34px; padding: 3px 8px; }
+  .map-switch-panel > p { display: none; }
+  .in-game-world-buttons { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .in-game-world-buttons { gap: 5px; }
+  .in-game-world-buttons button { min-height: 34px; padding: 3px; font-size: 12px; }
 
   .menu-panel,
   .shop-panel,

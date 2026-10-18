@@ -116,6 +116,10 @@ const powerPotionButton = document.querySelector("#powerPotionButton");
 const medkitButton = document.querySelector("#medkitButton");
 const backpackButton = document.querySelector("#backpackButton");
 const attackButton = document.querySelector("#attackButton");
+const mapSwitchButton = document.querySelector("#mapSwitchButton");
+const mapSwitchPanel = document.querySelector("#mapSwitchPanel");
+const closeMapSwitchButton = document.querySelector("#closeMapSwitchButton");
+const inGameWorldButtons = document.querySelector("#inGameWorldButtons");
 const backpackPanel = document.querySelector("#backpackPanel");
 const closeBackpackButton = document.querySelector("#closeBackpackButton");
 const inventoryItems = document.querySelector("#inventoryItems");
@@ -321,6 +325,8 @@ function startGame() {
   gameActions.classList.remove("is-hidden");
   backpackButton.classList.remove("is-hidden");
   attackButton.classList.remove("is-hidden");
+  mapSwitchButton.classList.toggle("is-hidden", gameMode !== "creative");
+  mapSwitchPanel.classList.add("is-hidden");
   level = buildLevel(currentLevel);
   arenaAllies = level.theme.id === "arena" ? [
     { x: 430, sprite: 0, attack: 10 },
@@ -654,6 +660,8 @@ function showMenu(reason) {
   gameActions.classList.add("is-hidden");
   backpackButton.classList.add("is-hidden");
   attackButton.classList.add("is-hidden");
+  mapSwitchButton.classList.add("is-hidden");
+  mapSwitchPanel.classList.add("is-hidden");
   backpackPanel.classList.add("is-hidden");
   mainMenu.classList.remove("is-hidden");
 }
@@ -2964,6 +2972,25 @@ function renderWorldTestButtons() {
   });
 }
 
+function renderInGameWorldButtons() {
+  if (!inGameWorldButtons) return;
+  inGameWorldButtons.innerHTML = "";
+  worldThemes.forEach((theme, index) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = `${index + 1}. ${theme.name}`;
+    button.className = index + 1 === currentLevel ? "is-current" : "";
+    button.addEventListener("click", () => {
+      currentLevel = index + 1;
+      mapSwitchPanel.classList.add("is-hidden");
+      startGame();
+      effects.push({ x: player.x, y: player.y - 36, width: 190, height: 30, life: 110, kind: "loot", text: `已切换：${theme.name}` });
+      if (typeof saveGame === "function") saveGame("创造地图已切换");
+    });
+    inGameWorldButtons.append(button);
+  });
+}
+
 function drawSky() {
   const themeId = level.theme.id;
   const townNight = themeId === "town" && level.town && level.town.isNight;
@@ -5217,6 +5244,13 @@ backpackButton.addEventListener("click", () => {
   backpackPanel.classList.toggle("is-hidden");
 });
 attackButton.addEventListener("click", attack);
+mapSwitchButton.addEventListener("click", () => {
+  if (gameMode !== "creative") return;
+  backpackPanel.classList.add("is-hidden");
+  renderInGameWorldButtons();
+  mapSwitchPanel.classList.toggle("is-hidden");
+});
+closeMapSwitchButton.addEventListener("click", () => mapSwitchPanel.classList.add("is-hidden"));
 closeBackpackButton.addEventListener("click", () => {
   backpackPanel.classList.add("is-hidden");
 });
