@@ -26,6 +26,21 @@ const dwarfWarriorFrames = Object.fromEntries(
     }),
   ])
 );
+const dragonSpriteFrames = Object.fromEntries(
+  ["gold", "wood", "water", "fire", "earth"].map(type => [
+    type,
+    Object.fromEntries(
+      Object.entries({ idle: 3, walk: 6, fly: 2, attack: 2 }).map(([action, count]) => [
+        action,
+        Array.from({ length: count }, (_, index) => {
+          const image = new Image();
+          image.src = `assets/dragons/${type}-${action}-${index}.png?v=20261018`;
+          return image;
+        }),
+      ])
+    ),
+  ])
+);
 
 const levelNumberElement = document.querySelector("#levelNumber");
 const themeNameElement = document.querySelector("#themeName");
@@ -3803,6 +3818,7 @@ function dragonPolygon(targetCtx, points, color) {
 }
 
 function drawDragonShape(targetCtx, x, y, dragon, scale, flying, saddled, facing = 1, moving = false, attacking = false) {
+  if (drawDragonPixelSprite(targetCtx, x, y, dragon, scale, flying, saddled, facing, moving, attacking)) return;
   const body = dragon.color;
   const dark = dragon.dark;
   const wing = dragon.wing || dragon.dark;
@@ -3905,6 +3921,37 @@ function drawDragonShape(targetCtx, x, y, dragon, scale, flying, saddled, facing
     targetCtx.beginPath(); targetCtx.moveTo(65, 37); targetCtx.lineTo(100, 32); targetCtx.stroke();
   }
   targetCtx.restore();
+}
+
+function drawDragonPixelSprite(targetCtx, x, y, dragon, scale, flying, saddled, facing, moving, attacking) {
+  const frames = dragonSpriteFrames[dragon.key];
+  if (!frames) return false;
+  const action = attacking ? "attack" : flying ? "fly" : moving ? "walk" : "idle";
+  const sequence = frames[action];
+  const frameIndex = Math.floor(Date.now() / (action === "walk" ? 105 : action === "attack" ? 125 : 165)) % sequence.length;
+  const source = sequence[frameIndex];
+  if (!source.complete || source.naturalWidth <= 0) return false;
+
+  const bob = flying ? Math.sin(Date.now() / 145) * 4 : moving ? Math.abs(Math.sin(Date.now() / 105)) * -2 : 0;
+  targetCtx.save();
+  targetCtx.translate(x + (facing < 0 ? 120 * scale : 0), y + bob);
+  targetCtx.scale(scale * facing, scale);
+  targetCtx.drawImage(source, -30, -42, 180, 160);
+  if (saddled) {
+    targetCtx.fillStyle = "#5b2b1d";
+    targetCtx.fillRect(42, 47, 38, 10);
+    targetCtx.fillStyle = "#e3ae45";
+    targetCtx.fillRect(47, 43, 28, 6);
+    targetCtx.fillRect(57, 54, 5, 29);
+    targetCtx.strokeStyle = "#e3ae45";
+    targetCtx.lineWidth = 3;
+    targetCtx.beginPath();
+    targetCtx.moveTo(74, 48);
+    targetCtx.lineTo(102, 55);
+    targetCtx.stroke();
+  }
+  targetCtx.restore();
+  return true;
 }
 
 function drawDragonSurfaceDetails(targetCtx, dragon, headBob, flap) {
