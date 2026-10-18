@@ -449,6 +449,8 @@ function enemySize(kind, number, index) {
     lavaBoss: [208, 186],
     arenaDragon: [250, 190],
     royalDuelist: [72, 80],
+    royalRaider: [66, 76],
+    royalHound: [78, 52],
     skeleton: [54, 68],
   };
   const [baseWidth, baseHeight] = table[kind] || [58, 58];
@@ -3362,15 +3364,20 @@ function drawRoyalSoldier(type, x, y, width = 68, height = 84, facing = 1) {
 }
 
 function drawRoyalCamp() {
+  const arenaActive = ["duel", "apology", "joined"].includes(level.story?.state);
   if (royalCampImage.complete && royalCampImage.naturalWidth) {
     const sourceHeight = Math.min(600, royalCampImage.naturalHeight);
     ctx.drawImage(royalCampImage, 0, 0, royalCampImage.naturalWidth, sourceHeight, 0, 0, level.worldWidth, 540);
-    ctx.fillStyle = "rgba(232, 208, 165, 0.72)";
-    ctx.fillRect(326, 224, 548, 178);
-    ctx.strokeStyle = "#8a5a31"; ctx.lineWidth = 8; ctx.strokeRect(326, 224, 548, 178);
-    ctx.strokeStyle = "#fff0bf"; ctx.lineWidth = 3; ctx.setLineDash([14, 10]);
-    ctx.strokeRect(344, 242, 512, 142); ctx.setLineDash([]);
-    drawTinyText(level.story?.state === "duel" ? "铠甲训练场 · 正在决斗" : "皇家战队训练营", 486, 216, "#fff4c7");
+    if (arenaActive) {
+      ctx.fillStyle = "rgba(232, 208, 165, 0.82)";
+      ctx.fillRect(326, 224, 548, 178);
+      ctx.strokeStyle = "#8a5a31"; ctx.lineWidth = 8; ctx.strokeRect(326, 224, 548, 178);
+      ctx.strokeStyle = "#fff0bf"; ctx.lineWidth = 3; ctx.setLineDash([14, 10]);
+      ctx.strokeRect(344, 242, 512, 142); ctx.setLineDash([]);
+      drawTinyText(level.story?.state === "duel" ? "铠甲训练场 · 正在决斗" : "皇家战队训练场", 486, 216, "#fff4c7");
+    } else {
+      drawTinyText(level.story?.state === "summons" ? "皇家营地 · 黑衣追兵来袭" : "皇家战队营地", 478, 210, "#fff4c7");
+    }
     for (const guard of level.royalGuards || []) {
       const bounce = Math.sin(Date.now() / 180 + guard.x * 0.03) * 2;
       drawRoyalSoldier(guard.type, guard.x, guard.y + bounce, 66, 82, guard.facing);
@@ -3408,11 +3415,15 @@ function drawRoyalCamp() {
   ctx.fillStyle = "#f5e1b7"; ctx.fillRect(584, 55, 72, 24);
   ctx.fillStyle = "#326fbc"; ctx.fillRect(584, 55, 38, 24);
 
-  ctx.strokeStyle = "#8a5a31"; ctx.lineWidth = 8;
-  ctx.strokeRect(330, 215, 540, 184);
-  ctx.strokeStyle = "#f7dfab"; ctx.lineWidth = 3; ctx.setLineDash([14, 10]);
-  ctx.strokeRect(347, 232, 506, 150); ctx.setLineDash([]);
-  drawTinyText(level.story?.state === "duel" ? "铠甲训练场 · 正在决斗" : "皇家战队训练营", 486, 205, "#fff4c7");
+  if (arenaActive) {
+    ctx.strokeStyle = "#8a5a31"; ctx.lineWidth = 8;
+    ctx.strokeRect(330, 215, 540, 184);
+    ctx.strokeStyle = "#f7dfab"; ctx.lineWidth = 3; ctx.setLineDash([14, 10]);
+    ctx.strokeRect(347, 232, 506, 150); ctx.setLineDash([]);
+    drawTinyText(level.story?.state === "duel" ? "铠甲训练场 · 正在决斗" : "皇家战队训练场", 486, 205, "#fff4c7");
+  } else {
+    drawTinyText(level.story?.state === "summons" ? "皇家营地 · 黑衣追兵来袭" : "皇家战队营地", 478, 205, "#fff4c7");
+  }
 
   for (const guard of level.royalGuards || []) {
     const bounce = Math.sin(Date.now() / 180 + guard.x * 0.03) * 2;
@@ -3765,6 +3776,8 @@ function drawEnemies() {
     if (enemy.kind === "lavaBoss") drawLavaBoss(enemy);
     if (enemy.kind === "arenaDragon") drawArenaDragonBoss(enemy);
     if (enemy.kind === "royalDuelist") drawRoyalDuelist(enemy);
+    if (enemy.kind === "royalRaider") drawRoyalRaider(enemy);
+    if (enemy.kind === "royalHound") drawRoyalHound(enemy);
     if (enemy.cagedTimer > 0) drawCage(enemy);
     drawEnemyHealthBar(enemy);
     ctx.restore();
@@ -3813,6 +3826,50 @@ function drawArenaAllies() {
 function drawRoyalDuelist(enemy) {
   drawRoyalSoldier(enemy.soldierType || "shield", enemy.x, enemy.y, enemy.width, enemy.height, enemy.facing);
   drawTinyText(enemy.soldierType === "archer" ? "皇家弓箭手" : enemy.soldierType === "spearman" ? "皇家长枪兵" : "皇家盾兵", enemy.x - 14, enemy.y - 10, "#ffe08a");
+}
+
+const royalEnemySpriteBuffers = new WeakMap();
+function getRoyalEnemySprite(image, backdropColors) {
+  if (!image?.complete || !image.naturalWidth) return null;
+  if (royalEnemySpriteBuffers.has(image)) return royalEnemySpriteBuffers.get(image);
+  const buffer = document.createElement("canvas");
+  buffer.width = image.naturalWidth;
+  buffer.height = image.naturalHeight;
+  const bufferCtx = buffer.getContext("2d", { willReadFrequently: true });
+  bufferCtx.imageSmoothingEnabled = false;
+  bufferCtx.drawImage(image, 0, 0);
+  const pixels = bufferCtx.getImageData(0, 0, buffer.width, buffer.height);
+  for (let index = 0; index < pixels.data.length; index += 4) {
+    const red = pixels.data[index], green = pixels.data[index + 1], blue = pixels.data[index + 2];
+    if (backdropColors.some(([r, g, b]) => Math.abs(red - r) <= 3 && Math.abs(green - g) <= 3 && Math.abs(blue - b) <= 3)) pixels.data[index + 3] = 0;
+  }
+  bufferCtx.putImageData(pixels, 0, 0);
+  royalEnemySpriteBuffers.set(image, buffer);
+  return buffer;
+}
+
+function drawRoyalRaider(enemy) {
+  const frame = shadowCultistFrames[Math.floor(Date.now() / 105 + enemy.phase) % shadowCultistFrames.length];
+  const sprite = getRoyalEnemySprite(frame, [[55, 53, 64], [47, 47, 46], [91, 87, 104], [65, 62, 73], [59, 59, 57], [51, 51, 50]]);
+  if (!sprite) return;
+  ctx.save();
+  ctx.filter = "brightness(0.72) saturate(0.65)";
+  ctx.translate(enemy.x + enemy.width / 2, enemy.y + enemy.height);
+  ctx.scale(enemy.facing, 1);
+  ctx.drawImage(sprite, -enemy.width * 0.7, -enemy.height * 1.1, enemy.width * 1.4, enemy.height * 1.1);
+  ctx.restore();
+}
+
+function drawRoyalHound(enemy) {
+  const frame = lavaHoundFrames[Math.floor(Date.now() / 90 + enemy.phase) % lavaHoundFrames.length];
+  const sprite = getRoyalEnemySprite(frame, [[47, 47, 46]]);
+  if (!sprite) return;
+  ctx.save();
+  ctx.filter = "grayscale(0.6) brightness(0.55) contrast(1.25)";
+  ctx.translate(enemy.x + enemy.width / 2, enemy.y + enemy.height);
+  ctx.scale(enemy.facing, 1);
+  ctx.drawImage(sprite, -enemy.width * 0.66, -enemy.height * 1.08, enemy.width * 1.32, enemy.height * 1.08);
+  ctx.restore();
 }
 
 function drawSkeleton(enemy) {

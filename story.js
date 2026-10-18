@@ -185,7 +185,7 @@ function refreshStoryHud() {
     const typeName = s.duelistType === "archer" ? "皇家弓箭手" : s.duelistType === "spearman" ? "皇家长枪兵" : "皇家盾兵";
     title = "终章 · 皇家战队";
     message = s.state === "letter" ? "你收到一封盖着王印的短笺。打开它，看看国王为什么召见你。" :
-      s.state === "summons" ? `国王来信：皇家战队误以为你带走了小狼。请到铠甲训练场说明真相。${Math.ceil(s.summonsTimer / 60)} 秒后卫兵会来带你过去。` :
+      s.state === "summons" ? `皇家战队误以为你带走了小狼。黑衣追兵和猎犬正在攻击你；${Math.ceil(s.summonsTimer / 60)} 秒后你会被强制带进训练场。` :
       s.state === "duel" ? `${s.forced ? "你被卫兵带进了训练场！" : "你走进了训练场。"}先和${typeName}公平格斗，证明你的勇气。` :
       s.state === "apology" ? `皇家战队发现抓走小狼的命令是错误的。${typeName}向你和小狼道歉，并愿意成为你的伙伴。` :
       `皇家战队已经改正错误，${typeName}成为了你的伙伴，会在之后的地图里跟随并帮助你战斗。`;
@@ -414,8 +414,9 @@ function interactStory() {
       break;
     case "openRoyalLetter":
       s.state = "summons";
-      s.summonsTimer = 900;
-      effects.push({ x: player.x - 70, y: player.y - 55, width: 230, height: 30, life: 150, kind: "loot", text: "国王召见：15 秒内前往训练场" });
+      s.summonsTimer = 600;
+      spawnRoyalPursuers();
+      effects.push({ x: player.x - 70, y: player.y - 55, width: 260, height: 30, life: 150, kind: "loot", text: "黑衣追兵来袭：10 秒内前往训练场" });
       break;
     case "enterRoyalDuel":
       beginRoyalDuel(false);
@@ -447,6 +448,26 @@ function beginWhaleBattle() {
     crocodile.hp = crocodile.maxHp = Math.max(18, getAttackDamage(weapons[weaponLevel].damage) * 5);
     level.enemies.push(crocodile);
   }
+  updateHud();
+}
+
+function spawnRoyalPursuers() {
+  const pursuers = [
+    ["royalHound", 430],
+    ["royalRaider", 610],
+    ["royalHound", 850],
+    ["royalRaider", 1040],
+  ];
+  level.enemies = pursuers.map(([kind, x], index) => {
+    const enemy = buildEnemy(kind, x, level.number, index, "royal");
+    enemy.royalPursuer = true;
+    enemy.hp = enemy.maxHp = kind === "royalHound" ? 95 : 130;
+    enemy.y = enemy.baseY = floorY - enemy.height;
+    enemy.patrolLeft = 100;
+    enemy.patrolRight = level.worldWidth - 100;
+    enemy.alerted = true;
+    return enemy;
+  });
   updateHud();
 }
 

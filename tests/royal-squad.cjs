@@ -31,7 +31,12 @@ const { chromium } = require(playwrightPath);
       };
 
       interactStory();
-      const letter = { state: level.story.state, prompt: storyPrompt().action };
+      const letter = {
+        state: level.story.state,
+        prompt: storyPrompt().action,
+        timer: level.story.summonsTimer,
+        pursuers: level.enemies.map(enemy => enemy.kind),
+      };
       level.story.summonsTimer = 1;
       updateStory();
       const forced = {
@@ -60,7 +65,12 @@ const { chromium } = require(playwrightPath);
     });
 
     assert.deepEqual(result.initial, { theme: "royal", state: "letter", prompt: "openRoyalLetter", guards: 10 });
-    assert.deepEqual(result.letter, { state: "summons", prompt: "enterRoyalDuel" });
+    assert.deepEqual(result.letter, {
+      state: "summons",
+      prompt: "enterRoyalDuel",
+      timer: 600,
+      pursuers: ["royalHound", "royalRaider", "royalHound", "royalRaider"],
+    });
     assert.equal(result.forced.state, "duel");
     assert.equal(result.forced.forced, true);
     assert.equal(result.forced.enemies, 1);
