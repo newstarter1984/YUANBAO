@@ -92,11 +92,12 @@ const enemySpeedMultiplier = 0.68;
 const chestDropChanceBonus = 0;
 
 const worldThemes = [
+  { id: "town", name: "月影小镇", next: "砾石草原" },
   { id: "gravel", name: "砾石草原", next: "海洋" },
   { id: "ocean", name: "海洋", next: "沙漠" },
   { id: "desert", name: "沙漠", next: "沼泽" },
   { id: "swamp", name: "沼泽", next: "岩浆世界" },
-  { id: "lava", name: "岩浆世界", next: "砾石草原" },
+  { id: "lava", name: "岩浆世界", next: "月影小镇" },
 ];
 
 const monsterXp = {
@@ -247,6 +248,8 @@ let inventory = {
   chestCoins50: 0,
 };
 let currentLevel = 1;
+let townHouseRented = false;
+try { townHouseRented = localStorage.getItem("yuanbao.town-house-rented.v1") === "yes"; } catch (_) {}
 let cameraX = 0;
 let gameState = "menu";
 let animationFrame;
@@ -316,10 +319,12 @@ function getTheme(number) {
 }
 
 function enemyKindsForTheme(themeId) {
+  if (themeId === "town") return ["skeleton"];
   if (themeId === "ocean") return ["fish", "crab", "fish", "shark", "harpooner"];
   if (themeId === "desert") return ["mummy", "scorpion", "sandGolem", "scarab"];
   if (themeId === "swamp") return ["swampFrog", "swampWitch", "mudBeast"];
   if (themeId === "lava") return ["lavaMage", "lavaKnight", "lavaBlade", "lavaSoldier", "lavaBeast", "lavaSlime"];
+  if (themeId === "gravel") return ["slime"];
   return ["slime", "bat", "guard", "brute"];
 }
 
@@ -347,6 +352,7 @@ function enemySize(kind, number, index) {
     lavaSlime: [66, 44],
     lavaAxeGuard: [86, 86],
     lavaBoss: [156, 138],
+    skeleton: [54, 68],
   };
   const [baseWidth, baseHeight] = table[kind] || [58, 58];
   return [baseWidth + sizeBonus, baseHeight + sizeBonus];
@@ -406,8 +412,8 @@ function getBossHp() {
 function buildLevel(number) {
   const theme = getTheme(number);
   const worldWidth = 3800 + number * 850;
-  const enemyCount = theme.id === "lava" ? 8 + number : theme.id === "swamp" ? 5 + number : 4 + number;
-  const platforms = theme.id === "ocean" ? [] : [
+  const enemyCount = theme.id === "town" ? 6 : theme.id === "lava" ? 8 + number : theme.id === "swamp" ? 5 + number : 4 + number;
+  const platforms = theme.id === "ocean" || theme.id === "town" ? [] : [
     { x: 210, y: 378, width: 150, height: 20 },
     { x: 520, y: 320, width: 160, height: 20 },
     { x: 900, y: 370, width: 160, height: 20 },
@@ -457,6 +463,7 @@ function buildLevel(number) {
 
   const river = theme.id === "ocean"
     ? { x: 0, y: 74, width: worldWidth, height: floorY + 100 }
+    : theme.id === "town" ? { x: -1000, y: floorY, width: 0, height: 0 }
     : { x: Math.floor(worldWidth * 0.48), y: floorY - 36, width: 270 + number * 35, height: 78 };
 
   if (theme.id === "gravel") {
@@ -502,6 +509,22 @@ function buildLevel(number) {
     { kind: "cow", x: Math.floor(worldWidth * 0.72), y: floorY - 46, width: 62, height: 46, alive: true, vx: 0.48, left: Math.floor(worldWidth * 0.72) - 90, right: Math.floor(worldWidth * 0.72) + 150, phase: 60 },
   ] : [];
 
+  const town = theme.id === "town" ? {
+    isNight: true,
+    clock: 0,
+    house: { x: 1640, width: 620 },
+    bed: { x: 2080, y: floorY - 70, width: 108, height: 70 },
+    npcs: [
+      { x: 420, name: "药草商人", item: "medkit", itemName: "医疗包", cost: 25, amount: 1, color: "#4b8d57" },
+      { x: 790, name: "面包师", item: "beef", itemName: "牛排", cost: 12, amount: 1, color: "#d78b47" },
+      { x: 1130, name: "箭匠", item: "normalArrow", itemName: "普通箭 ×10", cost: 18, amount: 10, color: "#557fb5" },
+      { x: 1480, name: "房东", item: "rent", itemName: "租下房屋", cost: 600, amount: 1, color: "#9d6843" },
+      { x: 1810, name: "屋内药师", item: "powerPotion", itemName: "力量药水", cost: 45, amount: 1, color: "#7d62aa", indoor: true },
+      { x: 1950, name: "屋内厨师", item: "beef", itemName: "牛排", cost: 10, amount: 1, color: "#bc5e51", indoor: true },
+      { x: 2670, name: "旅行商人", item: "fireResistPotion", itemName: "抗火药水", cost: 8, amount: 1, color: "#3f7f91" },
+    ],
+  } : null;
+
   return {
     number,
     theme,
@@ -518,6 +541,7 @@ function buildLevel(number) {
     bogTraps,
     coral,
     waveHazard,
+    town,
     chest: {
       x: worldWidth - 150,
       y: floorY - 62,
@@ -544,12 +568,12 @@ function showMenu(reason) {
   } else {
     const nextTheme = getTheme(currentLevel);
     resultLabel.textContent = "准备冒险";
-    menuText.textContent = `当前世界：${nextTheme.name}。砾石草原、海洋、沙漠、沼泽、岩浆世界会不断循环，小星星每个值 6 金币。`;
+    menuText.textContent = `当前世界：${nextTheme.name}。月影小镇、砾石草原、海洋、沙漠、沼泽、岩浆世界会不断循环，小星星每个值 6 金币。`;
   }
 
   level = buildLevel(currentLevel);
   startButton.textContent = `开始第 ${currentLevel} 关：${level.theme.name}`;
-  if (currentLevel === 1 && foxTutorialPending) startButton.textContent = "开始小狐狸引导";
+  if (level.theme.id === "gravel" && foxTutorialPending) startButton.textContent = "开始小狐狸引导";
   drawMenuBackdrop();
   updateHud();
   renderShop();
@@ -594,6 +618,7 @@ function update(frameTime = performance.now()) {
     return;
   }
   moveEnemies();
+  updateTown();
   moveAnimals();
   moveTraps();
   moveWaveHazard();
@@ -816,6 +841,11 @@ function moveEnemies() {
       effects.push({ x: enemy.x, y: enemy.y + 8, width: enemy.width, height: enemy.height, life: 12, kind: "claw" });
     }
   }
+}
+
+function updateTown() {
+  if (!level.town) return;
+  level.town.clock += 1;
 }
 
 function isFloatingEnemy(enemy) {
@@ -2699,7 +2729,9 @@ function renderWorldTestButtons() {
 
 function drawSky() {
   const themeId = level.theme.id;
+  const townNight = themeId === "town" && level.town && level.town.isNight;
   ctx.fillStyle =
+    themeId === "town" ? (townNight ? "#171a35" : "#75b8df") :
     themeId === "ocean" ? "#2387c8" :
     themeId === "desert" ? "#f2b866" :
     themeId === "lava" ? "#3a1620" :
@@ -2707,6 +2739,7 @@ function drawSky() {
     "#6dcff6";
   ctx.fillRect(cameraX, 0, canvas.width, canvas.height);
   ctx.fillStyle =
+    themeId === "town" ? (townNight ? "#29284b" : "#a8d7e9") :
     themeId === "ocean" ? "#126aa6" :
     themeId === "desert" ? "#d89047" :
     themeId === "lava" ? "#5c1d22" :
@@ -2715,6 +2748,7 @@ function drawSky() {
   ctx.fillRect(cameraX, 284, canvas.width, 170);
 
   const ridgeColor =
+    themeId === "town" ? (townNight ? "#343452" : "#7897a6") :
     themeId === "lava" ? "#21161b" :
     themeId === "desert" ? "#c7833f" :
     themeId === "swamp" ? "#40513d" :
@@ -2735,9 +2769,13 @@ function drawSky() {
   }
 
   ctx.fillStyle = "#ffe66d";
-  ctx.fillRect(cameraX + 54, 52, 56, 56);
+  ctx.fillRect(cameraX + 54, 52, townNight ? 42 : 56, townNight ? 42 : 56);
   ctx.fillStyle = "#fff29a";
-  ctx.fillRect(cameraX + 70, 66, 24, 24);
+  ctx.fillRect(cameraX + (townNight ? 63 : 70), townNight ? 61 : 66, 24, 24);
+  if (townNight) {
+    ctx.fillStyle = "#fff4c7";
+    for (let i = 0; i < 24; i += 1) ctx.fillRect(cameraX + 140 + (i * 173) % canvas.width, 35 + (i * 47) % 190, 3, 3);
+  }
 }
 
 function drawBlockCloud(x, y, scale) {
@@ -2780,18 +2818,21 @@ function drawVerticalDepthBackdrop() {
 function drawGround() {
   const themeId = level.theme.id;
   const front =
+    themeId === "town" ? "#756b72" :
     themeId === "ocean" ? "#135b87" :
     themeId === "desert" ? "#e4b757" :
     themeId === "lava" ? "#21161b" :
     themeId === "swamp" ? "#48613e" :
     "#42c96d";
   const top =
+    themeId === "town" ? "#aaa2a0" :
     themeId === "ocean" ? "#0d4161" :
     themeId === "desert" ? "#b98a38" :
     themeId === "lava" ? "#ff5a2e" :
     themeId === "swamp" ? "#2f442d" :
     "#2aa654";
   const side =
+    themeId === "town" ? "#484550" :
     themeId === "ocean" ? "#0a324a" :
     themeId === "desert" ? "#8f6631" :
     themeId === "lava" ? "#3b1513" :
@@ -2819,10 +2860,15 @@ function drawGround() {
   ctx.fillRect(0, floorY + 50, level.worldWidth, 6);
 
   for (let x = 0; x < level.worldWidth; x += 32) {
+    if (themeId === "town") {
+      ctx.fillStyle = x % 96 === 0 ? "#8d858a" : "#615d68";
+      ctx.fillRect(x, floorY + 14 + (x % 64 === 0 ? 4 : 0), 25, 8);
+      continue;
+    }
     ctx.fillStyle = themeId === "lava" ? (x % 64 === 0 ? "#ff8a2d" : "#cc3c21") : x % 64 === 0 ? "#216f3e" : "#2d8c4a";
     ctx.fillRect(x, floorY + 16 + (x % 96 === 0 ? 4 : 0), 16, 10);
   }
-  for (let x = 180; x < level.worldWidth; x += 360) {
+  for (let x = 180; x < level.worldWidth && themeId !== "town"; x += 360) {
     ctx.fillStyle =
       themeId === "ocean" ? "#0f78a8" :
       themeId === "desert" ? "#c98f3a" :
@@ -2893,6 +2939,8 @@ function drawWaveHazard() {
 }
 
 function drawThemeDecor() {
+  if (level.theme.id === "town") drawTownDecor();
+
   if (level.theme.id === "ocean") {
     for (const reef of level.coral) {
       const colors = ["#ff6b8a", "#ffd34d", "#7fffd4"];
@@ -2912,6 +2960,20 @@ function drawThemeDecor() {
       ctx.fillRect(x + 10, floorY - 48, 42, 14);
       ctx.fillStyle = "#b98235";
       ctx.fillRect(x + 52, floorY - 44, 28, 10);
+    }
+    for (let x = 250; x < level.worldWidth; x += 430) {
+      const sway = Math.sin(Date.now() / 360 + x) * 2;
+      ctx.fillStyle = "#6f9b45";
+      ctx.fillRect(x, floorY - 24, 6, 24);
+      ctx.fillRect(x - 10 + sway, floorY - 18, 6, 16);
+      ctx.fillRect(x + 10 - sway, floorY - 20, 6, 18);
+      ctx.fillStyle = "#efe3bd";
+      ctx.fillRect(x + 112, floorY - 10, 50, 8);
+      ctx.fillRect(x + 122, floorY - 18, 18, 10);
+      ctx.fillRect(x + 150, floorY - 6, 28, 6);
+      ctx.fillRect(x + 170, floorY - 12, 8, 12);
+      ctx.fillStyle = "#c9b98d";
+      ctx.fillRect(x + 128, floorY - 14, 6, 6);
     }
   }
 
@@ -2956,6 +3018,66 @@ function drawThemeDecor() {
       ctx.fillRect(x - 22, floorY - 18, 112, 18);
     }
   }
+}
+
+function drawTownDecor() {
+  const town = level.town;
+  const night = town.isNight;
+  // Street houses and warm windows.
+  for (let x = 120; x < level.worldWidth; x += 720) {
+    ctx.fillStyle = "#3d2d35";
+    ctx.fillRect(x, 180, 480, floorY - 180);
+    ctx.fillStyle = x % 1440 === 120 ? "#8b4d3d" : "#527286";
+    ctx.fillRect(x + 18, 204, 444, floorY - 204);
+    ctx.fillStyle = "#2b2028";
+    for (let roofX = x - 18; roofX < x + 490; roofX += 42) ctx.fillRect(roofX, 164 + ((roofX / 42) % 2) * 5, 48, 26);
+    ctx.fillStyle = night ? "#ffd978" : "#bce8f2";
+    for (let wx = x + 52; wx < x + 410; wx += 118) {
+      ctx.fillRect(wx, 240, 54, 54);
+      ctx.fillStyle = "#574539"; ctx.fillRect(wx + 24, 240, 6, 54); ctx.fillRect(wx, 264, 54, 6);
+      ctx.fillStyle = night ? "#ffd978" : "#bce8f2";
+    }
+    ctx.fillStyle = "#503526";
+    ctx.fillRect(x + 205, floorY - 104, 72, 104);
+  }
+
+  // Rented house shown as a cutaway room with two residents and a bed.
+  const h = town.house;
+  ctx.fillStyle = "#2f2428"; ctx.fillRect(h.x - 18, 118, h.width + 36, 306);
+  ctx.fillStyle = "#a9764b"; ctx.fillRect(h.x, 136, h.width, 280);
+  ctx.fillStyle = "#d8c79d"; ctx.fillRect(h.x + 22, 155, h.width - 44, 176);
+  ctx.fillStyle = "#704626";
+  for (let y = 334; y < 416; y += 18) ctx.fillRect(h.x + 12, y, h.width - 24, 5);
+  ctx.fillStyle = "#51465d"; ctx.fillRect(h.x + 365, 326, 188, 78);
+  ctx.fillStyle = "#e8dfce"; ctx.fillRect(h.x + 378, 333, 64, 24);
+  ctx.fillStyle = "#86a8c8"; ctx.fillRect(h.x + 442, 333, 96, 58);
+  ctx.fillStyle = townHouseRented ? "#54bf72" : "#b75050";
+  ctx.fillRect(h.x + 250, floorY - 100, 72, 100);
+  drawTinyText(townHouseRented ? "我的房子" : "出租 600 金币", h.x + 202, 128, "#fff4c7");
+
+  for (const npc of town.npcs) {
+    if (npc.indoor && !townHouseRented) continue;
+    if (!npc.indoor) drawTownStall(npc.x - 46, npc.color);
+    drawTownNpc(npc.x, floorY - 68, npc.color, npc.name);
+  }
+  if (townHouseRented) drawTinyText("床边可睡觉", town.bed.x - 10, floorY - 92, "#fff4c7");
+}
+
+function drawTownStall(x, color) {
+  ctx.fillStyle = "#503526"; ctx.fillRect(x, floorY - 122, 112, 122);
+  ctx.fillStyle = color; ctx.fillRect(x - 10, floorY - 130, 132, 28);
+  ctx.fillStyle = "#f4e3c2";
+  for (let i = 0; i < 4; i += 1) ctx.fillRect(x - 10 + i * 34, floorY - 130, 17, 28);
+  ctx.fillStyle = "#a66b3f"; ctx.fillRect(x, floorY - 55, 112, 16);
+}
+
+function drawTownNpc(x, y, color, name) {
+  ctx.fillStyle = "rgba(0,0,0,.24)"; ctx.fillRect(x - 16, y + 62, 48, 8);
+  ctx.fillStyle = "#f0b37b"; ctx.fillRect(x, y, 28, 25);
+  ctx.fillStyle = color; ctx.fillRect(x - 7, y + 24, 42, 36);
+  ctx.fillStyle = "#332733"; ctx.fillRect(x + 6, y + 8, 5, 5); ctx.fillRect(x + 19, y + 8, 5, 5);
+  ctx.fillRect(x - 3, y + 58, 12, 12); ctx.fillRect(x + 22, y + 58, 12, 12);
+  drawTinyText(name, x - 26, y - 12, "#fff4c7");
 }
 
 function drawStars() {
@@ -3123,6 +3245,10 @@ function drawEnemies() {
   ctx.translate(-cameraX, 0);
   for (const enemy of level.enemies) {
     if (!enemy.alive) {
+      if (enemy.kind === "skeleton") {
+        drawSkeletonBones(enemy);
+        continue;
+      }
       if (enemy.deathFall > 0) drawDefeatedEnemy(enemy);
       continue;
     }
@@ -3134,6 +3260,7 @@ function drawEnemies() {
     drawEnemySightCircle(enemy);
     drawEntityShadow(enemy, enemy.kind === "lavaBoss" ? 1.15 : 0.95);
     if (enemy.kind === "slime") drawSlime(enemy);
+    if (enemy.kind === "skeleton") drawSkeleton(enemy);
     if (enemy.kind === "bat") drawBat(enemy);
     if (enemy.kind === "guard") drawGuard(enemy);
     if (enemy.kind === "brute") drawBrute(enemy);
@@ -3162,6 +3289,38 @@ function drawEnemies() {
     ctx.restore();
   }
   ctx.restore();
+}
+
+function drawSkeleton(enemy) {
+  const bone = enemy.hurtFlash > 0 ? "#ffffff" : "#d9d5c5";
+  const step = Math.sin(enemy.leapWave + enemy.phase) * 5;
+  ctx.fillStyle = bone;
+  ctx.fillRect(enemy.x + 14, enemy.y, 28, 26);
+  ctx.fillRect(enemy.x + 9, enemy.y + 7, 38, 13);
+  ctx.fillRect(enemy.x + 24, enemy.y + 25, 7, 31);
+  ctx.fillRect(enemy.x + 13, enemy.y + 33, 30, 6);
+  ctx.fillRect(enemy.x + 12 + step, enemy.y + 54, 8, 17);
+  ctx.fillRect(enemy.x + 34 - step, enemy.y + 54, 8, 17);
+  ctx.fillStyle = "#24222a";
+  ctx.fillRect(enemy.x + 18, enemy.y + 8, 6, 7);
+  ctx.fillRect(enemy.x + 32, enemy.y + 8, 6, 7);
+  ctx.fillRect(enemy.x + 25, enemy.y + 18, 6, 4);
+  ctx.fillStyle = "#8f3340";
+  ctx.fillRect(enemy.x + 43, enemy.y + 30, 9, 32);
+  ctx.fillStyle = "#9aa4b5";
+  ctx.fillRect(enemy.x + 2, enemy.y + 28, 6, 36);
+}
+
+function drawSkeletonBones(enemy) {
+  const y = floorY - 15;
+  ctx.fillStyle = "rgba(0,0,0,.2)"; ctx.fillRect(enemy.x - 4, y + 7, enemy.width + 18, 7);
+  ctx.fillStyle = "#e8e1c9";
+  ctx.fillRect(enemy.x + 4, y, 28, 7);
+  ctx.fillRect(enemy.x + 27, y - 5, 8, 17);
+  ctx.fillRect(enemy.x + 38, y + 2, 24, 7);
+  ctx.fillRect(enemy.x + 49, y - 8, 8, 17);
+  ctx.fillRect(enemy.x + 13, y - 14, 18, 15);
+  ctx.fillStyle = "#37333b"; ctx.fillRect(enemy.x + 17, y - 10, 4, 4); ctx.fillRect(enemy.x + 25, y - 10, 4, 4);
 }
 
 function drawDefeatedEnemy(enemy) {

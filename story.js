@@ -16,7 +16,9 @@ function hideStory() {
 
 function initializeStoryLevel() {
   hideStory();
-  if (level.number === 1) {
+  if (level.theme.id === "town") {
+    level.story = { type: "town", state: "explore", clock: 0, message: "和镇上的居民聊聊。夜里会有骷髅兵出没，租下房子后可以在床边睡到天亮。" };
+  } else if (level.theme.id === "gravel") {
     level.story = { type: "meadow", state: "rescue", jump: false, attack: false, saved: foxRescued, clock: 0 };
     if (foxTutorialPending) {
       level.story.state = "tutorial";
@@ -44,7 +46,7 @@ function initializeStoryLevel() {
 
 function storyOwnsChest() {
   const s = level && level.story;
-  return Boolean(s && (s.type === "ocean" || !s.saved || s.state === "freed"));
+  return Boolean(s && s.type !== "town" && (s.type === "ocean" || !s.saved || s.state === "freed"));
 }
 
 function recordStoryAction(action) {
@@ -102,6 +104,12 @@ function storyNear(x, y, range = 145) {
 function storyPrompt() {
   const s = level.story;
   if (!s) return null;
+  if (s.type === "town") {
+    if (townHouseRented && storyNear(level.town.bed.x + 54, level.town.bed.y + 35, 150)) return { label: "睡觉到天亮", action: "sleep" };
+    const npc = level.town.npcs.find(person => (!person.indoor || townHouseRented) && storyNear(person.x + 14, floorY - 34, 135));
+    if (!npc) return null;
+    return { label: npc.item === "rent" && townHouseRented ? "和房东聊聊" : `购买${npc.itemName}（${npc.cost}金币）`, action: "townBuy", npc };
+  }
   if (s.type === "meadow") {
     if (s.state === "victory") return { label: "跟小狐狸学习", action: "learn" };
     if (s.state === "done") return { label: "前往海洋", action: "next" };
@@ -121,7 +129,20 @@ function refreshStoryHud() {
   storyHud.classList.toggle("is-hidden", !s || gameState !== "playing");
   if (!s) return;
   let title, message;
-  if (s.type === "meadow") {
+  if (s.type === "town") {
+    title = level.town.isNight ? "月影小镇 · 夜晚" : "月影小镇 · 白天";
+    const prompt = storyPrompt();
+    if (prompt && prompt.npc) {
+      const npc = prompt.npc;
+      message = npc.item === "rent" && townHouseRented
+        ? "房东：房子已经是你的了，屋内两位居民也很欢迎你。"
+        : `${npc.name}：要不要买${npc.itemName}？只要 ${npc.cost} 金币。`;
+    } else if (prompt && prompt.action === "sleep") {
+      message = level.town.isNight ? "走到床边了。点击睡觉，就能跳过黑夜。" : "现在已经是白天，也可以睡一觉恢复生命。";
+    } else {
+      message = s.message;
+    }
+  } else if (s.type === "meadow") {
     title = isFoxTutorial() ? "第一关胜利 · 小狐狸的引导" : s.saved ? "砾石草原 · 再次冒险" : "伙伴任务 · 救出小狐狸";
     message = s.saved ? "小狐狸已经安全了，这次终点是宝箱，可以直接去打开。" :
       s.state === "victory" ? "小狐狸：谢谢你打破牢笼！你已经赢了！接下来我教你跳跃和攻击。" :
@@ -169,6 +190,43 @@ function interactStory() {
   if (!prompt) return;
   const s = level.story;
   switch (prompt.action) {
+    case "townBuy": {
+      const npc = prompt.npc;
+      if (npc.item === "rent" && townHouseRented) {
+        s.message = "房东：屋内有两位居民，床在房间右侧。晚上走到床边就能睡觉。";
+        break;
+      }
+      if (!unlimitedCoinsMode && coins < npc.cost) {
+        s.message = `${npc.name}：金币不够，还差 ${npc.cost - coins} 金币。`;
+        effects.push({ x: npc.x - 30, y: floorY - 110, width: 160, height: 26, life: 90, kind: "loot", text: "金币不够" });
+        break;
+      }
+      if (!unlimitedCoinsMode) coins -= npc.cost;
+      if (npc.item === "rent") {
+        townHouseRented = true;
+        try { localStorage.setItem("yuanbao.town-house-rented.v1", "yes"); } catch (_) {}
+        s.message = "房东：成交！房子现在属于你，进去看看两位居民和床吧。";
+        effects.push({ x: npc.x - 60, y: floorY - 120, width: 210, height: 28, life: 120, kind: "loot", text: "已租下房屋！" });
+      } else {
+        inventory[npc.item] = (inventory[npc.item] || 0) + npc.amount;
+        s.message = `${npc.name}：谢谢惠顾！${npc.itemName}已经放进背包。`;
+        effects.push({ x: npc.x - 45, y: floorY - 116, width: 180, height: 28, life: 90, kind: "loot", text: `获得${npc.itemName}` });
+      }
+      updateHud();
+      renderBackpack();
+      break;
+    }
+    case "sleep":
+      level.town.isNight = false;
+      player.hearts = Math.min(maxBoostedHealth, player.hearts + 100);
+      for (const enemy of level.enemies) {
+        if (enemy.kind === "skeleton" && enemy.alive) { enemy.alive = false; enemy.deathFall = 999999; }
+      }
+      level.chest.locked = false;
+      s.message = "你一觉睡到了天亮。骷髅兵化成了街上的白骨，生命恢复了 100。";
+      effects.push({ x: player.x - 80, y: player.y - 50, width: 240, height: 28, life: 140, kind: "loot", text: "天亮了！生命 +100" });
+      updateHud();
+      break;
     case "learn":
       s.state = "tutorial";
       s.jump = s.attack = false;
@@ -226,6 +284,10 @@ function updateStory() {
   const s = level.story;
   if (!s) return;
   s.clock += 1;
+  if (s.type === "town") {
+    refreshStoryHud();
+    return;
+  }
   if (s.type === "ocean") {
     player.y = Math.max(80, player.y);
     // Swimming above the crabs must not block the invitation or the route.
