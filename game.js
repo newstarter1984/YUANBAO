@@ -23,6 +23,11 @@ const arenaAllyImages = ["mage", "warrior", "priest"].map(name => {
 });
 const oceanWreckImage = new Image();
 oceanWreckImage.src = "assets/ocean-wreck.png?v=20261018";
+const lavaDungeonImage = new Image();
+lavaDungeonImage.src = "assets/lava-dungeon.gif?v=20261018";
+const lavaHoundFrames = Array.from({ length: 8 }, (_, index) => {
+  const image = new Image(); image.src = `assets/lava-hound/frame-${index}.png?v=20261018`; return image;
+});
 const crocodileFrames = Array.from({ length: 24 }, (_, index) => {
   const image = new Image(); image.src = `assets/crocodile/frame-${index}.png?v=20261018`; return image;
 });
@@ -476,8 +481,8 @@ function getBossHp() {
 
 function buildLevel(number) {
   const theme = getTheme(number);
-  const worldWidth = theme.id === "arena" ? 960 : theme.id === "ocean" ? 1200 : 3800 + number * 850;
-  const enemyCount = theme.id === "arena" ? 0 : theme.id === "town" ? 6 : theme.id === "lava" ? 8 + number : theme.id === "swamp" ? 5 + number : 4 + number;
+  const worldWidth = theme.id === "arena" ? 960 : theme.id === "ocean" || theme.id === "lava" ? 1200 : 3800 + number * 850;
+  const enemyCount = theme.id === "arena" ? 0 : theme.id === "town" ? 6 : theme.id === "lava" ? 6 : theme.id === "swamp" ? 5 + number : 4 + number;
   const platforms = theme.id === "ocean" || theme.id === "town" ? [] : [
     { x: 210, y: 378, width: 150, height: 20 },
     { x: 520, y: 320, width: 160, height: 20 },
@@ -493,15 +498,6 @@ function buildLevel(number) {
 
   if (theme.id === "lava") {
     platforms.length = 0;
-    for (let x = 160; x < worldWidth - 280; x += 250) {
-      platforms.push({
-        x,
-        y: 342 + ((x / 250) % 3) * 34,
-        width: x % 500 === 0 ? 190 : 150,
-        height: 20,
-      });
-    }
-    platforms.push({ x: worldWidth - 520, y: 306, width: 220, height: 20 });
   }
   if (theme.id === "arena") {
     platforms.length = 0;
@@ -549,7 +545,7 @@ function buildLevel(number) {
   }
 
   const spikeTraps = [];
-  for (let i = 0; i < (theme.id === "ocean" || theme.id === "arena" ? 0 : 3 + number); i += 1) {
+  for (let i = 0; i < (["ocean", "arena", "lava"].includes(theme.id) ? 0 : 3 + number); i += 1) {
     spikeTraps.push({ x: 760 + i * 430, y: 78, width: 76, height: 38, state: "idle", timer: 0, vy: 0, originalY: 78 });
   }
 
@@ -3232,6 +3228,10 @@ function drawThemeDecor() {
     }
   }
 
+  if (level.theme.id === "lava" && lavaDungeonImage.complete && lavaDungeonImage.naturalWidth) {
+    ctx.drawImage(lavaDungeonImage, 0, 0, level.worldWidth, 540);
+  }
+
   if (level.theme.id === "desert") {
     for (let x = 120; x < level.worldWidth; x += 520) {
       ctx.fillStyle = "#d39a45";
@@ -4100,15 +4100,13 @@ function drawLavaBeast(enemy) {
 }
 
 function drawLavaSlime(enemy) {
-  ctx.fillStyle = enemyFill(enemy, "#ff5a2e");
-  ctx.fillRect(enemy.x, enemy.y + 14, enemy.width, enemy.height - 14);
-  addPixelHighlights(enemy.x, enemy.y + 14, enemy.width, enemy.height - 14);
-  ctx.fillRect(enemy.x + 12, enemy.y + 4, enemy.width - 24, 18);
-  ctx.fillStyle = "#ffd34d";
-  ctx.fillRect(enemy.x + 16, enemy.y + 24, 8, 8);
-  ctx.fillRect(enemy.x + enemy.width - 24, enemy.y + 24, 8, 8);
-  ctx.fillStyle = "#8b1e18";
-  ctx.fillRect(enemy.x + 20, enemy.y + enemy.height - 12, enemy.width - 40, 7);
+  const frame = lavaHoundFrames[Math.floor(Date.now() / 100 + enemy.phase) % lavaHoundFrames.length];
+  if (!frame?.complete || !frame.naturalWidth) return;
+  ctx.save();
+  ctx.translate(enemy.x + enemy.width / 2, enemy.y + enemy.height);
+  ctx.scale(enemy.facing, 1);
+  ctx.drawImage(frame, -48, -58, 96, 62);
+  ctx.restore();
 }
 
 function drawLavaAxeGuard(enemy) {
