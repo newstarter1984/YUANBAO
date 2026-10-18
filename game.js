@@ -453,7 +453,7 @@ function getBossHp() {
 
 function buildLevel(number) {
   const theme = getTheme(number);
-  const worldWidth = theme.id === "arena" ? 1920 : 3800 + number * 850;
+  const worldWidth = theme.id === "arena" ? 960 : 3800 + number * 850;
   const enemyCount = theme.id === "arena" ? 0 : theme.id === "town" ? 6 : theme.id === "lava" ? 8 + number : theme.id === "swamp" ? 5 + number : 4 + number;
   const platforms = theme.id === "ocean" || theme.id === "town" ? [] : [
     { x: 210, y: 378, width: 150, height: 20 },
@@ -497,11 +497,11 @@ function buildLevel(number) {
     enemies.push(buildEnemy(kind, x, number, i, theme.id));
   }
   if (theme.id === "arena") {
-    const dragonBoss = buildEnemy("arenaDragon", 1320, number, 0, theme.id);
+    const dragonBoss = buildEnemy("arenaDragon", 690, number, 0, theme.id);
     dragonBoss.y = floorY - dragonBoss.height;
     dragonBoss.baseY = dragonBoss.y;
-    dragonBoss.patrolLeft = 520;
-    dragonBoss.patrolRight = 1740;
+    dragonBoss.patrolLeft = 480;
+    dragonBoss.patrolRight = 850;
     dragonBoss.flightClock = 0;
     enemies.push(dragonBoss);
   }
@@ -3150,10 +3150,8 @@ function drawThemeDecor() {
   if (level.theme.id === "town") drawTownDecor();
 
   if (level.theme.id === "arena" && armorArenaImage.complete && armorArenaImage.naturalWidth) {
-    for (let x = 0; x < level.worldWidth; x += 960) {
-      ctx.drawImage(armorArenaImage, x, 0, 960, 540);
-      drawArenaCrowdCheer(x);
-    }
+    ctx.drawImage(armorArenaImage, 0, 0, 960, 540);
+    drawArenaCrowdCheer(0);
     ctx.fillStyle = "#e6b84f";
     ctx.fillRect(250, 238, 72, 68);
   }
@@ -3548,7 +3546,7 @@ function drawEnemies() {
 
 function drawArenaDragonBoss(enemy) {
   const airborne = enemy.y < floorY - enemy.height - 35;
-  const dragon = getDragonType("fire");
+  const dragon = getDragonType("wood");
   drawDragonShape(ctx, enemy.x + 16, enemy.y + 30, dragon, 1.72, airborne, false, enemy.facing, true, enemy.attackTimer > 72);
 }
 
