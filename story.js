@@ -149,7 +149,7 @@ function refreshStoryHud() {
       s.state === "tutorial" ? (!s.jump ? "小狐狸：跟我跳！按空格、↑ 或 W 试试跳跃，前面有绿色平台。" : "小狐狸：跳得好！现在按 J 挥动武器，练习攻击。") :
       s.state === "done" ? "小狐狸：你学会啦！我们一起去海洋冒险吧！" :
       "小狐狸：我在右边终点！不用打败怪物，靠近牢笼按 J 攻击，就能救我出来！";
-  } else {
+  } else if (s.type === "ocean") {
     const copy = {
       help: ["海洋 · 远处的求救声", "螃蟹们：救命呀！鲸鱼被渔网困住了！往右边来，我们带你过去！"],
       guide: ["跟随螃蟹", "螃蟹：请保护我们，我们带你去！按住空格、↑ 或 W 向上游，松开慢慢下潜。"],
@@ -473,13 +473,13 @@ function drawStoryScene() {
       }
       drawTinyText(free ? "牢笼已打破" : "按 J 打破牢笼", x - 60, y - 15, "#ffdfa0");
     }
-  } else {
+  } else if (s.type === "ocean") {
     const inside = ["inside", "reward"].includes(s.state);
     if (inside) drawStoryInterior(s);
     else {
       const caveX = s.shipX - 350;
       storyPoly([[caveX, 74], [caveX + 90, 150], [caveX + 120, 86], [caveX + 210, 157], [caveX + 255, 98], [level.worldWidth, 152], [level.worldWidth, 74]], "#274953");
-      drawStoryShip(s.shipX);
+      if (!oceanWreckImage.complete || !oceanWreckImage.naturalWidth) drawStoryShip(s.shipX);
       for (let i = 0; i < 8; i += 1) {
         const x = s.shipX - 340 + i * 110;
         const y = floorY - 8;

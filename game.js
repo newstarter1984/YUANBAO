@@ -16,6 +16,10 @@ const foxHelperFrames = Array.from({ length: 7 }, (_, index) => {
 });
 const townReferenceImage = new Image();
 townReferenceImage.src = "assets/town-reference.png?v=20261018";
+const armorArenaImage = new Image();
+armorArenaImage.src = "assets/armor-arena.png?v=20261018";
+const oceanWreckImage = new Image();
+oceanWreckImage.src = "assets/ocean-wreck.png?v=20261018";
 const shadowCultistFrames = Array.from({ length: 12 }, (_, index) => {
   const image = new Image(); image.src = `assets/shadow-cultist/frame-${index}.png?v=20261018`; return image;
 });
@@ -116,7 +120,8 @@ const worldThemes = [
   { id: "ocean", name: "海洋", next: "沙漠" },
   { id: "desert", name: "沙漠", next: "沼泽" },
   { id: "swamp", name: "沼泽", next: "岩浆世界" },
-  { id: "lava", name: "岩浆世界", next: "月影小镇" },
+  { id: "lava", name: "岩浆世界", next: "铠甲竞技场" },
+  { id: "arena", name: "铠甲竞技场", next: "全部通关" },
 ];
 
 const monsterXp = {
@@ -272,6 +277,7 @@ let inventory = {
   chestCoins50: 0,
 };
 let currentLevel = 1;
+let arenaAllies = [];
 let townHouseRented = false;
 try { townHouseRented = localStorage.getItem("yuanbao.town-house-rented.v1") === "yes"; } catch (_) {}
 let cameraX = 0;
@@ -296,6 +302,12 @@ function startGame() {
   gameActions.classList.remove("is-hidden");
   backpackButton.classList.remove("is-hidden");
   level = buildLevel(currentLevel);
+  if (level.theme.id === "arena") activeMount = "none";
+  arenaAllies = level.theme.id === "arena" ? [
+    { x: 150, color: "#2f79c8", attack: 10 },
+    { x: 205, color: "#d6473f", attack: 24 },
+    { x: 260, color: "#4c9b55", attack: 38 },
+  ] : [];
 
   player = {
     x: 80,
@@ -344,6 +356,7 @@ function getTheme(number) {
 }
 
 function enemyKindsForTheme(themeId) {
+  if (themeId === "arena") return [];
   if (themeId === "town") return ["skeleton"];
   if (themeId === "ocean") return ["fish", "crab", "fish", "shark", "harpooner"];
   if (themeId === "desert") return ["mummy", "scorpion", "sandGolem", "scarab"];
@@ -378,6 +391,7 @@ function enemySize(kind, number, index) {
     lavaSlime: [66, 44],
     lavaAxeGuard: [86, 86],
     lavaBoss: [208, 186],
+    arenaDragon: [250, 190],
     skeleton: [54, 68],
   };
   const [baseWidth, baseHeight] = table[kind] || [58, 58];
@@ -394,7 +408,7 @@ function buildEnemy(kind, x, number, index, themeId) {
     kind === "shark" || kind === "sandGolem" || kind === "lavaAxeGuard" ? 70 :
     kind.startsWith("lava") ? 44 :
     0;
-  const maxHp = kind === "lavaBoss" ? getBossHp() : 42 + number * 20 + index * 13 + hpBonus;
+  const maxHp = kind === "lavaBoss" ? getBossHp() : kind === "arenaDragon" ? Math.max(900, getBossHp() * 2) : 42 + number * 20 + index * 13 + hpBonus;
   return {
     kind,
     x,
@@ -437,8 +451,8 @@ function getBossHp() {
 
 function buildLevel(number) {
   const theme = getTheme(number);
-  const worldWidth = 3800 + number * 850;
-  const enemyCount = theme.id === "town" ? 6 : theme.id === "lava" ? 8 + number : theme.id === "swamp" ? 5 + number : 4 + number;
+  const worldWidth = theme.id === "arena" ? 1920 : 3800 + number * 850;
+  const enemyCount = theme.id === "arena" ? 0 : theme.id === "town" ? 6 : theme.id === "lava" ? 8 + number : theme.id === "swamp" ? 5 + number : 4 + number;
   const platforms = theme.id === "ocean" || theme.id === "town" ? [] : [
     { x: 210, y: 378, width: 150, height: 20 },
     { x: 520, y: 320, width: 160, height: 20 },
@@ -464,9 +478,12 @@ function buildLevel(number) {
     }
     platforms.push({ x: worldWidth - 520, y: 306, width: 220, height: 20 });
   }
+  if (theme.id === "arena") {
+    platforms.length = 0;
+  }
 
   const stars = [];
-  for (let i = 0; i < 5 + number; i += 1) {
+  for (let i = 0; i < (theme.id === "arena" ? 0 : 5 + number); i += 1) {
     stars.push({ x: 260 + i * 360, y: theme.id === "ocean" ? 160 + (i % 3) * 72 : i % 2 === 0 ? 332 : 254, size: 24, collected: false });
   }
 
@@ -476,6 +493,15 @@ function buildLevel(number) {
     const kind = enemyKinds[i % enemyKinds.length];
     const x = 620 + i * Math.max(320, (worldWidth - 1000) / enemyCount);
     enemies.push(buildEnemy(kind, x, number, i, theme.id));
+  }
+  if (theme.id === "arena") {
+    const dragonBoss = buildEnemy("arenaDragon", 1320, number, 0, theme.id);
+    dragonBoss.y = floorY - dragonBoss.height;
+    dragonBoss.baseY = dragonBoss.y;
+    dragonBoss.patrolLeft = 520;
+    dragonBoss.patrolRight = 1740;
+    dragonBoss.flightClock = 0;
+    enemies.push(dragonBoss);
   }
 
   if (theme.id === "lava") {
@@ -489,6 +515,7 @@ function buildLevel(number) {
 
   const river = theme.id === "ocean"
     ? { x: 0, y: 74, width: worldWidth, height: floorY + 100 }
+    : theme.id === "arena" ? { x: -1000, y: floorY, width: 0, height: 0 }
     : theme.id === "town" ? { x: -1000, y: floorY, width: 0, height: 0 }
     : { x: Math.floor(worldWidth * 0.48), y: floorY - 36, width: 270 + number * 35, height: 78 };
 
@@ -497,7 +524,7 @@ function buildLevel(number) {
   }
 
   const spikeTraps = [];
-  for (let i = 0; i < (theme.id === "ocean" ? 0 : 3 + number); i += 1) {
+  for (let i = 0; i < (theme.id === "ocean" || theme.id === "arena" ? 0 : 3 + number); i += 1) {
     spikeTraps.push({ x: 760 + i * 430, y: 78, width: 76, height: 38, state: "idle", timer: 0, vy: 0, originalY: 78 });
   }
 
@@ -595,7 +622,7 @@ function showMenu(reason) {
   } else {
     const nextTheme = getTheme(currentLevel);
     resultLabel.textContent = "准备冒险";
-    menuText.textContent = `当前世界：${nextTheme.name}。月影小镇、砾石草原、海洋、沙漠、沼泽、岩浆世界会不断循环，小星星每个值 6 金币。`;
+    menuText.textContent = `当前世界：${nextTheme.name}。依次挑战月影小镇、砾石草原、海洋、沙漠、沼泽、岩浆世界，最后进入铠甲竞技场。`;
   }
 
   level = buildLevel(currentLevel);
@@ -646,6 +673,7 @@ function update(frameTime = performance.now()) {
     return;
   }
   moveEnemies();
+  updateArenaBattle();
   updateTown();
   moveAnimals();
   updateFoxHelper();
@@ -821,6 +849,10 @@ function moveEnemies() {
       moveLavaBoss(enemy);
       continue;
     }
+    if (enemy.kind === "arenaDragon") {
+      moveArenaDragonBoss(enemy);
+      continue;
+    }
 
     const distance = player.x + player.width / 2 - (enemy.x + enemy.width / 2);
     const absDistance = Math.abs(distance);
@@ -870,6 +902,46 @@ function moveEnemies() {
       effects.push({ x: enemy.x, y: enemy.y + 8, width: enemy.width, height: enemy.height, life: 12, kind: "claw" });
     }
   }
+}
+
+function moveArenaDragonBoss(enemy) {
+  enemy.flightClock = (enemy.flightClock || 0) + 1;
+  enemy.attackTimer = Math.max(0, enemy.attackTimer - 1);
+  const airborne = Math.floor(enemy.flightClock / 210) % 2 === 1;
+  const targetX = airborne ? player.x + 260 : player.x + (player.facing > 0 ? 300 : -300);
+  enemy.facing = targetX >= enemy.x ? 1 : -1;
+  enemy.x += Math.sign(targetX - enemy.x) * (airborne ? 3.4 : 2.2);
+  enemy.x = Math.max(enemy.patrolLeft, Math.min(enemy.patrolRight, enemy.x));
+  const targetY = airborne ? 95 + Math.sin(enemy.flightClock / 18) * 42 : floorY - enemy.height;
+  enemy.y += (targetY - enemy.y) * 0.055;
+  if (enemy.attackTimer === 0) {
+    const dx = player.x + player.width / 2 - (enemy.x + enemy.width / 2);
+    const dy = player.y + player.height / 2 - (enemy.y + enemy.height / 2);
+    const distance = Math.max(1, Math.hypot(dx, dy));
+    projectiles.push({ x: enemy.x + enemy.width / 2, y: enemy.y + 76, width: 42, height: 26, vx: dx / distance * 7.2, vy: dy / distance * 7.2, damage: 72, rangeLeft: 900, kind: "bossFire", owner: "enemy" });
+    enemy.attackTimer = airborne ? 75 : 110;
+  }
+}
+
+function updateArenaBattle() {
+  if (!level || level.theme.id !== "arena") return;
+  const boss = level.enemies.find(enemy => enemy.kind === "arenaDragon" && enemy.alive);
+  if (!boss) return;
+  arenaAllies.forEach((ally, index) => {
+    ally.attack = Math.max(0, (ally.attack || 0) - 1);
+    const desired = boss.x - 150 - index * 52;
+    ally.x += Math.sign(desired - ally.x) * Math.min(2.4, Math.abs(desired - ally.x));
+    if (Math.abs(boss.x - ally.x) < 230 && ally.attack === 0) {
+      boss.hp = Math.max(0, boss.hp - (5 + heroLevel));
+      boss.hurtFlash = 6;
+      ally.attack = 42 + index * 7;
+      effects.push({ x: boss.x + 30 + index * 18, y: boss.y + 70, width: 22, height: 18, life: 10, kind: "claw" });
+      if (boss.hp === 0) {
+        boss.alive = false;
+        requestLevelVictory(false, "巨龙已经被四人小队击败！《元宝的星星大冒险》全部通关！");
+      }
+    }
+  });
 }
 
 function updateTown() {
@@ -1700,6 +1772,9 @@ function damageEnemy(enemy, damage) {
       addExperience(monsterXp[enemy.kind], enemy.x, enemy.y);
     }
     effects.push({ x: enemy.x, y: enemy.y, width: enemy.width, height: enemy.height, life: 24, kind: "poof" });
+    if (enemy.kind === "arenaDragon") {
+      requestLevelVictory(false, "巨龙已经被四人小队击败！《元宝的星星大冒险》全部通关！");
+    }
     if (selectedSkin === "zhaoYun") {
       effects.push({ x: enemy.x + enemy.width / 2 - 12, y: enemy.y + 8, width: 24, height: 24, vy: -7, life: 80, kind: "fallenHead" });
     }
@@ -2600,6 +2675,7 @@ function draw() {
   drawAnimals();
   drawFoxHelper();
   drawEnemies();
+  drawArenaAllies();
   drawProjectiles();
   drawPlayer();
   drawEffects();
@@ -3070,7 +3146,16 @@ function drawWaveHazard() {
 function drawThemeDecor() {
   if (level.theme.id === "town") drawTownDecor();
 
+  if (level.theme.id === "arena" && armorArenaImage.complete && armorArenaImage.naturalWidth) {
+    for (let x = 0; x < level.worldWidth; x += 960) ctx.drawImage(armorArenaImage, x, 0, 960, 540);
+    ctx.fillStyle = "#e6b84f";
+    ctx.fillRect(250, 238, 72, 68);
+  }
+
   if (level.theme.id === "ocean") {
+    if (oceanWreckImage.complete && oceanWreckImage.naturalWidth) {
+      for (let x = 0; x < level.worldWidth; x += 1200) ctx.drawImage(oceanWreckImage, x, 0, 1200, 540);
+    }
     for (const reef of level.coral) {
       const colors = ["#ff6b8a", "#ffd34d", "#7fffd4"];
       ctx.fillStyle = colors[reef.color];
@@ -3305,7 +3390,7 @@ function drawTraps() {
 }
 
 function drawChest() {
-  if (storyOwnsChest()) return;
+  if (storyOwnsChest() || level.theme.id === "arena") return;
   const chest = level.chest;
   ctx.save();
   ctx.translate(-cameraX, 0);
@@ -3394,7 +3479,7 @@ function drawEnemies() {
     ctx.save();
     ctx.translate(-enemy.facing * knock, knockY);
     drawEnemySightCircle(enemy);
-    drawEntityShadow(enemy, enemy.kind === "lavaBoss" ? 1.15 : 0.95);
+    drawEntityShadow(enemy, ["lavaBoss", "arenaDragon"].includes(enemy.kind) ? 1.15 : 0.95);
     if (enemy.kind === "slime") drawSlime(enemy);
     if (enemy.kind === "skeleton") drawSkeleton(enemy);
     if (enemy.kind === "bat") drawBat(enemy);
@@ -3421,10 +3506,34 @@ function drawEnemies() {
     if (enemy.kind === "lavaSlime") drawLavaSlime(enemy);
     if (enemy.kind === "lavaAxeGuard") drawLavaAxeGuard(enemy);
     if (enemy.kind === "lavaBoss") drawLavaBoss(enemy);
+    if (enemy.kind === "arenaDragon") drawArenaDragonBoss(enemy);
     if (enemy.cagedTimer > 0) drawCage(enemy);
     drawEnemyHealthBar(enemy);
     ctx.restore();
   }
+  ctx.restore();
+}
+
+function drawArenaDragonBoss(enemy) {
+  const airborne = enemy.y < floorY - enemy.height - 35;
+  const dragon = getDragonType("fire");
+  drawDragonShape(ctx, enemy.x + 16, enemy.y + 30, dragon, 1.72, airborne, false, enemy.facing, true, enemy.attackTimer > 72);
+}
+
+function drawArenaAllies() {
+  if (!level || level.theme.id !== "arena") return;
+  ctx.save();
+  ctx.translate(-cameraX, 0);
+  arenaAllies.forEach((ally, index) => {
+    const y = floorY - 68 + Math.sin(Date.now() / 110 + index) * 2;
+    ctx.fillStyle = "rgba(0,0,0,.25)"; ctx.fillRect(ally.x - 4, floorY - 5, 48, 7);
+    ctx.fillStyle = ally.color; ctx.fillRect(ally.x, y + 22, 38, 38);
+    ctx.fillStyle = "#d9dde5"; ctx.fillRect(ally.x + 5, y, 28, 25);
+    ctx.fillStyle = "#ffd08a"; ctx.fillRect(ally.x + 11, y + 8, 16, 13);
+    ctx.fillStyle = "#211b2c"; ctx.fillRect(ally.x + 3, y + 58, 12, 10); ctx.fillRect(ally.x + 24, y + 58, 12, 10);
+    ctx.fillStyle = "#eef3f8"; ctx.fillRect(ally.x + 34, y + 30, 34, 6);
+    ctx.fillStyle = "#ffd34d"; ctx.fillRect(ally.x + 31, y + 27, 7, 12);
+  });
   ctx.restore();
 }
 
@@ -4035,7 +4144,7 @@ function drawCage(enemy) {
 }
 
 function drawEnemyHealthBar(enemy) {
-  if (enemy.kind === "lavaBoss") {
+  if (enemy.kind === "lavaBoss" || enemy.kind === "arenaDragon") {
     drawBossHealthBar(enemy);
     return;
   }
@@ -4063,7 +4172,7 @@ function drawBossHealthBar(enemy) {
   ctx.fillRect(x, y, barWidth * ratio, 10);
   ctx.fillStyle = "#ffd34d";
   ctx.fillRect(x, y + 10, Math.max(0, barWidth * ratio), 3);
-  drawTinyText("狼人 BOSS", x, y - 8, "#ffd34d");
+  drawTinyText(enemy.kind === "arenaDragon" ? "终章巨龙" : "狼人 BOSS", x, y - 8, "#ffd34d");
 }
 
 function drawProjectiles() {
@@ -4499,7 +4608,7 @@ function drawPlayer() {
   const gait = moving ? Math.sin(Date.now() / 85) * 5 : 0;
   const swimKick = isPlayerInRiver() ? Math.sin(Date.now() / 90) * 6 : gait;
   drawEntityShadow(player, isRidingDragon() || isRidingHorse() ? 1.2 : 1);
-  if (getActiveDragon() && !isRidingDragon()) {
+  if (getActiveDragon() && !isRidingDragon() && level.theme.id !== "arena") {
     drawDragonCompanion(dragonRestX, dragonRestY, gait);
   }
 

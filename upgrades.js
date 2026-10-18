@@ -126,6 +126,7 @@ function getWorldObjective() {
   if (level.theme.id === "desert") return "穿过流沙，击败守卫并进入金字塔";
   if (level.theme.id === "swamp") return "净化沼泽怪物，开启传送门";
   if (level.theme.id === "lava") return "穿越岩浆池，击败终极 BOSS";
+  if (level.theme.id === "arena") return "和三名队友并肩作战，击败终章巨龙";
   return "收集星星，击败怪物并打开宝箱";
 }
 
