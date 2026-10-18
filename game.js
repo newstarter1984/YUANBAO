@@ -16,6 +16,8 @@ const foxHelperFrames = Array.from({ length: 8 }, (_, index) => {
 });
 const townReferenceImage = new Image();
 townReferenceImage.src = "assets/town-reference.png?v=20261018";
+const townHomeInteriorImage = new Image();
+townHomeInteriorImage.src = "assets/town-home/interior.gif?v=20261018-home";
 const armorArenaImage = new Image();
 armorArenaImage.src = "assets/armor-arena-clean.png?v=20261018";
 const royalSoldierImages = {
@@ -314,6 +316,8 @@ let inventory = {
   chestCoins20: 0,
   chestCoins30: 0,
   chestCoins50: 0,
+  homeMeal: 0,
+  storyBook: 0,
 };
 let currentLevel = 1;
 let arenaAllies = [];
@@ -323,6 +327,12 @@ let royalCompanionY = floorY - 74;
 let royalCompanionAttackTimer = 0;
 let townHouseRented = false;
 try { townHouseRented = localStorage.getItem("yuanbao.town-house-rented.v1") === "yes"; } catch (_) {}
+let townShopOwned = false;
+let townApartmentOwned = false;
+let townApartmentRented = false;
+let townPropertyIncome = 0;
+let townBookFound = false;
+let townServantMealReady = true;
 let cameraX = 0;
 let gameState = "menu";
 let animationFrame;
@@ -371,6 +381,7 @@ function startGame() {
     grenadeTimer: 0,
     skillTimer: 0,
     attacking: 0,
+    sittingTimer: 0,
   };
 
   projectiles = [];
@@ -602,16 +613,23 @@ function buildLevel(number) {
   const town = theme.id === "town" ? {
     isNight: true,
     clock: 0,
+    inside: false,
+    outsideState: null,
     house: { x: 1640, width: 620 },
-    bed: { x: 2080, y: floorY - 70, width: 108, height: 70 },
+    entrance: { x: 1950, y: floorY - 80 },
+    bed: { x: 0, y: floorY - 118, width: 92, height: 94 },
+    bookshelf: { x: 118, y: 185, width: 92, height: 118 },
+    servants: [{ x: 557, y: 246 }, { x: 681, y: 246 }],
+    chair: { x: 826, y: 268, width: 86, height: 90 },
+    exit: { x: 285, y: floorY - 128, width: 100, height: 128 },
     npcs: [
       { x: 420, name: "药草商人", item: "medkit", itemName: "医疗包", cost: 25, amount: 1, color: "#4b8d57" },
       { x: 790, name: "面包师", item: "beef", itemName: "牛排", cost: 12, amount: 1, color: "#d78b47" },
       { x: 1130, name: "箭匠", item: "normalArrow", itemName: "普通箭 ×10", cost: 18, amount: 10, color: "#557fb5" },
-      { x: 1480, name: "房东", item: "rent", itemName: "租下房屋", cost: 600, amount: 1, color: "#9d6843" },
-      { x: 1810, name: "屋内药师", item: "powerPotion", itemName: "力量药水", cost: 45, amount: 1, color: "#7d62aa", indoor: true },
-      { x: 1950, name: "屋内厨师", item: "beef", itemName: "牛排", cost: 10, amount: 1, color: "#bc5e51", indoor: true },
-      { x: 2670, name: "旅行商人", item: "fireResistPotion", itemName: "抗火药水", cost: 8, amount: 1, color: "#3f7f91" },
+      { x: 1480, name: "房产经纪", item: "rent", itemName: "购买房屋", cost: 600, amount: 1, color: "#9d6843" },
+      { x: 2450, name: "商铺经纪", item: "shopProperty", itemName: "城镇商铺", cost: 1200, amount: 1, color: "#7d62aa" },
+      { x: 2810, name: "公寓管理员", item: "apartmentProperty", itemName: "城镇公寓", cost: 1800, amount: 1, color: "#bc5e51" },
+      { x: 3220, name: "旅行商人", item: "fireResistPotion", itemName: "抗火药水", cost: 8, amount: 1, color: "#3f7f91" },
     ],
   } : null;
 
@@ -748,6 +766,7 @@ function update(frameTime = performance.now()) {
 
 function handleInput() {
   player.vx = 0;
+  if (player.sittingTimer > 0) return;
   const moveSpeed = getPlayerMoveSpeed();
 
   if (keys.has("ArrowLeft") || keys.has("KeyA")) {
@@ -2398,6 +2417,8 @@ function renderBackpack() {
     { key: "dragonWand", icon: "🪄", name: "驯龙杖", count: inventory.dragonWand, action: equippedTool === "dragonWand" ? "已装备" : "装备", onClick: () => equipTool("dragonWand") },
     { key: "dragonNest", icon: "🪺", name: "驯龙巢", count: inventory.dragonNest, action: equippedTool === "dragonNest" ? "已装备" : "装备", onClick: () => equipTool("dragonNest") },
     { key: "beef", icon: "🥩", name: "牛肉", count: inventory.beef, action: "喂龙", onClick: feedDragon },
+    { key: "homeMeal", icon: "🍲", name: "仆人做的热饭", count: inventory.homeMeal || 0, action: "食用", onClick: useHomeMeal },
+    { key: "storyBook", icon: "📖", name: "屋内找到的书", count: inventory.storyBook || 0, action: "阅读", onClick: readStoryBook },
   ];
 
   weapons.forEach((weapon, index) => {
@@ -2419,6 +2440,19 @@ function renderBackpack() {
     item.append(button);
     inventoryItems.append(item);
   }
+}
+
+function useHomeMeal() {
+  if (!inventory.homeMeal) return;
+  inventory.homeMeal -= 1;
+  if (player) player.hearts = Math.min(maxBoostedHealth, player.hearts + 120);
+  effects.push({ x: player ? player.x - 40 : 120, y: player ? player.y - 40 : 260, width: 180, height: 28, life: 90, kind: "loot", text: "热饭：生命 +120" });
+  updateHud(); renderBackpack();
+}
+
+function readStoryBook() {
+  if (!inventory.storyBook) return;
+  effects.push({ x: player ? player.x - 45 : 120, y: player ? player.y - 42 : 260, width: 210, height: 28, life: 120, kind: "loot", text: "书中记着月影小镇的故事" });
 }
 
 function sellTreasure(key, value) {
@@ -2532,6 +2566,7 @@ function tickTimers() {
   player.grenadeTimer = Math.max(0, player.grenadeTimer - 1);
   player.skillTimer = Math.max(0, player.skillTimer - 1);
   player.attacking = Math.max(0, player.attacking - 1);
+  player.sittingTimer = Math.max(0, (player.sittingTimer || 0) - 1);
   characterMountTimer = Math.max(0, characterMountTimer - 1);
   characterDismountTimer = Math.max(0, characterDismountTimer - 1);
   player.invincible = Math.max(0, player.invincible - 1);
@@ -2694,6 +2729,7 @@ function draw() {
   drawProjectiles();
   drawPlayer();
   drawEffects();
+  if (level.theme.id === "town" && level.town?.inside) return;
   drawForegroundDepth();
   drawScreenDepthOverlay();
   drawVisionMask();
@@ -2707,6 +2743,13 @@ function drawMenuBackdrop() {
 }
 
 function drawWorld() {
+  if (level.theme.id === "town" && level.town?.inside) {
+    ctx.save();
+    cameraX = 0;
+    drawTownDecor();
+    ctx.restore();
+    return;
+  }
   ctx.save();
   ctx.translate(-cameraX, 0);
   drawSky();
@@ -3144,6 +3187,7 @@ function drawPlatforms() {
 
 function drawRiver() {
   const river = level.river;
+  if (!river) return;
   const isOcean = level.theme.id === "ocean";
   ctx.fillStyle = isOcean ? "#4f9eb9" : "#0b4c78";
   ctx.fillRect(river.x + 12, river.y + 12, river.width, river.height);
@@ -3370,11 +3414,27 @@ function drawArenaCrowdCheer(offsetX) {
 
 function drawTownDecor() {
   const town = level.town;
+  if (town.inside) {
+    if (townHomeInteriorImage.complete && townHomeInteriorImage.naturalWidth) {
+      ctx.drawImage(townHomeInteriorImage, 0, 0, 960, 540);
+    } else {
+      ctx.fillStyle = "#6e452c"; ctx.fillRect(0, 0, 960, 540);
+      ctx.fillStyle = "#d8cfb0"; ctx.fillRect(40, 70, 880, 250);
+      ctx.fillStyle = "#9a6038"; ctx.fillRect(0, 320, 960, 220);
+    }
+    drawTinyText("床", 84, floorY - 128, "#fff4c7");
+    drawTinyText("书柜", 128, 174, "#fff4c7");
+    drawTinyText("仆人", 602, 232, "#fff4c7");
+    drawTinyText("椅子", 838, 256, "#fff4c7");
+    return;
+  }
   if (townReferenceImage.complete && townReferenceImage.naturalWidth) {
     for (let x = 0; x < level.worldWidth; x += 960) {
       ctx.drawImage(townReferenceImage, x, 0, 960, 540);
     }
-    if (townHouseRented) drawTinyText("床边可睡觉", town.bed.x - 10, floorY - 92, "#fff4c7");
+    drawTinyText(townHouseRented ? "我的房屋 · 门前按 E" : "房屋 600 金币", town.house.x + 180, floorY - 112, "#fff4c7");
+    drawTinyText(townShopOwned ? "我的商铺" : "商铺 1200 金币", 2390, floorY - 105, "#fff4c7");
+    drawTinyText(townApartmentOwned ? (townApartmentRented ? "我的公寓 · 已出租" : "我的公寓 · 可出租") : "公寓 1800 金币", 2735, floorY - 105, "#fff4c7");
     return;
   }
   const night = town.isNight;
@@ -3408,7 +3468,7 @@ function drawTownDecor() {
   ctx.fillStyle = "#86a8c8"; ctx.fillRect(h.x + 442, 333, 96, 58);
   ctx.fillStyle = townHouseRented ? "#54bf72" : "#b75050";
   ctx.fillRect(h.x + 250, floorY - 100, 72, 100);
-  drawTinyText(townHouseRented ? "我的房子" : "出租 600 金币", h.x + 202, 205, "#fff4c7");
+  drawTinyText(townHouseRented ? "我的房子" : "购买 600 金币", h.x + 202, 205, "#fff4c7");
 
   for (const npc of town.npcs) {
     if (npc.indoor && !townHouseRented) continue;

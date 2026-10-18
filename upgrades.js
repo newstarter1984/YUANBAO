@@ -39,6 +39,13 @@ function getSaveData() {
     foxRescued: typeof foxRescued === "boolean" ? foxRescued : false,
     foxTutorialPending: typeof foxTutorialPending === "boolean" ? foxTutorialPending : false,
     royalCompanion: typeof royalCompanion === "string" ? royalCompanion : "",
+    townHouseRented: typeof townHouseRented === "boolean" ? townHouseRented : false,
+    townShopOwned: typeof townShopOwned === "boolean" ? townShopOwned : false,
+    townApartmentOwned: typeof townApartmentOwned === "boolean" ? townApartmentOwned : false,
+    townApartmentRented: typeof townApartmentRented === "boolean" ? townApartmentRented : false,
+    townPropertyIncome: typeof townPropertyIncome === "number" ? townPropertyIncome : 0,
+    townBookFound: typeof townBookFound === "boolean" ? townBookFound : false,
+    townServantMealReady: typeof townServantMealReady === "boolean" ? townServantMealReady : true,
   };
 }
 
@@ -71,6 +78,13 @@ function applySaveData(data) {
   if (typeof foxRescued === "boolean") foxRescued = Boolean(data.foxRescued);
   if (typeof foxTutorialPending === "boolean") foxTutorialPending = Boolean(data.foxTutorialPending);
   if (typeof royalCompanion === "string") royalCompanion = ["shield", "archer", "spearman"].includes(data.royalCompanion) ? data.royalCompanion : "";
+  if (typeof townHouseRented === "boolean") townHouseRented = Boolean(data.townHouseRented || townHouseRented);
+  if (typeof townShopOwned === "boolean") townShopOwned = Boolean(data.townShopOwned);
+  if (typeof townApartmentOwned === "boolean") townApartmentOwned = Boolean(data.townApartmentOwned);
+  if (typeof townApartmentRented === "boolean") townApartmentRented = Boolean(data.townApartmentRented);
+  if (typeof townPropertyIncome === "number") townPropertyIncome = Math.max(0, Number(data.townPropertyIncome) || 0);
+  if (typeof townBookFound === "boolean") townBookFound = Boolean(data.townBookFound);
+  if (typeof townServantMealReady === "boolean") townServantMealReady = data.townServantMealReady !== false;
   level = buildLevel(currentLevel);
   startButton.textContent = `开始第 ${currentLevel} 关：${level.theme.name}`;
   syncModeUi(); renderProfessions(); renderBackpack(); renderShop(); updateHud();
@@ -122,7 +136,7 @@ function getWorldObjective() {
   if (!level) return "准备下一次冒险";
   if (level.story) {
     if (level.story.type === "meadow") return level.story.saved ? "打开终点宝箱" : "找到并救出小狼";
-    if (level.story.type === "town") return "与镇民交谈，租房并安全度过黑夜";
+    if (level.story.type === "town") return level.town.inside ? "在家中做饭、找书、坐下或睡到天亮" : "购买房屋、商铺和公寓，经营月影小镇房产";
     if (level.story.type === "ocean") {
       const oceanObjectives = { battle: "击败抓住鲸鱼的三条鳄鱼", rescued: "打开沉船旁的金色宝箱" };
       return oceanObjectives[level.story.state] || "完成海洋救援";

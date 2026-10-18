@@ -17,7 +17,7 @@ function hideStory() {
 function initializeStoryLevel() {
   hideStory();
   if (level.theme.id === "town") {
-    level.story = { type: "town", state: "explore", clock: 0, message: "和镇上的居民聊聊。夜里会有骷髅兵出没，租下房子后可以在床边睡到天亮。" };
+    level.story = { type: "town", state: "explore", clock: 0, message: "和镇上的居民聊聊。花 600 金币买下房屋后，可以从门口进入自己的家。" };
   } else if (level.theme.id === "gravel") {
     level.story = { type: "meadow", state: "rescue", jump: false, attack: false, saved: foxRescued, clock: 0 };
     if (foxTutorialPending) {
@@ -111,10 +111,22 @@ function storyPrompt() {
   const s = level.story;
   if (!s) return null;
   if (s.type === "town") {
-    if (townHouseRented && storyNear(level.town.bed.x + 54, level.town.bed.y + 35, 150)) return { label: "睡觉到天亮", action: "sleep" };
-    const npc = level.town.npcs.find(person => (!person.indoor || townHouseRented) && storyNear(person.x + 14, floorY - 34, 135));
+    const town = level.town;
+    if (town.inside) {
+      if (storyNear(town.bed.x + 55, town.bed.y + 44, 130)) return { label: "睡觉到天亮", action: "sleep" };
+      if (storyNear(town.bookshelf.x + 45, floorY - 36, 105)) return { label: townBookFound ? "阅读书籍" : "从书柜找到一本书", action: "findBook" };
+      if (town.servants.some(servant => storyNear(servant.x, floorY - 36, 112))) return { label: townServantMealReady ? "让仆人帮忙做饭" : "和仆人聊聊", action: "servantCook" };
+      if (storyNear(town.chair.x + 40, floorY - 36, 112)) return { label: "坐下休息", action: "sitChair" };
+      if (storyNear(town.exit.x + 76, town.exit.y + 62, 115)) return { label: "走出房屋", action: "leaveHouse" };
+      return null;
+    }
+    if (townHouseRented && storyNear(town.entrance.x, town.entrance.y, 145)) return { label: "进入我的房屋", action: "enterHouse" };
+    const npc = town.npcs.find(person => storyNear(person.x + 14, floorY - 34, 135));
     if (!npc) return null;
-    return { label: npc.item === "rent" && townHouseRented ? "和房东聊聊" : `购买${npc.itemName}（${npc.cost}金币）`, action: "townBuy", npc };
+    if (npc.item === "rent" && townHouseRented) return { label: "询问我的房屋", action: "townBuy", npc };
+    if (npc.item === "shopProperty" && townShopOwned) return { label: townPropertyIncome ? `领取房产收入（${townPropertyIncome}金币）` : "查看我的商铺", action: "townBuy", npc };
+    if (npc.item === "apartmentProperty" && townApartmentOwned) return { label: townApartmentRented ? (townPropertyIncome ? `领取租金（${townPropertyIncome}金币）` : "查看公寓租客") : "把公寓出租", action: "townBuy", npc };
+    return { label: `购买${npc.itemName}（${npc.cost}金币）`, action: "townBuy", npc };
   }
   if (s.type === "meadow") {
     if (s.state === "victory") return { label: "跟小狼学习", action: "learn" };
@@ -137,13 +149,14 @@ function refreshStoryHud() {
   if (!s) return;
   let title, message;
   if (s.type === "town") {
-    title = level.town.isNight ? "月影小镇 · 夜晚" : "月影小镇 · 白天";
+    title = level.town.inside ? "我的房屋" : level.town.isNight ? "月影小镇 · 夜晚" : "月影小镇 · 白天";
     const prompt = storyPrompt();
     if (prompt && prompt.npc) {
       const npc = prompt.npc;
-      message = npc.item === "rent" && townHouseRented
-        ? "房东：房子已经是你的了，屋内两位居民也很欢迎你。"
-        : `${npc.name}：要不要买${npc.itemName}？只要 ${npc.cost} 金币。`;
+      message = npc.item === "rent" && townHouseRented ? "房产经纪：房子已经属于你，走到门前就能进去。" :
+        npc.item === "shopProperty" && townShopOwned ? `商铺经纪：你的商铺正在营业，当前可领取 ${townPropertyIncome} 金币。` :
+        npc.item === "apartmentProperty" && townApartmentOwned ? (townApartmentRented ? `公寓管理员：租客住得很好，当前可领取 ${townPropertyIncome} 金币。` : "公寓管理员：公寓已经买下，现在可以把它出租。") :
+        `${npc.name}：要不要买${npc.itemName}？只要 ${npc.cost} 金币。`;
     } else if (prompt && prompt.action === "sleep") {
       message = level.town.isNight ? "走到床边了。点击睡觉，就能跳过黑夜。" : "现在已经是白天，也可以睡一觉恢复生命。";
     } else {
@@ -191,6 +204,71 @@ function positionStoryInteraction() {
   storyInteract.style.top = `${canvas.offsetTop + (floorY - 85) * scale}px`;
 }
 
+function enterTownHouse() {
+  const town = level.town;
+  if (!town || town.inside || !townHouseRented) return;
+  town.outsideState = {
+    worldWidth: level.worldWidth,
+    platforms: level.platforms,
+    stars: level.stars,
+    enemies: level.enemies,
+    animals: level.animals,
+    river: level.river,
+    spikeTraps: level.spikeTraps,
+    lavaTraps: level.lavaTraps,
+    quicksandTraps: level.quicksandTraps,
+    bogTraps: level.bogTraps,
+    coral: level.coral,
+    waveHazard: level.waveHazard,
+    chest: level.chest,
+  };
+  town.inside = true;
+  level.worldWidth = 960;
+  level.platforms = [];
+  level.stars = [];
+  level.enemies = [];
+  level.animals = [];
+  level.river = null;
+  level.spikeTraps = [];
+  level.lavaTraps = [];
+  level.quicksandTraps = [];
+  level.bogTraps = [];
+  level.coral = [];
+  level.waveHazard = null;
+  level.chest = { x: -1000, y: -1000, width: 1, height: 1, opened: true, locked: true };
+  player.x = 475;
+  player.y = floorY - player.height;
+  player.vx = player.vy = 0;
+  player.onGround = true;
+  cameraX = 0;
+  keys.clear();
+}
+
+function leaveTownHouse() {
+  const town = level.town;
+  if (!town || !town.inside || !town.outsideState) return;
+  const outside = town.outsideState;
+  Object.assign(level, outside);
+  town.outsideState = null;
+  town.inside = false;
+  player.x = town.entrance.x;
+  player.y = floorY - player.height;
+  player.vx = player.vy = 0;
+  player.onGround = true;
+  cameraX = Math.max(0, player.x - canvas.width * 0.42);
+  keys.clear();
+}
+
+function collectTownPropertyIncome(label) {
+  if (townPropertyIncome <= 0) return 0;
+  const amount = townPropertyIncome;
+  townPropertyIncome = 0;
+  coins += amount;
+  effects.push({ x: player.x - 40, y: player.y - 45, width: 220, height: 28, life: 110, kind: "loot", text: `${label} +${amount} 金币` });
+  updateHud();
+  return amount;
+}
+
 function interactStory() {
   if (gameState !== "playing" || isBackpackOpen()) return;
   const prompt = storyPrompt();
@@ -200,7 +278,24 @@ function interactStory() {
     case "townBuy": {
       const npc = prompt.npc;
       if (npc.item === "rent" && townHouseRented) {
-        s.message = "房东：屋内有两位居民，床在房间右侧。晚上走到床边就能睡觉。";
+        s.message = "房产经纪：房子已经属于你。走到房屋门口，按 E 就能进入。";
+        break;
+      }
+      if (npc.item === "shopProperty" && townShopOwned) {
+        const collected = collectTownPropertyIncome("商铺收入");
+        s.message = collected ? `商铺经纪：已结清 ${collected} 金币的房产收入。` : "商铺经纪：商铺正在营业，睡过一晚后会产生收入。";
+        break;
+      }
+      if (npc.item === "apartmentProperty" && townApartmentOwned) {
+        if (!townApartmentRented) {
+          townApartmentRented = true;
+          s.message = "公寓管理员：已经找到租客！以后每睡过一晚，公寓都会产生租金。";
+          effects.push({ x: npc.x - 45, y: floorY - 116, width: 190, height: 28, life: 100, kind: "loot", text: "公寓已出租" });
+        } else {
+          collectTownPropertyIncome("公寓租金");
+          s.message = "公寓管理员：租客的租金已经为你结清。";
+        }
+        updateHud();
         break;
       }
       if (!unlimitedCoinsMode && coins < npc.cost) {
@@ -212,8 +307,16 @@ function interactStory() {
       if (npc.item === "rent") {
         townHouseRented = true;
         try { localStorage.setItem("yuanbao.town-house-rented.v1", "yes"); } catch (_) {}
-        s.message = "房东：成交！房子现在属于你，进去看看两位居民和床吧。";
-        effects.push({ x: npc.x - 60, y: floorY - 120, width: 210, height: 28, life: 120, kind: "loot", text: "已租下房屋！" });
+        s.message = "房产经纪：成交！房子现在属于你，走到门口就能进入。";
+        effects.push({ x: npc.x - 60, y: floorY - 120, width: 210, height: 28, life: 120, kind: "loot", text: "已买下房屋！" });
+      } else if (npc.item === "shopProperty") {
+        townShopOwned = true;
+        s.message = "商铺经纪：商铺已经属于你，每睡过一晚都会产生营业收入。";
+        effects.push({ x: npc.x - 45, y: floorY - 116, width: 190, height: 28, life: 100, kind: "loot", text: "已买下城镇商铺" });
+      } else if (npc.item === "apartmentProperty") {
+        townApartmentOwned = true;
+        s.message = "公寓管理员：公寓已经属于你。再和我交谈，就能把它出租给镇民。";
+        effects.push({ x: npc.x - 45, y: floorY - 116, width: 190, height: 28, life: 100, kind: "loot", text: "已买下城镇公寓" });
       } else {
         inventory[npc.item] = (inventory[npc.item] || 0) + npc.amount;
         s.message = `${npc.name}：谢谢惠顾！${npc.itemName}已经放进背包。`;
@@ -223,15 +326,50 @@ function interactStory() {
       renderBackpack();
       break;
     }
+    case "enterHouse":
+      enterTownHouse();
+      s.message = "欢迎回家。两位仆人可以做饭，床能跳过黑夜，书柜藏着书，椅子可以坐下休息。";
+      break;
+    case "leaveHouse":
+      leaveTownHouse();
+      s.message = "你走出了自己的房屋，回到月影小镇。";
+      break;
+    case "servantCook":
+      if (townServantMealReady) {
+        townServantMealReady = false;
+        inventory.homeMeal = (inventory.homeMeal || 0) + 1;
+        s.message = "仆人：饭做好了！一份热饭已经放进你的背包。";
+        effects.push({ x: player.x - 55, y: player.y - 45, width: 210, height: 28, life: 100, kind: "loot", text: "获得仆人做的热饭" });
+        renderBackpack();
+      } else s.message = "仆人：今天的饭已经做好了，睡过一晚再为你准备新的。";
+      break;
+    case "findBook":
+      if (!townBookFound) {
+        townBookFound = true;
+        inventory.storyBook = (inventory.storyBook || 0) + 1;
+        effects.push({ x: player.x - 40, y: player.y - 45, width: 190, height: 28, life: 100, kind: "loot", text: "找到一本小镇故事书" });
+        renderBackpack();
+      }
+      s.message = "书里记着月影小镇、皇家战队和五行龙的古老故事。";
+      break;
+    case "sitChair":
+      player.sittingTimer = 180;
+      player.vx = 0;
+      s.message = "你在书桌旁坐下来休息。三秒后可以继续行动。";
+      effects.push({ x: player.x - 25, y: player.y - 40, width: 150, height: 28, life: 90, kind: "loot", text: "坐下休息" });
+      break;
     case "sleep":
       level.town.isNight = false;
       player.hearts = Math.min(maxBoostedHealth, player.hearts + 100);
-      for (const enemy of level.enemies) {
+      const sleepingEnemies = level.town.outsideState ? level.town.outsideState.enemies : level.enemies;
+      for (const enemy of sleepingEnemies) {
         if (enemy.kind === "skeleton" && enemy.alive) { enemy.alive = false; enemy.deathFall = 999999; }
       }
+      townServantMealReady = true;
+      townPropertyIncome += (townShopOwned ? 80 : 0) + (townApartmentOwned && townApartmentRented ? 120 : 0);
       level.chest.locked = false;
-      s.message = "你一觉睡到了天亮。骷髅兵化成了街上的白骨，生命恢复了 100。";
-      effects.push({ x: player.x - 80, y: player.y - 50, width: 240, height: 28, life: 140, kind: "loot", text: "天亮了！生命 +100" });
+      s.message = `你一觉睡到了天亮。骷髅兵化成白骨，生命恢复 100${townPropertyIncome ? `，房产待领取 ${townPropertyIncome} 金币` : ""}。`;
+      effects.push({ x: player.x - 80, y: player.y - 50, width: 260, height: 28, life: 140, kind: "loot", text: "天亮了！生命 +100" });
       updateHud();
       break;
     case "learn":
@@ -284,6 +422,7 @@ function interactStory() {
       break;
   }
   if (finishPendingVictory()) return;
+  if (s.type === "town" && typeof saveGame === "function") saveGame("住宅与房产已保存");
   refreshStoryHud();
 }
 
