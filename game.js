@@ -8,6 +8,12 @@ const emberKnightFrames = [0, 1, 2, 3].map(index => {
   image.src = `assets/ember-knight-frame-${index}.png?v=20261018`;
   return image;
 });
+const emberKnightFrameBounds = [
+  { centerX: 130, bottom: 215 },
+  { centerX: 129.5, bottom: 215 },
+  { centerX: 130, bottom: 215 },
+  { centerX: 132.5, bottom: 215 },
+];
 
 const levelNumberElement = document.querySelector("#levelNumber");
 const themeNameElement = document.querySelector("#themeName");
@@ -2228,6 +2234,8 @@ function buySkin(skin) {
 function equipSkin(key) {
   if (!ownedSkins[key]) return;
   selectedSkin = key;
+  if (key !== "emberKnight" && selectedProfession === "emberKnight") selectedProfession = "doctor";
+  renderProfessions();
   updateHud();
   renderShop();
 }
@@ -4118,11 +4126,10 @@ function drawEmberKnight(x, y, facing, attackFrames) {
   const attackMax = attackFrames > 12 ? 48 : 12;
   const attackProgress = attackFrames > 0 ? 1 - attackFrames / attackMax : 0;
   const attacking = attackFrames > 0;
-  const drawWidth = attacking ? 104 : 96;
-  const drawHeight = attacking ? 106 : 98;
-  let offsetX = walking ? walkPhase * 3 : 0;
-  let offsetY = walking ? -Math.abs(walkPhase) * 5 : Math.sin(now / 320);
-  let rotation = walking ? walkPhase * 0.045 : 0;
+  const drawHeight = 98;
+  let offsetX = 0;
+  let offsetY = 0;
+  let rotation = 0;
 
   if (jumping) {
     offsetY -= 8;
@@ -4145,24 +4152,20 @@ function drawEmberKnight(x, y, facing, attackFrames) {
   ctx.translate(x + player.width / 2 + offsetX, y + 38 + offsetY);
   ctx.scale(facing, 1);
   ctx.rotate(rotation * facing);
-  if (walking) ctx.scale(1 + Math.abs(walkPhase) * 0.035, 1 - Math.abs(walkPhase) * 0.025);
   if (jumping) ctx.scale(0.94, 1.07);
-  if (attacking) {
-    ctx.globalAlpha = 0.32;
-    ctx.fillStyle = "#ff6a1f";
-    ctx.beginPath();
-    ctx.arc(14, 8, 50, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalAlpha = 1;
-  }
   if (emberKnightImage.complete && emberKnightImage.naturalWidth > 0) {
-    let source = emberKnightImage;
+    let frameIndex = 0;
     if (attacking) {
       const frameOrder = [0, 1, 2, 2, 3, 0];
-      const frameIndex = frameOrder[Math.min(frameOrder.length - 1, Math.floor(attackProgress * frameOrder.length))];
-      if (emberKnightFrames[frameIndex].complete) source = emberKnightFrames[frameIndex];
+      frameIndex = frameOrder[Math.min(frameOrder.length - 1, Math.floor(attackProgress * frameOrder.length))];
+    } else if (walking) {
+      const walkOrder = [0, 1, 0, 3];
+      frameIndex = walkOrder[Math.floor(now / 150) % walkOrder.length];
     }
-    ctx.drawImage(source, 48, 48, 168, 172, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+    const source = emberKnightFrames[frameIndex].complete && emberKnightFrames[frameIndex].naturalWidth > 0 ? emberKnightFrames[frameIndex] : emberKnightImage;
+    const alignment = emberKnightFrameBounds[frameIndex];
+    const frameScale = drawHeight / 172;
+    ctx.drawImage(source, -alignment.centerX * frameScale, 49 - alignment.bottom * frameScale, 256 * frameScale, 256 * frameScale);
   } else {
     ctx.fillStyle = "#f06a1b";
     ctx.fillRect(-20, -34, 40, 62);
@@ -4308,10 +4311,12 @@ function drawEffects() {
 
     if (effect.kind === "emberImpact") {
       ctx.globalAlpha = effect.life / 12;
-      ctx.fillStyle = "#ff6a1f";
-      ctx.fillRect(effect.x, effect.y, effect.width, effect.height);
-      ctx.fillStyle = "#fff6a1";
-      ctx.fillRect(effect.x + 9, effect.y + 9, effect.width - 18, effect.height - 18);
+      for (let spark = 0; spark < 6; spark += 1) {
+        ctx.fillStyle = spark % 2 ? "#ff2018" : "#b80f0a";
+        const sparkX = effect.x + 5 + (spark % 3) * 11;
+        const sparkY = effect.y + 16 + Math.sin(effect.life + spark * 1.7) * 14;
+        ctx.fillRect(sparkX, sparkY, 5, 5);
+      }
       ctx.globalAlpha = 1;
     }
 
