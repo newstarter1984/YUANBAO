@@ -36,6 +36,11 @@ const oceanFishFrames = Array.from({ length: 8 }, (_, species) =>
     return image;
   })
 );
+const eliteKnightFrames = Array.from({ length: 24 }, (_, index) => {
+  const image = new Image();
+  image.src = `assets/elite-knight/frame-${index}.png?v=20261018`;
+  return image;
+});
 const dwarfWarriorImage = new Image();
 dwarfWarriorImage.src = "assets/dwarf-warrior.gif?v=20261018";
 const dwarfWarriorFrames = Object.fromEntries(
@@ -2135,7 +2140,7 @@ function renderSkinShop() {
   const knightButton = document.createElement("button");
   knightButton.type = "button";
   knightButton.className = selectedSkin === "knight" ? "shop-item has-preview is-equipped" : "shop-item has-preview is-owned";
-  knightButton.append(createSkinPreviewCanvas("knight"), createShopCopy("骑士皮肤", selectedSkin === "knight" ? "已佩戴" : "佩戴", "默认的小骑士"));
+  knightButton.append(createSkinPreviewCanvas("knight"), createShopCopy("精英骑士", selectedSkin === "knight" ? "已佩戴" : "佩戴", "默认角色 · 蓝金重甲"));
   knightButton.disabled = selectedSkin === "knight";
   knightButton.addEventListener("click", () => equipSkin("knight"));
   shopItems.append(knightButton);
@@ -2184,7 +2189,18 @@ function createSkinPreviewCanvas(skinKey) {
   previewCtx.imageSmoothingEnabled = false;
   previewCtx.fillStyle = "#fffdf0";
   previewCtx.fillRect(0, 0, preview.width, preview.height);
-  drawSkinSprite(previewCtx, 2, 5, skinKey, 0, 1);
+  if (skinKey === "knight") {
+    const paintKnight = () => {
+      previewCtx.fillStyle = "#fffdf0";
+      previewCtx.fillRect(0, 0, preview.width, preview.height);
+      const source = eliteKnightFrames[0];
+      if (source.complete && source.naturalWidth > 0) previewCtx.drawImage(source, 2, 3, 52, 68);
+    };
+    eliteKnightFrames[0].addEventListener("load", paintKnight, { once: true });
+    paintKnight();
+  } else {
+    drawSkinSprite(previewCtx, 2, 5, skinKey, 0, 1);
+  }
   return preview;
 }
 
@@ -4682,6 +4698,12 @@ function drawPlayer() {
     return;
   }
 
+  if (selectedSkin === "knight") {
+    drawEliteKnight(x, isRidingDragon() ? y - 16 : isRidingHorse() ? y - 6 : y, player.facing, player.attacking);
+    ctx.restore();
+    return;
+  }
+
   const knightY = isRidingDragon() ? y - 4 : isRidingHorse() ? y + 4 : y;
   const mountMotion = getCharacterMountMotion(player.facing);
   ctx.save();
@@ -4738,6 +4760,38 @@ function drawBlueMage(x, y, facing, attackFrames) {
   } else {
     ctx.fillStyle = "#2d6ac5";
     ctx.fillRect(-22, -62, 44, 62);
+  }
+  ctx.restore();
+}
+
+function drawEliteKnight(x, y, facing, attackFrames) {
+  const now = Date.now();
+  const riding = isRidingDragon() || isRidingHorse();
+  const walking = player.onGround && Math.abs(player.vx) > 0.15 && !riding;
+  const jumping = !player.onGround && !isRidingDragon();
+  let frameIndex = 0;
+  if (walking) frameIndex = 4 + Math.floor(now / 90) % 12;
+  if (riding) frameIndex = 8 + Math.floor(now / 150) % 4;
+  if (jumping) frameIndex = player.vy < 0 ? 10 : 14;
+  if (attackFrames > 0) {
+    const attackMax = attackFrames > 12 ? 36 : 12;
+    const progress = Math.max(0, Math.min(0.999, 1 - attackFrames / attackMax));
+    frameIndex = Math.min(3, Math.floor(progress * 4));
+  }
+
+  const source = eliteKnightFrames[frameIndex] || eliteKnightFrames[0];
+  const mountMotion = getCharacterMountMotion(facing);
+  const bob = walking ? Math.sin(now / 90) * 1.5 : 0;
+  ctx.save();
+  ctx.translate(x + player.width / 2 + mountMotion.x, y + 72 + mountMotion.y + bob);
+  ctx.rotate(mountMotion.rotation);
+  ctx.scale(facing, 1);
+  if (jumping) ctx.rotate(Math.max(-0.12, Math.min(0.12, player.vy * 0.012)) * facing);
+  if (source.complete && source.naturalWidth > 0) {
+    ctx.drawImage(source, -61, -99, 122, 130);
+  } else {
+    ctx.fillStyle = "#4b83bd";
+    ctx.fillRect(-23, -64, 46, 64);
   }
   ctx.restore();
 }
