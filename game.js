@@ -183,8 +183,8 @@ let ownedSkins = {
   emberKnight: true,
 };
 let selectedProfession = "doctor";
-let emberMountTimer = 0;
-let emberDismountTimer = 0;
+let characterMountTimer = 0;
+let characterDismountTimer = 0;
 let speedPotionOwned = false;
 let powerBoostTimer = 0;
 let fireResistTimer = 0;
@@ -1312,7 +1312,7 @@ function useProfessionSkill() {
     player.attacking = 24;
     player.vx = 8 * player.facing;
     damageEnemiesIfHit(hitBox, getAttackDamage(68));
-    effects.push({ ...hitBox, life: 28, kind: "emberSlash", direction: player.facing });
+    effects.push({ x: player.facing > 0 ? hitBox.x + hitBox.width - 28 : hitBox.x, y: player.y + 18, width: 34, height: 34, life: 12, kind: "emberImpact" });
   }
 
   updateHud();
@@ -2032,10 +2032,10 @@ function toggleDragonMount() {
     dragonRestX = player.x + player.facing * 76;
     dragonRestY = Math.min(floorY - 76, player.y + 18);
     dragonRestLevel = currentLevel;
-    if (selectedSkin === "emberKnight") emberDismountTimer = 22;
+    characterDismountTimer = 22;
     setActiveMount("none");
   } else if (isNearActiveDragon()) {
-    if (selectedSkin === "emberKnight") emberMountTimer = 34;
+    characterMountTimer = 34;
     setActiveMount("dragon");
     if (player) {
       player.vy = -5.8;
@@ -2240,8 +2240,8 @@ function tickTimers() {
   player.grenadeTimer = Math.max(0, player.grenadeTimer - 1);
   player.skillTimer = Math.max(0, player.skillTimer - 1);
   player.attacking = Math.max(0, player.attacking - 1);
-  emberMountTimer = Math.max(0, emberMountTimer - 1);
-  emberDismountTimer = Math.max(0, emberDismountTimer - 1);
+  characterMountTimer = Math.max(0, characterMountTimer - 1);
+  characterDismountTimer = Math.max(0, characterDismountTimer - 1);
   player.invincible = Math.max(0, player.invincible - 1);
   powerBoostTimer = Math.max(0, powerBoostTimer - 1);
   fireResistTimer = Math.max(0, fireResistTimer - 1);
@@ -3918,7 +3918,7 @@ function drawDragonSurfaceDetails(targetCtx, dragon, headBob, flap) {
   targetCtx.restore();
 }
 
-function drawSkinSprite(targetCtx, x, y, skinKey, gait, facing) {
+function drawSkinSprite(targetCtx, x, y, skinKey, gait, facing, jumping = false, riding = false) {
   if (skinKey === "diverSkin") {
     targetCtx.fillStyle = "#ffd08a";
     targetCtx.fillRect(x + 14, y + 8, 28, 24);
@@ -3932,9 +3932,8 @@ function drawSkinSprite(targetCtx, x, y, skinKey, gait, facing) {
     targetCtx.fillStyle = "#f0c24d";
     targetCtx.fillRect(x + 5, y + 34, 7, 30);
     targetCtx.fillRect(x + 44, y + 34, 7, 30);
-    targetCtx.fillStyle = "#0e2236";
-    targetCtx.fillRect(x + 7, y + 62 + Math.max(0, gait), 16, 10);
-    targetCtx.fillRect(x + 31, y + 62 + Math.max(0, -gait), 16, 10);
+    drawPixelLeg(targetCtx, x + 15 + (riding ? 0 : gait * 0.7), y + 58 - (jumping ? 7 : Math.max(0, gait)), "#0e2236", jumping ? -0.45 : gait * 0.025);
+    drawPixelLeg(targetCtx, x + 39 - (riding ? 0 : gait * 0.7), y + 58 - (jumping ? 7 : Math.max(0, -gait)), "#0e2236", jumping ? 0.45 : -gait * 0.025);
     targetCtx.fillStyle = "#8f95a3";
     targetCtx.fillRect(x + 39, y + 8, 6, 26);
     return;
@@ -3952,9 +3951,8 @@ function drawSkinSprite(targetCtx, x, y, skinKey, gait, facing) {
   targetCtx.fillStyle = skin.accent;
   targetCtx.fillRect(x + 14, y + 36, 22, 5);
   targetCtx.fillRect(x + 23, y + 31, 4, 30);
-  targetCtx.fillStyle = skin.leg;
-  targetCtx.fillRect(x + 10, y + 56 + Math.max(0, gait), 12, 12);
-  targetCtx.fillRect(x + 28, y + 56 + Math.max(0, -gait), 12, 12);
+  drawPixelLeg(targetCtx, x + 16 + (riding ? 0 : gait * 0.75), y + 55 - (jumping ? 8 : Math.max(0, gait)), skin.leg, jumping ? -0.55 : gait * 0.03);
+  drawPixelLeg(targetCtx, x + 34 - (riding ? 0 : gait * 0.75), y + 55 - (jumping ? 8 : Math.max(0, -gait)), skin.leg, jumping ? 0.55 : -gait * 0.03);
   targetCtx.fillStyle = skin.helmet;
   targetCtx.fillRect(x + 8, y + 8, 36, 30);
   targetCtx.fillStyle = skin.face;
@@ -4009,6 +4007,19 @@ function drawSkinSprite(targetCtx, x, y, skinKey, gait, facing) {
   }
 }
 
+function drawPixelLeg(targetCtx, x, y, color, angle) {
+  targetCtx.save();
+  targetCtx.translate(x, y);
+  targetCtx.rotate(angle);
+  targetCtx.fillStyle = color;
+  targetCtx.fillRect(-6, 0, 12, 15);
+  targetCtx.fillStyle = "rgba(255,255,255,0.18)";
+  targetCtx.fillRect(-4, 2, 4, 7);
+  targetCtx.fillStyle = "#211b2c";
+  targetCtx.fillRect(-7, 12, 16, 6);
+  targetCtx.restore();
+}
+
 function addPixelHighlightsTo(targetCtx, x, y, width, height) {
   targetCtx.fillStyle = "rgba(255,255,255,0.18)";
   targetCtx.fillRect(x + 4, y + 4, Math.max(4, width / 3), 4);
@@ -4030,13 +4041,6 @@ function drawPlayer() {
   drawEntityShadow(player, isRidingDragon() || isRidingHorse() ? 1.2 : 1);
   if (getActiveDragon() && !isRidingDragon()) {
     drawDragonCompanion(dragonRestX, dragonRestY, gait);
-  }
-
-  if (selectedSkin === "diverSkin" || (level && level.theme.id === "ocean" && diverSkinOwned && selectedSkin === "knight")) {
-    drawSkinSprite(ctx, x, y, "diverSkin", swimKick, player.facing);
-    drawWeapon(y);
-    ctx.restore();
-    return;
   }
 
   if (isRidingDragon()) {
@@ -4063,8 +4067,25 @@ function drawPlayer() {
     return;
   }
 
+  if (selectedSkin === "diverSkin" || (level && level.theme.id === "ocean" && diverSkinOwned && selectedSkin === "knight")) {
+    const diverY = isRidingDragon() ? y - 4 : isRidingHorse() ? y + 4 : y;
+    const mountMotion = getCharacterMountMotion(player.facing);
+    ctx.save();
+    ctx.translate(mountMotion.x, mountMotion.y);
+    drawSkinSprite(ctx, x, diverY, "diverSkin", swimKick, player.facing, !player.onGround && !isRidingDragon(), isRidingDragon() || isRidingHorse());
+    drawWeapon(diverY);
+    ctx.restore();
+    ctx.restore();
+    return;
+  }
+
   const knightY = isRidingDragon() ? y - 4 : isRidingHorse() ? y + 4 : y;
-  drawSkinSprite(ctx, x, knightY, selectedSkin, gait, player.facing);
+  const mountMotion = getCharacterMountMotion(player.facing);
+  ctx.save();
+  ctx.translate(x + 24 + mountMotion.x, knightY + 38 + mountMotion.y);
+  ctx.rotate(mountMotion.rotation);
+  ctx.translate(-(x + 24), -(knightY + 38));
+  drawSkinSprite(ctx, x, knightY, selectedSkin, gait, player.facing, !player.onGround && !isRidingDragon(), isRidingDragon() || isRidingHorse());
   if (zhangFeiRageTimer > 0 && (selectedSkin === "zhangFei" || selectedSkin === "zhangFeiAlt")) {
     ctx.save();
     ctx.globalAlpha = 0.35;
@@ -4076,6 +4097,19 @@ function drawPlayer() {
   }
   drawWeapon(knightY);
   ctx.restore();
+  ctx.restore();
+}
+
+function getCharacterMountMotion(facing) {
+  if (characterMountTimer > 0) {
+    const progress = 1 - characterMountTimer / 34;
+    return { x: -facing * (1 - progress) * 68, y: (1 - progress) * 28 - Math.sin(progress * Math.PI) * 62, rotation: -facing * (1 - progress) * 0.2 };
+  }
+  if (characterDismountTimer > 0) {
+    const progress = 1 - characterDismountTimer / 22;
+    return { x: facing * progress * 34, y: -Math.sin(progress * Math.PI) * 30, rotation: facing * Math.sin(progress * Math.PI) * 0.12 };
+  }
+  return { x: 0, y: 0, rotation: 0 };
 }
 
 function drawEmberKnight(x, y, facing, attackFrames) {
@@ -4097,14 +4131,14 @@ function drawEmberKnight(x, y, facing, attackFrames) {
     offsetY -= 8;
     rotation = Math.max(-0.2, Math.min(0.2, player.vy * 0.018));
   }
-  if (emberMountTimer > 0) {
-    const mountProgress = 1 - emberMountTimer / 34;
+  if (characterMountTimer > 0) {
+    const mountProgress = 1 - characterMountTimer / 34;
     offsetX -= facing * (1 - mountProgress) * 72;
     offsetY += (1 - mountProgress) * 30 - Math.sin(mountProgress * Math.PI) * 66;
     rotation -= facing * (1 - mountProgress) * 0.22;
   }
-  if (emberDismountTimer > 0) {
-    const dismountProgress = 1 - emberDismountTimer / 22;
+  if (characterDismountTimer > 0) {
+    const dismountProgress = 1 - characterDismountTimer / 22;
     offsetX += facing * dismountProgress * 34;
     offsetY -= Math.sin(dismountProgress * Math.PI) * 30;
     rotation += facing * 0.12 * Math.sin(dismountProgress * Math.PI);
@@ -4125,28 +4159,49 @@ function drawEmberKnight(x, y, facing, attackFrames) {
     ctx.globalAlpha = 1;
   }
   if (emberKnightImage.complete && emberKnightImage.naturalWidth > 0) {
-    ctx.drawImage(emberKnightImage, 48, 48, 168, 172, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+    const stride = walking ? walkPhase * 7 : 0;
+    const legLift = walking ? Math.abs(walkPhase) * 5 : jumping ? 8 : isRidingDragon() || isRidingHorse() ? 9 : 0;
+    // The GIF is separated into armor, shield and two animated legs so the feet truly move.
+    ctx.drawImage(emberKnightImage, 48, 48, 168, 128, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight * 0.744);
+    ctx.drawImage(emberKnightImage, 159, 120, 45, 81, 14, -8, 26, 46);
+    drawEmberLeg(-19 + stride, 20 - Math.max(0, walkPhase) * legLift, -walkPhase * 0.18 + (jumping ? -0.35 : 0));
+    drawEmberLeg(5 - stride, 20 - Math.max(0, -walkPhase) * legLift, walkPhase * 0.18 + (jumping ? 0.35 : 0));
   } else {
     ctx.fillStyle = "#f06a1b";
     ctx.fillRect(-20, -34, 40, 62);
     ctx.fillStyle = "#ffd34d";
     ctx.fillRect(-12, -28, 24, 12);
   }
-  if (attacking) drawEmberSwordSwing(attackProgress);
+  drawEmberSword(attacking ? attackProgress : null);
   ctx.restore();
 }
 
-function drawEmberSwordSwing(progress) {
+function drawEmberLeg(x, y, angle) {
   ctx.save();
-  const swing = -1.65 + Math.min(1, progress * 1.35) * 2.35;
-  ctx.translate(2, 7);
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+  ctx.fillStyle = "#6f250f";
+  ctx.fillRect(-6, 0, 13, 12);
+  ctx.fillStyle = "#dd641b";
+  ctx.fillRect(-5, 1, 10, 8);
+  ctx.fillStyle = "#3a1710";
+  ctx.fillRect(-7, 10, 15, 9);
+  ctx.fillStyle = "#ff9b2f";
+  ctx.fillRect(-4, 2, 4, 3);
+  ctx.restore();
+}
+
+function drawEmberSword(progress) {
+  ctx.save();
+  const swing = progress === null ? 0.52 : -1.65 + Math.min(1, progress * 1.35) * 2.35;
+  ctx.translate(-3, 5);
   ctx.rotate(swing);
   const blade = ctx.createLinearGradient(8, 0, 70, 0);
   blade.addColorStop(0, "#ff6a1f");
   blade.addColorStop(0.35, "#ffd34d");
   blade.addColorStop(1, "#fffbe2");
   ctx.shadowColor = "#ff5a1f";
-  ctx.shadowBlur = 14;
+  ctx.shadowBlur = progress === null ? 5 : 14;
   ctx.fillStyle = blade;
   ctx.fillRect(5, -4, 65, 9);
   dragonPolygon(ctx, [[70,-7],[82,0],[70,7]], "#fffbe2");
@@ -4179,6 +4234,11 @@ function drawWeapon(knightY) {
   ctx.save();
   ctx.translate(handX, handY);
   ctx.scale(player.facing, 1);
+  if (player.attacking > 0) {
+    const maxFrames = player.attacking > 12 ? 24 : 12;
+    const swingProgress = 1 - player.attacking / maxFrames;
+    ctx.rotate(-1.25 + Math.min(1, swingProgress * 1.3) * 1.85);
+  }
 
   if (specialWeapon) {
     ctx.fillStyle =
@@ -4286,33 +4346,13 @@ function drawEffects() {
       ctx.fillRect(effect.x + 20, effect.y + 24, Math.max(8, effect.width - 34), 8);
     }
 
-    if (effect.kind === "emberSlash") {
-      const fade = Math.max(0.08, effect.life / 28);
-      ctx.save();
-      ctx.globalAlpha = fade;
-      ctx.translate(effect.direction < 0 ? effect.x + effect.width : effect.x, effect.y + effect.height / 2);
-      ctx.scale(effect.direction || 1, 1);
-      const flameGradient = ctx.createLinearGradient(0, 0, effect.width, 0);
-      flameGradient.addColorStop(0, "#fff6a1");
-      flameGradient.addColorStop(0.42, "#ff8a22");
-      flameGradient.addColorStop(1, "rgba(190,35,18,0.1)");
-      ctx.strokeStyle = flameGradient;
-      ctx.lineWidth = 16;
-      ctx.beginPath();
-      ctx.moveTo(12, 24);
-      ctx.quadraticCurveTo(effect.width * 0.5, -54, effect.width - 4, -5);
-      ctx.stroke();
-      ctx.lineWidth = 5;
-      ctx.strokeStyle = "#fff9d6";
-      ctx.beginPath();
-      ctx.moveTo(18, 19);
-      ctx.quadraticCurveTo(effect.width * 0.52, -40, effect.width - 12, -3);
-      ctx.stroke();
-      for (let spark = 0; spark < 6; spark += 1) {
-        ctx.fillStyle = spark % 2 ? "#ffd34d" : "#ff5a2e";
-        ctx.fillRect(34 + spark * 24, -28 + Math.sin(effect.life + spark) * 22, 8, 8);
-      }
-      ctx.restore();
+    if (effect.kind === "emberImpact") {
+      ctx.globalAlpha = effect.life / 12;
+      ctx.fillStyle = "#ff6a1f";
+      ctx.fillRect(effect.x, effect.y, effect.width, effect.height);
+      ctx.fillStyle = "#fff6a1";
+      ctx.fillRect(effect.x + 9, effect.y + 9, effect.width - 18, effect.height - 18);
+      ctx.globalAlpha = 1;
     }
 
     if (effect.kind === "fallenHead") {
