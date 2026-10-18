@@ -120,7 +120,7 @@ function getWorldObjective() {
   if (!level) return "准备下一次冒险";
   if (level.story) {
     if (level.story.type === "meadow") return level.story.saved ? "打开终点宝箱" : "找到并救出小狐狸";
-    const oceanObjectives = { help: "找到求救的螃蟹", guide: "跟随螃蟹找到鲸鱼", battle: "保护螃蟹，击退鲨鱼", freed: "和鲸鱼一起击退鲨鱼", thanks: "游到鲸鱼身边", offer: "接受鲸鱼的邀请", ride: "乘鲸鱼前往沉船", cave: "进入沉船", inside: "寻找金色宝箱", reward: "带着宝物前往沙漠" };
+    const oceanObjectives = { battle: "击败抓住鲸鱼的三条鳄鱼", rescued: "打开沉船旁的金色宝箱" };
     return oceanObjectives[level.story.state] || "完成海洋救援";
   }
   if (level.theme.id === "desert") return "穿过流沙，击败守卫并进入金字塔";

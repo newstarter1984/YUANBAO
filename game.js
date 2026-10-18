@@ -17,9 +17,15 @@ const foxHelperFrames = Array.from({ length: 7 }, (_, index) => {
 const townReferenceImage = new Image();
 townReferenceImage.src = "assets/town-reference.png?v=20261018";
 const armorArenaImage = new Image();
-armorArenaImage.src = "assets/armor-arena.png?v=20261018";
+armorArenaImage.src = "assets/armor-arena-clean.png?v=20261018";
+const arenaAllyImages = ["mage", "warrior", "priest"].map(name => {
+  const image = new Image(); image.src = `assets/arena-allies/${name}.png?v=20261018`; return image;
+});
 const oceanWreckImage = new Image();
 oceanWreckImage.src = "assets/ocean-wreck.png?v=20261018";
+const crocodileFrames = Array.from({ length: 24 }, (_, index) => {
+  const image = new Image(); image.src = `assets/crocodile/frame-${index}.png?v=20261018`; return image;
+});
 const shadowCultistFrames = Array.from({ length: 12 }, (_, index) => {
   const image = new Image(); image.src = `assets/shadow-cultist/frame-${index}.png?v=20261018`; return image;
 });
@@ -317,9 +323,9 @@ function startGame() {
   attackButton.classList.remove("is-hidden");
   level = buildLevel(currentLevel);
   arenaAllies = level.theme.id === "arena" ? [
-    { x: 430, color: "#2f79c8", attack: 10 },
-    { x: 490, color: "#d6473f", attack: 24 },
-    { x: 550, color: "#4c9b55", attack: 38 },
+    { x: 430, sprite: 0, attack: 10 },
+    { x: 490, sprite: 1, attack: 24 },
+    { x: 550, sprite: 2, attack: 38 },
   ] : [];
 
   player = {
@@ -464,7 +470,7 @@ function getBossHp() {
 
 function buildLevel(number) {
   const theme = getTheme(number);
-  const worldWidth = theme.id === "arena" ? 960 : 3800 + number * 850;
+  const worldWidth = theme.id === "arena" ? 960 : theme.id === "ocean" ? 1200 : 3800 + number * 850;
   const enemyCount = theme.id === "arena" ? 0 : theme.id === "town" ? 6 : theme.id === "lava" ? 8 + number : theme.id === "swamp" ? 5 + number : 4 + number;
   const platforms = theme.id === "ocean" || theme.id === "town" ? [] : [
     { x: 210, y: 378, width: 150, height: 20 },
@@ -1012,6 +1018,7 @@ function getPlayerMoveSpeed() {
 
 function getEnemyAttackDamage(enemy) {
   if (!enemy) return 50;
+  if (enemy.questCrocodile) return 18;
   if (enemy.kind === "lavaBoss") return 98;
   if (["swampWitch", "lavaMage", "lavaKnight"].includes(enemy.kind)) return 70;
   return 50;
@@ -2962,7 +2969,7 @@ function drawSky() {
   const townNight = themeId === "town" && level.town && level.town.isNight;
   ctx.fillStyle =
     themeId === "town" ? (townNight ? "#171a35" : "#75b8df") :
-    themeId === "ocean" ? "#2387c8" :
+    themeId === "ocean" ? "#72cce8" :
     themeId === "desert" ? "#f2b866" :
     themeId === "lava" ? "#3a1620" :
     themeId === "swamp" ? "#7c8a67" :
@@ -2970,7 +2977,7 @@ function drawSky() {
   ctx.fillRect(cameraX, 0, canvas.width, canvas.height);
   ctx.fillStyle =
     themeId === "town" ? (townNight ? "#29284b" : "#a8d7e9") :
-    themeId === "ocean" ? "#126aa6" :
+    themeId === "ocean" ? "#55b7d9" :
     themeId === "desert" ? "#d89047" :
     themeId === "lava" ? "#5c1d22" :
     themeId === "swamp" ? "#536247" :
@@ -2982,7 +2989,7 @@ function drawSky() {
     themeId === "lava" ? "#21161b" :
     themeId === "desert" ? "#c7833f" :
     themeId === "swamp" ? "#40513d" :
-    themeId === "ocean" ? "#0e5a90" :
+    themeId === "ocean" ? "#399ec4" :
     "#3996c8";
   ctx.fillStyle = ridgeColor;
   for (let x = cameraX - 120; x < cameraX + canvas.width + 220; x += 180) {
@@ -3049,21 +3056,21 @@ function drawGround() {
   const themeId = level.theme.id;
   const front =
     themeId === "town" ? "#756b72" :
-    themeId === "ocean" ? "#135b87" :
+    themeId === "ocean" ? "#70bfd5" :
     themeId === "desert" ? "#e4b757" :
     themeId === "lava" ? "#21161b" :
     themeId === "swamp" ? "#48613e" :
     "#42c96d";
   const top =
     themeId === "town" ? "#aaa2a0" :
-    themeId === "ocean" ? "#0d4161" :
+    themeId === "ocean" ? "#55a8c2" :
     themeId === "desert" ? "#b98a38" :
     themeId === "lava" ? "#ff5a2e" :
     themeId === "swamp" ? "#2f442d" :
     "#2aa654";
   const side =
     themeId === "town" ? "#484550" :
-    themeId === "ocean" ? "#0a324a" :
+    themeId === "ocean" ? "#3b829c" :
     themeId === "desert" ? "#8f6631" :
     themeId === "lava" ? "#3b1513" :
     themeId === "swamp" ? "#203022" :
@@ -3134,20 +3141,20 @@ function drawPlatforms() {
 function drawRiver() {
   const river = level.river;
   const isOcean = level.theme.id === "ocean";
-  ctx.fillStyle = isOcean ? "#062d52" : "#0b4c78";
+  ctx.fillStyle = isOcean ? "#4f9eb9" : "#0b4c78";
   ctx.fillRect(river.x + 12, river.y + 12, river.width, river.height);
-  ctx.fillStyle = isOcean ? "#126aa6" : "#1d8fd8";
+  ctx.fillStyle = isOcean ? "#79cbe2" : "#1d8fd8";
   ctx.fillRect(river.x, river.y, river.width, river.height);
-  ctx.fillStyle = isOcean ? "#65d7ff" : "#8ee8ff";
+  ctx.fillStyle = isOcean ? "#c4f3ff" : "#8ee8ff";
   ctx.fillRect(river.x, river.y, river.width, 8);
-  ctx.fillStyle = isOcean ? "rgba(101, 215, 255, 0.45)" : "#65d7ff";
+  ctx.fillStyle = isOcean ? "rgba(230, 251, 255, 0.72)" : "#65d7ff";
   const drift = Math.floor(Date.now() / 90) % 46;
   for (let x = river.x + 12 - drift; x < river.x + river.width; x += 46) {
     ctx.fillRect(x, river.y + 14, 24, 5);
     ctx.fillRect(x + 18, river.y + 42, 30, 5);
     if (isOcean) ctx.fillRect(x + 8, river.y + 118, 36, 4);
   }
-  ctx.fillStyle = isOcean ? "rgba(6, 45, 82, 0.55)" : "#0f5f9f";
+  ctx.fillStyle = isOcean ? "rgba(58, 135, 161, 0.5)" : "#0f5f9f";
   ctx.fillRect(river.x, river.y + river.height - 12, river.width, 12);
 }
 
@@ -3180,7 +3187,12 @@ function drawThemeDecor() {
 
   if (level.theme.id === "ocean") {
     if (oceanWreckImage.complete && oceanWreckImage.naturalWidth) {
-      for (let x = 0; x < level.worldWidth; x += 1200) ctx.drawImage(oceanWreckImage, x, 0, 1200, 540);
+      ctx.save();
+      ctx.globalAlpha = 0.78;
+      ctx.drawImage(oceanWreckImage, 0, 0, level.worldWidth, 540);
+      ctx.fillStyle = "rgba(129, 216, 237, 0.28)";
+      ctx.fillRect(0, 0, level.worldWidth, 540);
+      ctx.restore();
     }
     for (const reef of level.coral) {
       const colors = ["#ff6b8a", "#ffd34d", "#7fffd4"];
@@ -3540,7 +3552,8 @@ function drawEnemies() {
     if (enemy.kind === "drowned") drawDrowned(enemy);
     if (enemy.kind === "fish") drawFish(enemy);
     if (enemy.kind === "crab") drawCrab(enemy);
-    if (enemy.kind === "shark") drawShark(enemy);
+    if (enemy.kind === "shark" && enemy.questCrocodile) drawCrocodile(enemy);
+    else if (enemy.kind === "shark") drawShark(enemy);
     if (enemy.kind === "harpooner") drawHarpooner(enemy);
     if (enemy.kind === "mummy") drawMummy(enemy);
     if (enemy.kind === "scorpion") drawScorpion(enemy);
@@ -3572,19 +3585,34 @@ function drawArenaDragonBoss(enemy) {
   drawDragonShape(ctx, enemy.x + 16, enemy.y + 30, dragon, 1.72, airborne, false, enemy.facing, false, enemy.attackTimer > 72);
 }
 
+function drawCrocodile(enemy) {
+  const frame = crocodileFrames[(Math.floor(Date.now() / 90) + (enemy.crocodileOffset || 0)) % crocodileFrames.length];
+  ctx.save();
+  ctx.translate(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2);
+  ctx.scale(enemy.facing, 1);
+  if (frame.complete && frame.naturalWidth > 0) ctx.drawImage(frame, -82, -38, 164, 58);
+  ctx.restore();
+}
+
 function drawArenaAllies() {
   if (!level || level.theme.id !== "arena") return;
   ctx.save();
   ctx.translate(-cameraX, 0);
   arenaAllies.forEach((ally, index) => {
-    const y = floorY - 68 + Math.sin(Date.now() / 110 + index) * 2;
+    const source = arenaAllyImages[ally.sprite];
+    const attacking = ally.attack > 30;
+    const y = floorY - 65 + Math.sin(Date.now() / 110 + index) * 2;
     ctx.fillStyle = "rgba(0,0,0,.25)"; ctx.fillRect(ally.x - 4, floorY - 5, 48, 7);
-    ctx.fillStyle = ally.color; ctx.fillRect(ally.x, y + 22, 38, 38);
-    ctx.fillStyle = "#d9dde5"; ctx.fillRect(ally.x + 5, y, 28, 25);
-    ctx.fillStyle = "#ffd08a"; ctx.fillRect(ally.x + 11, y + 8, 16, 13);
-    ctx.fillStyle = "#211b2c"; ctx.fillRect(ally.x + 3, y + 58, 12, 10); ctx.fillRect(ally.x + 24, y + 58, 12, 10);
-    ctx.fillStyle = "#eef3f8"; ctx.fillRect(ally.x + 34, y + 30, 34, 6);
-    ctx.fillStyle = "#ffd34d"; ctx.fillRect(ally.x + 31, y + 27, 7, 12);
+    ctx.save();
+    ctx.translate(ally.x + 24, y + 64);
+    ctx.rotate(attacking ? -0.12 : 0);
+    if (source.complete && source.naturalWidth > 0) ctx.drawImage(source, -30, -70, 60, 70);
+    ctx.restore();
+    if (attacking) {
+      ctx.strokeStyle = index === 0 ? "#8fd9ff" : index === 1 ? "#ffd34d" : "#fff7c2";
+      ctx.lineWidth = 5;
+      ctx.beginPath(); ctx.arc(ally.x + 54, y + 33, 24, -0.8, 0.8); ctx.stroke();
+    }
   });
   ctx.restore();
 }

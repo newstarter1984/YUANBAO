@@ -26,20 +26,15 @@ function initializeStoryLevel() {
     }
   } else if (level.theme.id === "ocean") {
     level.story = {
-      type: "ocean", state: "help", clock: 0, timer: 0, attacked: false,
-      crabX: 440, whaleX: 1510, whaleY: 250, net: 1, ramTimer: 0,
-      shipX: level.worldWidth - 620, rewarded: false,
+      type: "ocean", state: "battle", clock: 0, timer: 0,
+      whaleX: 430, whaleY: 255, net: 0,
+      shipX: 650, rewarded: false,
     };
-    // Story actors are separate from enemies so friendly creatures cannot be attacked.
     level.enemies = [];
     level.waveHazard = null;
-    if ("speechSynthesis" in window && "SpeechSynthesisUtterance" in window) {
-      const call = new SpeechSynthesisUtterance("救命呀！请帮帮我们，鲸鱼被困住了！");
-      call.lang = "zh-CN";
-      call.volume = 0.4;
-      call.rate = 1.1;
-      window.speechSynthesis.speak(call);
-    }
+    level.stars = [];
+    level.chest = { x: 1010, y: floorY - 62, width: 76, height: 58, opened: false, locked: true };
+    beginWhaleBattle();
   }
   refreshStoryHud();
 }
@@ -115,12 +110,7 @@ function storyPrompt() {
     if (s.state === "done") return { label: "前往海洋", action: "next" };
     return null;
   }
-  if (s.state === "help") return { label: "跟螃蟹走", action: "guide" };
-  if (s.state === "thanks" && storyNear(s.whaleX + 100, s.whaleY + 45, 300)) return { label: "听鲸鱼说话", action: "talk" };
-  if (s.state === "offer" && storyNear(s.whaleX + 100, s.whaleY + 45, 300)) return { label: "跟鲸鱼去寻宝", action: "ride" };
-  if (s.state === "cave" && storyNear(s.shipX + 180, floorY - 70, 140)) return { label: "进入沉船", action: "enter" };
-  if (s.state === "inside" && storyNear(level.chest.x + 38, floorY - 45, 130)) return { label: "打开金色宝箱", action: "treasure" };
-  if (s.state === "reward") return { label: "带着宝物前往沙漠", action: "next" };
+  if (s.state === "rescued" && storyNear(level.chest.x + 38, floorY - 45, 150)) return { label: "打开沉船里的金色宝箱", action: "treasure" };
   return null;
 }
 
@@ -151,16 +141,8 @@ function refreshStoryHud() {
       "小狐狸：我在右边终点！不用打败怪物，靠近牢笼按 J 攻击，就能救我出来！";
   } else if (s.type === "ocean") {
     const copy = {
-      help: ["海洋 · 远处的求救声", "螃蟹们：救命呀！鲸鱼被渔网困住了！往右边来，我们带你过去！"],
-      guide: ["跟随螃蟹", "螃蟹：请保护我们，我们带你去！按住空格、↑ 或 W 向上游，松开慢慢下潜。"],
-      battle: ["救援鲸鱼", s.attacked ? `螃蟹正在剪网：${Math.round((1 - s.net) * 100)}%。挡住鲨鱼，给它们争取时间！` : "鲸鱼被围住了！先用 J 攻击鲨鱼，螃蟹会趁机剪开渔网。"],
-      freed: ["鲸鱼加入战斗", "鲸鱼：我自由了！我们一起赶走鲨鱼！"],
-      thanks: ["救援成功", "鲨鱼都被击败了。游到鲸鱼身边，和它说说话。"],
-      offer: ["鲸鱼的邀请", "鲸鱼：谢谢你和螃蟹们！我知道一个藏着宝物的水下洞穴，坐上来，我带你去！"],
-      ride: ["鲸鱼带路", "坐稳啦！我们穿过珊瑚礁，去寻找那艘古老的沉船。"],
-      cave: ["水下洞穴 · 沉船入口", "螃蟹：进去吧，里面有很多好东西！游到下方沉船的破洞处。"],
-      inside: ["沉船内部", "腐旧的船梁间游着小鱼，螃蟹在船板上爬行。继续向右，寻找金色宝箱。"],
-      reward: ["找到宝藏！", "获得龙蛋 ×1、牛排 ×1，已放进背包。鲸鱼和螃蟹：下次再来找我们玩！"],
+      battle: ["海洋救援", "三条鳄鱼抓住了鲸鱼！击败它们，再去沉船旁寻找金色宝箱。"],
+      rescued: ["鲸鱼获救", "沉船旁的金色宝箱已经出现。打开它就会返回主界面。"],
     };
     [title, message] = copy[s.state];
   }
@@ -239,20 +221,16 @@ function interactStory() {
       projectiles = [];
       effects = [];
       break;
-    case "guide": s.state = "guide"; break;
-    case "talk": s.state = "offer"; break;
-    case "ride": s.state = "ride"; keys.clear(); break;
-    case "enter": enterStoryShip(); break;
     case "treasure":
       if (s.rewarded) return;
       s.rewarded = true;
       level.chest.opened = true;
       inventory.dragonEgg += 1;
       inventory.beef += 1;
-      s.state = "reward";
+      s.state = "rescued";
       renderBackpack();
       updateHud();
-      requestLevelVictory(true, "沉船寻宝成功！获得龙蛋 ×1、牛排 ×1，已放入背包。准备好后点击开始前往沙漠。");
+      requestLevelVictory(true, "沉船宝箱已经打开！获得龙蛋 ×1、牛排 ×1，已回到主界面。");
       break;
     case "next":
       if (s.type === "meadow") {
@@ -270,12 +248,12 @@ function beginWhaleBattle() {
   const s = level.story;
   s.state = "battle";
   for (let i = 0; i < 3; i += 1) {
-    const shark = buildEnemy("shark", s.whaleX + 100 + i * 130, level.number, i, "ocean");
-    shark.questShark = true;
-    shark.y = shark.baseY = 300 + i * 28;
-    // A rescue must be playable with the starter sword too.
-    shark.hp = shark.maxHp = Math.max(12, getAttackDamage(weapons[weaponLevel].damage) * 4);
-    level.enemies.push(shark);
+    const crocodile = buildEnemy("shark", s.whaleX - 20 + i * 135, level.number, i, "ocean");
+    crocodile.questCrocodile = true;
+    crocodile.crocodileOffset = i * 8;
+    crocodile.y = crocodile.baseY = 285 + (i % 2) * 58;
+    crocodile.hp = crocodile.maxHp = Math.max(18, getAttackDamage(weapons[weaponLevel].damage) * 5);
+    level.enemies.push(crocodile);
   }
   updateHud();
 }
@@ -290,45 +268,10 @@ function updateStory() {
   }
   if (s.type === "ocean") {
     player.y = Math.max(80, player.y);
-    // Swimming above the crabs must not block the invitation or the route.
-    if (s.state === "help" && player.x + player.width >= s.crabX - 220) s.state = "guide";
-    if (s.state === "guide") {
-      if (s.crabX - player.x < 300) {
-        const guideSpeed = Math.max(2.2, Math.min(8, getPlayerMoveSpeed() * 1.15));
-        s.crabX = Math.min(1300, s.crabX + guideSpeed);
-      }
-      if (s.crabX >= 1280 && player.x > 1040) beginWhaleBattle();
-    }
-    if (s.state === "battle" || s.state === "freed") {
-      const sharks = level.enemies.filter(e => e.questShark);
-      if (sharks.some(e => e.hp < e.maxHp)) s.attacked = true;
-      if (s.attacked && s.state === "battle") {
-        s.net = Math.max(0, s.net - 1 / 360);
-        if (s.net < 0.001) { s.net = 0; s.state = "freed"; }
-      }
-      if (s.state === "freed") {
-        s.ramTimer += 1;
-        const target = sharks.find(e => e.alive);
-        if (target) {
-          const dx = target.x - 110 - s.whaleX;
-          s.whaleX += Math.sign(dx) * Math.min(Math.abs(dx), 4);
-          s.whaleY += (target.y - 35 - s.whaleY) * 0.04;
-          if (s.ramTimer >= 90 && Math.abs(dx) < 160) {
-            damageEnemy(target, Math.ceil(target.maxHp / 3));
-            s.ramTimer = 0;
-            effects.push({ x: target.x, y: target.y, width: 110, height: 50, kind: "loot", text: "鲸鱼撞击！", life: 40 });
-          }
-        } else { s.state = "thanks"; }
-      }
-    }
-    if (s.state === "ride") {
-      s.whaleX = Math.min(s.shipX - 220, s.whaleX + 4);
-      s.whaleY += (235 - s.whaleY) * 0.05;
-      player.x = s.whaleX + 95;
-      player.y = s.whaleY - player.height + 16;
-      player.vx = player.vy = 0;
-      player.invincible = Math.max(2, player.invincible);
-      if (s.whaleX >= s.shipX - 220) s.state = "cave";
+    if (s.state === "battle" && level.enemies.filter(e => e.questCrocodile && e.alive).length === 0) {
+      s.state = "rescued";
+      level.chest.locked = false;
+      effects.push({ x: level.chest.x - 70, y: level.chest.y - 35, width: 220, height: 30, life: 140, kind: "loot", text: "金色宝箱出现了！" });
     }
   }
   refreshStoryHud();
@@ -469,9 +412,7 @@ function drawStoryScene() {
       drawTinyText(free ? "牢笼已打破" : "按 J 打破牢笼", x - 60, y - 15, "#ffdfa0");
     }
   } else if (s.type === "ocean") {
-    const inside = ["inside", "reward"].includes(s.state);
-    if (inside) drawStoryInterior(s);
-    else {
+    {
       const caveX = s.shipX - 350;
       storyPoly([[caveX, 74], [caveX + 90, 150], [caveX + 120, 86], [caveX + 210, 157], [caveX + 255, 98], [level.worldWidth, 152], [level.worldWidth, 74]], "#274953");
       if (!oceanWreckImage.complete || !oceanWreckImage.naturalWidth) drawStoryShip(s.shipX);
@@ -486,9 +427,13 @@ function drawStoryScene() {
         ctx.fillStyle = "#dbcba9"; ctx.fillRect(x - 8, y - 3, 26, 7);
       }
       drawStoryWhale(s);
-      const cutting = ["battle", "freed"].includes(s.state);
-      drawStoryCrabs(cutting ? s.whaleX + 40 : s.state === "cave" ? s.shipX + 60 : s.state === "ride" ? s.whaleX + 40 : s.crabX, cutting ? s.whaleY + 82 : s.state === "ride" ? s.whaleY - 5 : floorY - 26, s.clock);
-      if (s.state === "help") drawTinyText("救命呀！", s.crabX - 8, floorY - 65, "#ffedbd");
+      if (s.state === "rescued") {
+        const c = level.chest;
+        ctx.fillStyle = "rgba(255,211,77,.18)"; ctx.beginPath(); ctx.arc(c.x + 38, c.y + 24, 70, 0, Math.PI * 2); ctx.fill();
+        drawBlock3D(c.x, c.y + 15, 76, 42, "#bd8e28", "#ffe39a", "#785626", 8);
+        ctx.fillStyle = "#ffda63"; ctx.fillRect(c.x, c.y, 76, 19); ctx.fillRect(c.x + 10, c.y + 15, 6, 42); ctx.fillRect(c.x + 59, c.y + 15, 6, 42);
+        ctx.fillStyle = "#fff0b4"; ctx.fillRect(c.x + 31, c.y + 20, 14, 12);
+      }
     }
     for (let i = 0; i < 16; i += 1) {
       const x = (i * 257 + s.clock * (0.4 + i % 3 * 0.15)) % level.worldWidth;
