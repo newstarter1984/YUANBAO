@@ -97,6 +97,7 @@ const mountButton = document.querySelector("#mountButton");
 const powerPotionButton = document.querySelector("#powerPotionButton");
 const medkitButton = document.querySelector("#medkitButton");
 const backpackButton = document.querySelector("#backpackButton");
+const attackButton = document.querySelector("#attackButton");
 const backpackPanel = document.querySelector("#backpackPanel");
 const closeBackpackButton = document.querySelector("#closeBackpackButton");
 const inventoryItems = document.querySelector("#inventoryItems");
@@ -301,16 +302,17 @@ function startGame() {
   mainMenu.classList.add("is-hidden");
   gameActions.classList.remove("is-hidden");
   backpackButton.classList.remove("is-hidden");
+  attackButton.classList.remove("is-hidden");
   level = buildLevel(currentLevel);
   if (level.theme.id === "arena") activeMount = "none";
   arenaAllies = level.theme.id === "arena" ? [
-    { x: 150, color: "#2f79c8", attack: 10 },
-    { x: 205, color: "#d6473f", attack: 24 },
-    { x: 260, color: "#4c9b55", attack: 38 },
+    { x: 430, color: "#2f79c8", attack: 10 },
+    { x: 490, color: "#d6473f", attack: 24 },
+    { x: 550, color: "#4c9b55", attack: 38 },
   ] : [];
 
   player = {
-    x: 80,
+    x: level.theme.id === "arena" ? 360 : 80,
     y: floorY - 72,
     width: isRidingDragon() ? 78 : isRidingHorse() ? 70 : 48,
     height: isRidingDragon() ? 88 : isRidingHorse() ? 84 : 72,
@@ -634,6 +636,7 @@ function showMenu(reason) {
   renderWorldTestButtons();
   gameActions.classList.add("is-hidden");
   backpackButton.classList.add("is-hidden");
+  attackButton.classList.add("is-hidden");
   backpackPanel.classList.add("is-hidden");
   mainMenu.classList.remove("is-hidden");
 }
@@ -3147,7 +3150,10 @@ function drawThemeDecor() {
   if (level.theme.id === "town") drawTownDecor();
 
   if (level.theme.id === "arena" && armorArenaImage.complete && armorArenaImage.naturalWidth) {
-    for (let x = 0; x < level.worldWidth; x += 960) ctx.drawImage(armorArenaImage, x, 0, 960, 540);
+    for (let x = 0; x < level.worldWidth; x += 960) {
+      ctx.drawImage(armorArenaImage, x, 0, 960, 540);
+      drawArenaCrowdCheer(x);
+    }
     ctx.fillStyle = "#e6b84f";
     ctx.fillRect(250, 238, 72, 68);
   }
@@ -3231,6 +3237,32 @@ function drawThemeDecor() {
       ctx.fillStyle = "#4a2028";
       ctx.fillRect(x - 22, floorY - 18, 112, 18);
     }
+  }
+}
+
+function drawArenaCrowdCheer(offsetX) {
+  const time = Date.now() / 115;
+  const sections = [[170, 365], [590, 790]];
+  sections.forEach(([start, end], section) => {
+    let index = 0;
+    for (let x = start; x < end; x += 24) {
+      const raised = Math.sin(time + index * 1.7 + section) > 0;
+      const bob = raised ? -4 : 1;
+      const y = 82 + (index % 2) * 13 + bob;
+      const color = ["#2f79c8", "#d6473f", "#e0ad35", "#4c9b55", "#7e58aa"][index % 5];
+      ctx.fillStyle = "#efb17d";
+      ctx.fillRect(offsetX + x + 5, y, 8, 8);
+      ctx.fillStyle = color;
+      ctx.fillRect(offsetX + x + 3, y + 8, 12, 13);
+      ctx.fillRect(offsetX + x + (raised ? -3 : 0), y + (raised ? 3 : 11), 6, 5);
+      ctx.fillRect(offsetX + x + (raised ? 15 : 12), y + (raised ? 3 : 11), 6, 5);
+      index += 1;
+    }
+  });
+  for (let i = 0; i < 12; i += 1) {
+    const sparkle = (Math.floor(time * 3) + i * 53) % 430;
+    ctx.fillStyle = ["#ffd34d", "#8ee8ff", "#ff6b50"][i % 3];
+    ctx.fillRect(offsetX + 270 + sparkle, 46 + (i % 4) * 13, 4, 4);
   }
 }
 
@@ -5107,6 +5139,7 @@ backpackButton.addEventListener("click", () => {
   renderBackpack();
   backpackPanel.classList.toggle("is-hidden");
 });
+attackButton.addEventListener("click", attack);
 closeBackpackButton.addEventListener("click", () => {
   backpackPanel.classList.add("is-hidden");
 });
