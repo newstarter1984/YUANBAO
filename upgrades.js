@@ -55,7 +55,7 @@ function applySaveData(data) {
   hasHorse = Boolean(data.hasHorse); hasRedHare = Boolean(data.hasRedHare); hasBlackHorse = Boolean(data.hasBlackHorse);
   hasGoldenArmor = Boolean(data.hasGoldenArmor); hasDragonAdult = Boolean(data.hasDragonAdult);
   dragonFeedCount = Number(data.dragonFeedCount) || 0; dragonEggIncubator = data.dragonEggIncubator || null;
-  dragons = Array.isArray(data.dragons) ? data.dragons : []; activeDragonId = data.activeDragonId || "";
+  dragons = Array.isArray(data.dragons) ? data.dragons.map(dragon => ({ ...dragon, hitsTaken: Math.max(0, Math.min(10, Number(dragon.hitsTaken) || 0)), hitInvincible: 0, down: Boolean(dragon.down) })) : []; activeDragonId = data.activeDragonId || "";
   activeMount = data.activeMount || "horse"; lightningBootsEquipped = Boolean(data.lightningBootsEquipped);
   dragonRestX = Number(data.dragonRestX) || 80; dragonRestY = Number(data.dragonRestY) || floorY - 76;
   dragonRestLevel = Number(data.dragonRestLevel) || currentLevel;
@@ -68,6 +68,8 @@ function applySaveData(data) {
   speedPotionOwned = Boolean(data.speedPotionOwned); inventory = { ...inventory, ...(data.inventory || {}) };
   if (typeof foxRescued === "boolean") foxRescued = Boolean(data.foxRescued);
   if (typeof foxTutorialPending === "boolean") foxTutorialPending = Boolean(data.foxTutorialPending);
+  level = buildLevel(currentLevel);
+  startButton.textContent = `开始第 ${currentLevel} 关：${level.theme.name}`;
   syncModeUi(); renderProfessions(); renderBackpack(); renderShop(); updateHud();
 }
 
@@ -147,13 +149,13 @@ function updateAdventureSystems() {
   if (autoSaveClock >= 600) { autoSaveClock = 0; saveGame(); }
   const activeDragon = getActiveDragon();
   dragonSkillButton.textContent = activeDragon?.type === "gold" ? "金龙无龙技" : dragonSkillCooldown > 0 ? `龙技冷却 ${Math.ceil(dragonSkillCooldown / 60)}秒` : "五行龙技";
-  dragonSkillButton.disabled = !activeDragon || activeDragon.type === "gold" || dragonSkillCooldown > 0;
+  dragonSkillButton.disabled = !activeDragon || activeDragon.down || activeDragon.type === "gold" || dragonSkillCooldown > 0;
 }
 
 function useDragonSkill() {
   if (gameState !== "playing" || dragonSkillCooldown > 0) return;
   const dragon = getActiveDragon();
-  if (!dragon || dragon.feedCount < 10) return;
+  if (!dragon || dragon.feedCount < 10 || dragon.down) return;
   const type = dragon.type;
   if (type === "gold") return;
   const centerX = player.x + player.width / 2;
@@ -182,8 +184,8 @@ function renderDragonHome() {
   dragons.forEach((dragon, index) => {
     const type = getDragonType(dragon.type); const adult = dragon.feedCount >= 10;
     const card = document.createElement("button"); card.type = "button"; card.className = `dragon-card${activeDragonId === dragon.id ? " is-active" : ""}`;
-    card.innerHTML = `<strong>${type.name} · ${adult ? "成年" : "幼龙"}</strong><span>名字：元宝的${type.name}${index + 1}号</span><span>${type.skill}</span><span>${adult ? "点击选择出战" : `成长 ${dragon.feedCount}/10`}</span>`;
-    card.disabled = !adult; card.addEventListener("click", () => { selectDragon(dragon.id); renderDragonHome(); saveGame(); });
+    card.innerHTML = `<strong>${type.name} · ${adult ? "成年" : "幼龙"}</strong><span>名字：元宝的${type.name}${index + 1}号</span><span>${type.skill}</span><span>${dragon.down ? "已倒下，请去主界面龙库购买医疗包" : adult ? `耐久 ${10 - (dragon.hitsTaken || 0)}/10 · 点击选择出战` : `成长 ${dragon.feedCount}/10`}</span>`;
+    card.disabled = !adult || dragon.down; card.addEventListener("click", () => { selectDragon(dragon.id); renderDragonHome(); saveGame(); });
     dragonHomeContent.append(card);
   });
 }

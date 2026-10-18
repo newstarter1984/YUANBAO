@@ -30,7 +30,7 @@ const dragonSpriteFrames = Object.fromEntries(
   ["gold", "wood", "water", "fire", "earth"].map(type => [
     type,
     Object.fromEntries(
-      Object.entries({ idle: 3, walk: 6, fly: 2, attack: 2 }).map(([action, count]) => [
+      Object.entries({ idle: 3, walk: 6, fly: 2, attack: 2, death: 10 }).map(([action, count]) => [
         action,
         Array.from({ length: count }, (_, index) => {
           const image = new Image();
@@ -1107,7 +1107,7 @@ function updateFoxHelper() {
 
 function dragonAssistAttack() {
   const activeDragon = getActiveDragon();
-  if (!hasDragonAdult || !activeDragon || !player || dragonAttackTimer > 0) return;
+  if (!hasDragonAdult || !activeDragon || activeDragon.down || !player || dragonAttackTimer > 0) return;
 
   const dragonCenterX = isRidingDragon() ? player.x + player.width / 2 : dragonRestX + 48;
   const dragonCenterY = isRidingDragon() ? player.y + player.height / 2 : dragonRestY + 38;
@@ -1155,6 +1155,14 @@ function dragonAssistAttack() {
     dragonType: activeDragon.type,
     attackStyle,
     direction: target.x >= dragonCenterX ? 1 : -1,
+  });
+  const orbDx = target.x + target.width / 2 - dragonCenterX;
+  const orbDy = target.y + target.height / 2 - dragonCenterY;
+  const orbDistance = Math.max(1, Math.hypot(orbDx, orbDy));
+  projectiles.push({
+    x: dragonCenterX - 12, y: dragonCenterY - 12, width: 24, height: 24,
+    vx: orbDx / orbDistance * 9, vy: orbDy / orbDistance * 9,
+    damage: 0, rangeLeft: orbDistance, kind: "dragonOrb", dragonType: activeDragon.type,
   });
   damageEnemy(target, getDragonSkillDamage(activeDragon.type));
 }
@@ -1525,6 +1533,8 @@ function moveProjectiles() {
     projectile.y += projectile.vy || 0;
     projectile.rangeLeft -= Math.hypot(projectile.vx, projectile.vy || 0);
 
+    if (projectile.kind === "dragonOrb") continue;
+
     if (projectile.owner === "enemy") {
       if (touches(projectile, player)) {
         hurtPlayer(projectile.damage);
@@ -1842,9 +1852,13 @@ function boostDropChance(chance) {
 }
 
 function checkDangerHits() {
+  const activeDragon = getActiveDragon();
   for (const enemy of level.enemies) {
     if (enemy.alive && touches(player, enemy) && !isPlayerProtectedByPlatform(enemy)) {
       hurtPlayer(getEnemyAttackDamage(enemy));
+    }
+    if (activeDragon && !activeDragon.down && !isRidingDragon() && enemy.alive && touches(enemy, { x: dragonRestX - 20, y: dragonRestY - 35, width: 190, height: 145 })) {
+      hurtActiveDragon();
     }
   }
 
@@ -1869,6 +1883,7 @@ function hurtPlayer(amount) {
   if (blackFistTimer > 0 || guanYuInvincibleTimer > 0 || zhangFeiRageTimer > 0 || zhaoYunInvincibleTimer > 0 || player.invincible > 0 || gameState !== "playing") return;
 
   playSound("hurt");
+  if (isRidingDragon()) hurtActiveDragon();
   player.hearts -= amount;
   player.invincible = 76;
   player.vx = -player.facing * 9;
@@ -1878,6 +1893,25 @@ function hurtPlayer(amount) {
   if (player.hearts <= 0) {
     showMenu("death");
   }
+}
+
+function hurtActiveDragon() {
+  const dragon = getActiveDragon();
+  if (!dragon || dragon.down || (dragon.hitInvincible || 0) > 0) return;
+  dragon.hitsTaken = (dragon.hitsTaken || 0) + 1;
+  dragon.hitInvincible = 60;
+  effects.push({ x: isRidingDragon() ? player.x - 20 : dragonRestX, y: isRidingDragon() ? player.y - 45 : dragonRestY - 30, width: 180, height: 28, life: 70, kind: "loot", text: `龙受伤 ${dragon.hitsTaken}/10` });
+  if (dragon.hitsTaken >= 10) {
+    dragon.down = true;
+    dragon.hitsTaken = 10;
+    if (isRidingDragon()) {
+      dragonRestX = player.x + 30;
+      dragonRestY = floorY - 82;
+      setActiveMount("none");
+    }
+    effects.push({ x: dragonRestX - 30, y: dragonRestY - 55, width: 250, height: 30, life: 180, kind: "loot", text: "龙倒下了，请在龙库购买医疗包" });
+  }
+  updateHud();
 }
 
 function renderShop() {
@@ -1929,6 +1963,15 @@ function renderShop() {
 }
 
 function renderDragonLibrary() {
+  const injuredDragon = dragons.find(dragon => dragon.down || (dragon.hitsTaken || 0) > 0);
+  const medicalButton = document.createElement("button");
+  medicalButton.type = "button";
+  medicalButton.className = "shop-item";
+  medicalButton.disabled = !injuredDragon || (!unlimitedCoinsMode && coins < 500);
+  medicalButton.append(createShopCopy("龙医疗包", injuredDragon ? "治疗龙 · 500 金币" : "目前没有受伤的龙", "清除全部伤势，让倒下的龙重新站起来"));
+  medicalButton.addEventListener("click", buyDragonMedicalKit);
+  shopItems.append(medicalButton);
+
   const eggButton = document.createElement("button");
   eggButton.type = "button";
   eggButton.className = "shop-item has-preview";
@@ -1963,14 +2006,29 @@ function renderDragonLibrary() {
     const button = document.createElement("button");
     button.type = "button";
     button.className = equipped ? "shop-item has-preview is-equipped" : adult ? "shop-item has-preview is-owned" : "shop-item has-preview";
-    button.append(createDragonPreviewCanvas(dragon.type), createShopCopy(getDragonType(dragon.type).name, adult ? equipped ? "已骑乘" : "骑乘" : `喂养 ${dragon.feedCount}/10`, getDragonType(dragon.type).skill + "，还会咬住怪物 10 秒"));
-    button.disabled = adult && equipped;
+    const healthText = dragon.down ? "已倒下 · 需要龙医疗包" : `耐久 ${10 - (dragon.hitsTaken || 0)}/10`;
+    button.append(createDragonPreviewCanvas(dragon.type), createShopCopy(getDragonType(dragon.type).name, adult ? dragon.down ? "无法出战" : equipped ? "已骑乘" : "骑乘" : `喂养 ${dragon.feedCount}/10`, `${healthText} · ${getDragonType(dragon.type).skill}`));
+    button.disabled = dragon.down || (adult && equipped);
     button.addEventListener("click", () => {
       if (adult) selectDragon(dragon.id);
       else feedDragonById(dragon.id);
     });
     shopItems.append(button);
   }
+}
+
+function buyDragonMedicalKit() {
+  const dragon = dragons.find(item => item.down || (item.hitsTaken || 0) > 0);
+  if (!dragon || (!unlimitedCoinsMode && coins < 500)) return;
+  if (!unlimitedCoinsMode) coins -= 500;
+  dragon.hitsTaken = 0;
+  dragon.hitInvincible = 0;
+  dragon.down = false;
+  activeDragonId = dragon.id;
+  hasDragonAdult = true;
+  effects.push({ x: dragonRestX - 20, y: dragonRestY - 45, width: 220, height: 30, life: 120, kind: "loot", text: "龙恢复健康！" });
+  updateHud();
+  renderShop();
 }
 
 function renderSkinShop() {
@@ -2078,7 +2136,7 @@ function getIncubatorText() {
 function hatchDragonEgg() {
   if (!canHatchDragon()) return;
   const type = dragonEggIncubator.type;
-  dragons.push({ id: `dragon-${Date.now()}-${dragons.length}`, type, feedCount: 0 });
+  dragons.push({ id: `dragon-${Date.now()}-${dragons.length}`, type, feedCount: 0, hitsTaken: 0, hitInvincible: 0, down: false });
   dragonEggIncubator = null;
   renderBackpack();
   renderShop();
@@ -2096,7 +2154,7 @@ function feedDragonById(id) {
 }
 
 function selectDragon(id) {
-  const dragon = dragons.find((item) => item.id === id && item.feedCount >= 10);
+  const dragon = dragons.find((item) => item.id === id && item.feedCount >= 10 && !item.down);
   if (!dragon) return;
   activeDragonId = dragon.id;
   hasDragonAdult = true;
@@ -2110,7 +2168,8 @@ function getActiveDragon() {
 }
 
 function isRidingDragon() {
-  return activeMount === "dragon" && Boolean(getActiveDragon());
+  const dragon = getActiveDragon();
+  return activeMount === "dragon" && Boolean(dragon) && !dragon.down;
 }
 
 function isRidingHorse() {
@@ -2129,7 +2188,7 @@ function setActiveMount(type) {
 }
 
 function toggleDragonMount() {
-  if (!getActiveDragon()) return;
+  if (!getActiveDragon() || getActiveDragon().down) return;
   if (isRidingDragon()) {
     dragonRestX = player.x + player.facing * 76;
     dragonRestY = Math.min(floorY - 76, player.y + 18);
@@ -2368,6 +2427,7 @@ function tickTimers() {
     enemy.attackTimer = Math.max(0, enemy.attackTimer - 1);
     enemy.cagedTimer = Math.max(0, enemy.cagedTimer - 1);
   }
+  for (const dragon of dragons) dragon.hitInvincible = Math.max(0, (dragon.hitInvincible || 0) - 1);
 
   for (const effect of effects) {
     effect.life -= 1;
@@ -3944,6 +4004,7 @@ function drawProjectiles() {
   for (const projectile of projectiles) {
     ctx.fillStyle =
       projectile.kind === "grenade" ? "#2f6b3f" :
+      projectile.kind === "dragonOrb" ? (projectile.dragonType === "fire" ? "#ff5a2e" : projectile.dragonType === "water" ? "#65d7ff" : projectile.dragonType === "wood" ? "#45d06f" : projectile.dragonType === "earth" ? "#b98235" : "#ffd34d") :
       projectile.kind === "cage" ? "#fff29a" :
       projectile.kind === "witchMagic" ? "#9b5cff" :
       projectile.kind === "mageOrb" ? "#73d9ff" :
@@ -3954,7 +4015,14 @@ function drawProjectiles() {
       projectile.kind === "poisonArrow" ? "#45d06f" :
       "#211b2c";
     ctx.fillRect(projectile.x, projectile.y, projectile.width, projectile.height);
-    if (projectile.kind === "mageOrb") {
+    if (projectile.kind === "dragonOrb") {
+      ctx.fillStyle = "#fff4c7";
+      ctx.fillRect(projectile.x + 7, projectile.y + 7, 10, 10);
+      ctx.globalAlpha = 0.55;
+      ctx.fillStyle = projectile.dragonType === "fire" ? "#ffb02e" : projectile.dragonType === "water" ? "#eaffff" : projectile.dragonType === "wood" ? "#d9ff72" : projectile.dragonType === "earth" ? "#f3dfae" : "#fff29a";
+      ctx.fillRect(projectile.x - Math.sign(projectile.vx) * 16, projectile.y + 9, 18, 7);
+      ctx.globalAlpha = 1;
+    } else if (projectile.kind === "mageOrb") {
       ctx.fillStyle = "#e7fbff";
       ctx.fillRect(projectile.x + 7, projectile.y + 7, 14, 14);
       ctx.fillStyle = "#328ddd";
@@ -4143,7 +4211,7 @@ function drawDragonPixelSprite(targetCtx, x, y, dragon, scale, flying, saddled, 
   if (!frames) return false;
   const action = attacking ? "attack" : flying ? "fly" : moving ? "walk" : "idle";
   const sequence = frames[action];
-  const frameIndex = Math.floor(Date.now() / (action === "walk" ? 105 : action === "attack" ? 125 : 165)) % sequence.length;
+  const frameIndex = Math.floor(Date.now() / (action === "fly" ? 85 : action === "walk" ? 105 : action === "attack" ? 125 : 165)) % sequence.length;
   const source = sequence[frameIndex];
   if (!source.complete || source.naturalWidth <= 0) return false;
 
@@ -4151,6 +4219,12 @@ function drawDragonPixelSprite(targetCtx, x, y, dragon, scale, flying, saddled, 
   targetCtx.save();
   targetCtx.translate(x + (facing < 0 ? 120 * scale : 0), y + bob);
   targetCtx.scale(scale * facing, scale);
+  if (flying) {
+    const flap = frameIndex % 2 === 0 ? 1.07 : 0.93;
+    targetCtx.translate(60, 52);
+    targetCtx.scale(1, flap);
+    targetCtx.translate(-60, -52);
+  }
   targetCtx.drawImage(source, -30, -42, 180, 160);
   if (attacking) {
     const chomp = Math.floor(Date.now() / 75) % 2;
@@ -4500,7 +4574,12 @@ function drawDragonMount(x, y, gait) {
 }
 
 function drawDragonCompanion(x, y, gait) {
-  const dragon = getDragonType(getActiveDragon()?.type || "wood");
+  const activeDragon = getActiveDragon();
+  const dragon = getDragonType(activeDragon?.type || "wood");
+  if (activeDragon?.down) {
+    drawDragonFallen(x, y, dragon);
+    return;
+  }
   let drawX = x;
   let drawY = y;
   let facing = 1;
@@ -4520,6 +4599,17 @@ function drawDragonCompanion(x, y, gait) {
   ctx.save();
   ctx.globalAlpha = 0.92;
   drawDragonShape(ctx, drawX, drawY, dragon, 1.02, flying, false, facing, !flying, biting);
+  ctx.restore();
+}
+
+function drawDragonFallen(x, y, dragon) {
+  const frames = dragonSpriteFrames[dragon.key]?.death;
+  if (!frames) return;
+  const source = frames[frames.length - 1];
+  ctx.save();
+  ctx.globalAlpha = 0.9;
+  if (source.complete && source.naturalWidth > 0) ctx.drawImage(source, x - 30, y - 24, 198, 176);
+  drawTinyText("倒下了 · 需要龙医疗包", x - 35, y - 32, "#fff4c7");
   ctx.restore();
 }
 
