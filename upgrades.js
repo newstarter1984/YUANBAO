@@ -61,7 +61,8 @@ function applySaveData(data) {
   dragonRestLevel = Number(data.dragonRestLevel) || currentLevel;
   equippedArrow = data.equippedArrow || "normalArrow"; equippedTool = data.equippedTool || "";
   diverSkinOwned = Boolean(data.diverSkinOwned); selectedSkin = data.selectedSkin || "knight";
-  ownedSkins = { ...ownedSkins, ...(data.ownedSkins || {}) }; selectedProfession = data.selectedProfession || "doctor";
+  if (["guanYu", "zhangFei", "liuBei", "luBu", "zhangFeiAlt", "zhaoYun"].includes(selectedSkin)) selectedSkin = "knight";
+  ownedSkins = { ...ownedSkins, ...(data.ownedSkins || {}) }; selectedProfession = ["doctor", "emberKnight"].includes(data.selectedProfession) ? data.selectedProfession : "doctor";
   speedPotionOwned = Boolean(data.speedPotionOwned); inventory = { ...inventory, ...(data.inventory || {}) };
   if (typeof foxRescued === "boolean") foxRescued = Boolean(data.foxRescued);
   if (typeof foxTutorialPending === "boolean") foxTutorialPending = Boolean(data.foxTutorialPending);

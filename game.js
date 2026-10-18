@@ -3,6 +3,11 @@ const ctx = canvas.getContext("2d");
 ctx.imageSmoothingEnabled = false;
 const emberKnightImage = new Image();
 emberKnightImage.src = "assets/ember-knight.gif?v=20261017";
+const emberKnightFrames = [0, 1, 2, 3].map(index => {
+  const image = new Image();
+  image.src = `assets/ember-knight-frame-${index}.png?v=20261018`;
+  return image;
+});
 
 const levelNumberElement = document.querySelector("#levelNumber");
 const themeNameElement = document.querySelector("#themeName");
@@ -114,12 +119,6 @@ const shopGoods = [
 
 const skinGoods = [
   { key: "magmaSamurai", name: "岩浆武士皮肤", cost: 100, line: "红色盔甲和火焰护肩" },
-  { key: "guanYu", name: "关羽", cost: 600, line: "青绿色战袍，红面长须" },
-  { key: "zhangFei", name: "张飞", cost: 400, line: "黑紫战甲，勇猛风格" },
-  { key: "liuBei", name: "刘备", cost: 700, line: "金蓝王者战衣" },
-  { key: "luBu", name: "吕布", cost: 600, line: "暗红金甲，头戴长翎" },
-  { key: "zhangFeiAlt", name: "张飞（另一款）", cost: 900, line: "红黑重甲加强版" },
-  { key: "zhaoYun", name: "赵云", cost: 650, line: "蓝甲蓝披风，长矛与青龙头盔" },
 ];
 
 const dragonTypes = [
@@ -132,8 +131,6 @@ const dragonTypes = [
 
 const professions = {
   doctor: { name: "医生", button: "回复", description: "点击回复，生命 +100，可叠到 1000。" },
-  police: { name: "警察", button: "牢笼", description: "发射牢笼，困住怪物 10 秒。" },
-  boxer: { name: "黑拳", button: "黑拳", description: "短时间内所有伤害无效。" },
   emberKnight: { name: "烈焰勇士", button: "炼狱斩", description: "挥动火焰剑冲击前方，造成范围伤害。", portrait: "assets/ember-knight.gif?v=20261017" },
 };
 
@@ -1309,7 +1306,7 @@ function useProfessionSkill() {
       height: 104,
     };
     player.skillTimer = 210;
-    player.attacking = 24;
+    player.attacking = 48;
     player.vx = 8 * player.facing;
     damageEnemiesIfHit(hitBox, getAttackDamage(68));
     effects.push({ x: player.facing > 0 ? hitBox.x + hitBox.width - 28 : hitBox.x, y: player.y + 18, width: 34, height: 34, life: 12, kind: "emberImpact" });
@@ -4118,7 +4115,7 @@ function drawEmberKnight(x, y, facing, attackFrames) {
   const walking = player.onGround && Math.abs(player.vx) > 0.15 && !isRidingDragon() && !isRidingHorse();
   const jumping = !player.onGround && !isRidingDragon();
   const walkPhase = Math.sin(now / 72);
-  const attackMax = attackFrames > 12 ? 24 : 12;
+  const attackMax = attackFrames > 12 ? 48 : 12;
   const attackProgress = attackFrames > 0 ? 1 - attackFrames / attackMax : 0;
   const attacking = attackFrames > 0;
   const drawWidth = attacking ? 104 : 96;
@@ -4159,56 +4156,19 @@ function drawEmberKnight(x, y, facing, attackFrames) {
     ctx.globalAlpha = 1;
   }
   if (emberKnightImage.complete && emberKnightImage.naturalWidth > 0) {
-    const stride = walking ? walkPhase * 7 : 0;
-    const legLift = walking ? Math.abs(walkPhase) * 5 : jumping ? 8 : isRidingDragon() || isRidingHorse() ? 9 : 0;
-    // The GIF is separated into armor, shield and two animated legs so the feet truly move.
-    ctx.drawImage(emberKnightImage, 48, 48, 168, 128, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight * 0.744);
-    ctx.drawImage(emberKnightImage, 159, 120, 45, 81, 14, -8, 26, 46);
-    drawEmberLeg(-19 + stride, 20 - Math.max(0, walkPhase) * legLift, -walkPhase * 0.18 + (jumping ? -0.35 : 0));
-    drawEmberLeg(5 - stride, 20 - Math.max(0, -walkPhase) * legLift, walkPhase * 0.18 + (jumping ? 0.35 : 0));
+    let source = emberKnightImage;
+    if (attacking) {
+      const frameOrder = [0, 1, 2, 2, 3, 0];
+      const frameIndex = frameOrder[Math.min(frameOrder.length - 1, Math.floor(attackProgress * frameOrder.length))];
+      if (emberKnightFrames[frameIndex].complete) source = emberKnightFrames[frameIndex];
+    }
+    ctx.drawImage(source, 48, 48, 168, 172, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
   } else {
     ctx.fillStyle = "#f06a1b";
     ctx.fillRect(-20, -34, 40, 62);
     ctx.fillStyle = "#ffd34d";
     ctx.fillRect(-12, -28, 24, 12);
   }
-  drawEmberSword(attacking ? attackProgress : null);
-  ctx.restore();
-}
-
-function drawEmberLeg(x, y, angle) {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(angle);
-  ctx.fillStyle = "#6f250f";
-  ctx.fillRect(-6, 0, 13, 12);
-  ctx.fillStyle = "#dd641b";
-  ctx.fillRect(-5, 1, 10, 8);
-  ctx.fillStyle = "#3a1710";
-  ctx.fillRect(-7, 10, 15, 9);
-  ctx.fillStyle = "#ff9b2f";
-  ctx.fillRect(-4, 2, 4, 3);
-  ctx.restore();
-}
-
-function drawEmberSword(progress) {
-  ctx.save();
-  const swing = progress === null ? 0.52 : -1.65 + Math.min(1, progress * 1.35) * 2.35;
-  ctx.translate(-3, 5);
-  ctx.rotate(swing);
-  const blade = ctx.createLinearGradient(8, 0, 70, 0);
-  blade.addColorStop(0, "#ff6a1f");
-  blade.addColorStop(0.35, "#ffd34d");
-  blade.addColorStop(1, "#fffbe2");
-  ctx.shadowColor = "#ff5a1f";
-  ctx.shadowBlur = progress === null ? 5 : 14;
-  ctx.fillStyle = blade;
-  ctx.fillRect(5, -4, 65, 9);
-  dragonPolygon(ctx, [[70,-7],[82,0],[70,7]], "#fffbe2");
-  ctx.fillStyle = "#5a2415";
-  ctx.fillRect(-6, -6, 14, 12);
-  ctx.fillStyle = "#f4b928";
-  ctx.fillRect(2, -11, 6, 22);
   ctx.restore();
 }
 
