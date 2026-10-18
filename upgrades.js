@@ -119,7 +119,7 @@ function selectMode(mode) {
 function getWorldObjective() {
   if (!level) return "准备下一次冒险";
   if (level.story) {
-    if (level.story.type === "meadow") return level.story.saved ? "打开终点宝箱" : "找到并救出小狐狸";
+    if (level.story.type === "meadow") return level.story.saved ? "打开终点宝箱" : "找到并救出小狼";
     const oceanObjectives = { battle: "击败抓住鲸鱼的三条鳄鱼", rescued: "打开沉船旁的金色宝箱" };
     return oceanObjectives[level.story.state] || "完成海洋救援";
   }
@@ -179,7 +179,7 @@ function useDragonSkill() {
 function renderDragonHome() {
   dragonHomeContent.innerHTML = "";
   const friend = document.createElement("div"); friend.className = "dragon-card";
-  friend.innerHTML = `<strong>伙伴墙</strong><span>${typeof foxRescued === "boolean" && foxRescued ? "🦊 小狐狸已获救" : "继续冒险，寻找小狐狸"}</span>`;
+  friend.innerHTML = `<strong>伙伴墙</strong><span>${typeof foxRescued === "boolean" && foxRescued ? "🐺 小狼已获救" : "继续冒险，寻找小狼"}</span>`;
   dragonHomeContent.append(friend);
   if (!dragons.length) {
     const empty = document.createElement("div"); empty.className = "dragon-card"; empty.innerHTML = "<strong>温暖的空巢</strong><span>海洋沉船中藏着第一颗龙蛋。</span>"; dragonHomeContent.append(empty);

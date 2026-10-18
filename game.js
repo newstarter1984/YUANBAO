@@ -11,8 +11,8 @@ const blueMageFrames = Array.from({ length: 8 }, (_, index) => {
 const swampLickerFrames = Array.from({ length: 4 }, (_, index) => {
   const image = new Image(); image.src = `assets/swamp-licker/frame-${index}.png?v=20261018`; return image;
 });
-const foxHelperFrames = Array.from({ length: 7 }, (_, index) => {
-  const image = new Image(); image.src = `assets/fox-helper/frame-${index}.png?v=20261018`; return image;
+const foxHelperFrames = Array.from({ length: 8 }, (_, index) => {
+  const image = new Image(); image.src = `assets/lava-hound/frame-${index}.png?v=20261018`; return image;
 });
 const townReferenceImage = new Image();
 townReferenceImage.src = "assets/town-reference.png?v=20261018";
@@ -35,7 +35,7 @@ const shadowCultistFrames = Array.from({ length: 12 }, (_, index) => {
   const image = new Image(); image.src = `assets/shadow-cultist/frame-${index}.png?v=20261018`; return image;
 });
 const werewolfBossFrames = Array.from({ length: 16 }, (_, index) => {
-  const image = new Image(); image.src = `assets/werewolf-boss/frame-${index}.png?v=20261018`; return image;
+  const image = new Image(); image.src = `assets/werewolf-boss/frame-${index}.png?v=20261018-clean`; return image;
 });
 const spellProjectileFrames = Array.from({ length: 8 }, (_, index) => {
   const image = new Image(); image.src = `assets/spell-projectile/frame-${index}.png?v=20261018`; return image;
@@ -460,8 +460,8 @@ function buildEnemy(kind, x, number, index, themeId) {
     patrolRight: x + 190,
     phase: index * 18,
     cagedTimer: 0,
-    bossMode: kind === "lavaBoss" ? "armor" : "",
-    bossTimer: kind === "lavaBoss" ? 120 : 0,
+    bossMode: kind === "lavaBoss" ? "chase" : "",
+    bossTimer: 0,
     summonTimer: 0,
     bossSpin: 0,
     chargeDir: 0,
@@ -482,7 +482,7 @@ function getBossHp() {
 function buildLevel(number) {
   const theme = getTheme(number);
   const worldWidth = theme.id === "arena" ? 960 : theme.id === "ocean" || theme.id === "lava" ? 1200 : 3800 + number * 850;
-  const enemyCount = theme.id === "arena" ? 0 : theme.id === "town" ? 6 : theme.id === "lava" ? 6 : theme.id === "swamp" ? 5 + number : 4 + number;
+  const enemyCount = theme.id === "arena" || theme.id === "lava" ? 0 : theme.id === "town" ? 6 : theme.id === "swamp" ? 5 + number : 4 + number;
   const platforms = theme.id === "ocean" || theme.id === "town" ? [] : [
     { x: 210, y: 378, width: 150, height: 20 },
     { x: 520, y: 320, width: 160, height: 20 },
@@ -526,8 +526,8 @@ function buildLevel(number) {
   }
 
   if (theme.id === "lava") {
-    const boss = buildEnemy("lavaBoss", worldWidth - 620, number, enemyCount + 2, theme.id);
-    boss.patrolLeft = worldWidth - 980;
+    const boss = buildEnemy("lavaBoss", worldWidth - 300, number, enemyCount + 2, theme.id);
+    boss.patrolLeft = worldWidth - 760;
     boss.patrolRight = worldWidth - 230;
     boss.y = floorY - boss.height;
     boss.baseY = boss.y;
@@ -648,7 +648,7 @@ function showMenu(reason) {
 
   level = buildLevel(currentLevel);
   startButton.textContent = `开始第 ${currentLevel} 关：${level.theme.name}`;
-  if (level.theme.id === "gravel" && foxTutorialPending) startButton.textContent = "开始小狐狸引导";
+  if (level.theme.id === "gravel" && foxTutorialPending) startButton.textContent = "开始小狼引导";
   drawMenuBackdrop();
   updateHud();
   renderShop();
@@ -1055,111 +1055,24 @@ function castWitchMagic(enemy, targetX = player.x + player.width / 2, targetY = 
 }
 
 function moveLavaBoss(enemy) {
-  enemy.bossTimer = Math.max(0, enemy.bossTimer - 1);
-
-  if (enemy.bossMode === "diving") {
-    enemy.bossSpin += 0.42;
-    enemy.y += 4.8;
-    if (enemy.bossTimer <= 0) {
-      enemy.bossMode = "hidden";
-      enemy.bossTimer = 70;
-      enemy.y = floorY + 18;
-    }
-    return;
-  }
-
-  if (enemy.bossMode === "hidden") {
-    enemy.y = floorY + 18;
-    if (enemy.bossTimer <= 0) {
-      enemy.bossMode = "emerge";
-      enemy.bossTimer = 82;
-      enemy.attackChecked = false;
-      enemy.summonedOnMiss = false;
-      enemy.y = floorY - enemy.height;
-      effects.push({ x: enemy.x - 20, y: floorY - 90, width: enemy.width + 40, height: 80, life: 38, kind: "boom" });
-    }
-    return;
-  }
-
+  enemy.attackTimer = Math.max(0, enemy.attackTimer - 1);
   const distance = player.x + player.width / 2 - (enemy.x + enemy.width / 2);
   const absDistance = Math.abs(distance);
   enemy.alerted = enemy.alerted || absDistance < 760;
-  const inSight = enemy.alerted;
   enemy.facing = distance > 0 ? 1 : -1;
-
-  if (enemy.bossMode === "emerge") {
-    if (!enemy.attackChecked && enemy.bossTimer <= 50) {
-      enemy.attackChecked = true;
-      enemy.attackTimer = 110;
-      const axeBox = {
-        x: enemy.facing > 0 ? enemy.x + enemy.width - 16 : enemy.x - 126,
-        y: enemy.y + 34,
-        width: 140,
-        height: 64,
-      };
-      effects.push({ x: axeBox.x, y: axeBox.y, width: axeBox.width, height: axeBox.height, life: 18, kind: "claw" });
-      if (touches(player, axeBox)) {
-        hurtPlayer(getEnemyAttackDamage(enemy));
-      } else {
-        enemy.bossMode = "axeStuck";
-        enemy.bossTimer = 210;
-        enemy.summonedOnMiss = true;
-        summonLavaAxeGuard(enemy, 2);
-        effects.push({ x: enemy.x - 18, y: enemy.y - 28, width: enemy.width + 36, height: 30, life: 70, kind: "loot", text: "斧头砍空，召唤小弟！" });
-      }
-    }
-    if (enemy.bossTimer <= 0) {
-      enemy.bossMode = "armor";
-      enemy.bossTimer = 160;
-    }
-    return;
-  }
-
-  if (enemy.bossMode === "axeStuck") {
-    if (enemy.bossTimer <= 0) {
-      enemy.bossMode = "armor";
-      enemy.bossTimer = 150;
-    }
-    return;
-  }
-
-  if (enemy.bossMode === "charge") {
-    enemy.x += enemy.chargeDir * getEnemyChaseSpeed(enemy) * 3.8;
+  enemy.y = floorY - enemy.height;
+  enemy.bossMode = "chase";
+  if (enemy.alerted && absDistance > 125) {
+    enemy.x += Math.sign(distance) * getEnemyChaseSpeed(enemy) * 0.82;
     enemy.x = Math.max(18, Math.min(level.worldWidth - enemy.width - 18, enemy.x));
-    effects.push({ x: enemy.x + (enemy.chargeDir > 0 ? 0 : enemy.width - 24), y: enemy.y + 28, width: 52, height: 62, life: 14, kind: "bossChargeFire" });
-    if (touches(player, enemy)) {
-      hurtPlayer(getEnemyAttackDamage(enemy));
-    }
-    if (enemy.bossTimer <= 0) {
-      enemy.bossMode = "armor";
-      enemy.bossTimer = 110;
-    }
-    return;
-  }
-
-  if (inSight && absDistance > 110) {
-    enemy.x += Math.sign(distance) * getEnemyChaseSpeed(enemy);
-    enemy.x = Math.max(18, Math.min(level.worldWidth - enemy.width - 18, enemy.x));
-  } else if (!inSight) {
+  } else if (!enemy.alerted) {
     enemy.x += Math.sin((Date.now() / 620 + enemy.phase) % 20) * 0.8;
     enemy.x = Math.max(enemy.patrolLeft, Math.min(enemy.patrolRight, enemy.x));
   }
-
-  if (absDistance < 170 && enemy.attackTimer === 0) {
-    enemy.bossMode = "diving";
-    enemy.bossTimer = 42;
-    enemy.bossSpin = 0;
-  } else if (inSight && enemy.attackTimer === 0 && absDistance < 620) {
-    if (absDistance > 260) {
-      enemy.bossMode = "charge";
-      enemy.bossTimer = 46;
-      enemy.chargeDir = Math.sign(distance);
-      enemy.attackTimer = 180;
-      effects.push({ x: enemy.x - 20, y: enemy.y - 34, width: enemy.width + 40, height: 36, life: 54, kind: "loot", text: "狼人 BOSS 猛扑！" });
-    } else {
-      enemy.attackTimer = 130;
-      spawnBossFire(enemy);
-    }
+  if (absDistance < 155 && Math.abs(player.y - enemy.y) < 150 && enemy.attackTimer === 0) {
+    enemy.attackTimer = 72;
+    effects.push({ x: enemy.facing > 0 ? enemy.x + enemy.width - 30 : enemy.x - 42, y: enemy.y + 58, width: 74, height: 58, life: 14, kind: "claw" });
+    hurtPlayer(getEnemyAttackDamage(enemy));
   }
 }
 
@@ -1760,31 +1673,7 @@ function damageEnemiesIfHit(hitBox, damage) {
 function damageEnemy(enemy, damage) {
   enemy.alerted = true;
   const specialDamage = getSkinSpecialDamage(enemy, damage);
-  const usedSpecialDamage = specialDamage > damage;
   damage = specialDamage;
-
-  if (enemy.kind === "lavaBoss") {
-    if (enemy.bossMode === "hidden") {
-      effects.push({ x: enemy.x, y: floorY - 44, width: 120, height: 28, life: 32, kind: "miss" });
-      return;
-    }
-    if (enemy.bossMode === "armor" && Math.random() < 0.32) {
-      enemy.bossMode = "diving";
-      enemy.bossTimer = 42;
-      enemy.bossSpin = 0;
-      effects.push({ x: enemy.x - 18, y: floorY - 78, width: enemy.width + 36, height: 64, life: 42, kind: "boom" });
-      updateHud();
-      return;
-    }
-    if (enemy.bossMode === "axeStuck") {
-      const aliveSummons = level.enemies.some((monster) => monster.alive && monster.kind === "lavaAxeGuard");
-      if (aliveSummons) {
-        effects.push({ x: enemy.x + 10, y: enemy.y - 20, width: 150, height: 28, life: 46, kind: "loot", text: "先打败小弟！" });
-        return;
-      }
-      if (!usedSpecialDamage) damage *= 1.5;
-    }
-  }
 
   enemy.hp = Math.max(0, enemy.hp - damage);
   enemy.hurtFlash = 10;
@@ -2397,7 +2286,7 @@ function renderBackpack() {
   if (backpackWeaponSlot) backpackWeaponSlot.textContent = getSpecialWeaponName() || weapons[weaponLevel].name;
   if (backpackCompanionSlot) {
     const activeDragon = getActiveDragon();
-    backpackCompanionSlot.textContent = activeDragon && !activeDragon.down ? getDragonType(activeDragon.type).name : (foxRescued ? "小狐狸" : "无");
+    backpackCompanionSlot.textContent = activeDragon && !activeDragon.down ? getDragonType(activeDragon.type).name : (foxRescued ? "小狼" : "无");
   }
   const rows = [
     { key: "stinkSock", icon: "🧦", name: "臭袜子", count: inventory.stinkSock, action: "卖出", onClick: () => sellTreasure("stinkSock", 1) },
@@ -3266,63 +3155,24 @@ function drawThemeDecor() {
     }
   }
 
-  if (level.theme.id === "lava") {
-    const flameTime = Date.now() / 120;
-    for (let x = 30; x < level.worldWidth; x += 96) {
-      const height = 72 + ((x / 13 + Math.floor(flameTime)) % 5) * 18;
-      const sway = Math.sin(flameTime + x * 0.02) * 10;
-      ctx.fillStyle = "#7a1d19";
-      ctx.fillRect(x + sway, floorY - height, 34, height);
-      ctx.fillStyle = "#ff4d2e";
-      ctx.fillRect(x + 7 + sway * 0.4, floorY - height + 18, 20, height - 18);
-      ctx.fillStyle = "#ffd34d";
-      ctx.fillRect(x + 13 - sway * 0.2, floorY - height + 42, 10, Math.max(18, height - 54));
-    }
-
-    for (let ember = 0; ember < 44; ember += 1) {
-      const x = (ember * 211 + Math.floor(Date.now() / 35) * (ember % 3 + 1)) % level.worldWidth;
-      const y = 66 + ((ember * 47 + Math.floor(Date.now() / 60)) % 250);
-      ctx.fillStyle = ember % 2 === 0 ? "#ff8a2d" : "#ffd34d";
-      ctx.fillRect(x, y, 5, 5);
-    }
-
-    for (let x = 90; x < level.worldWidth; x += 470) {
-      ctx.fillStyle = "#1b1116";
-      ctx.fillRect(x, floorY - 112, 64, 112);
-      ctx.fillStyle = "#ff5a2e";
-      ctx.fillRect(x + 12, floorY - 90, 14, 74);
-      ctx.fillStyle = "#ffd34d";
-      ctx.fillRect(x + 34, floorY - 62, 10, 42);
-      ctx.fillStyle = "#4a2028";
-      ctx.fillRect(x - 22, floorY - 18, 112, 18);
-    }
-  }
 }
 
 function drawArenaCrowdCheer(offsetX) {
-  const time = Date.now() / 115;
-  const sections = [[170, 365], [590, 790]];
-  sections.forEach(([start, end], section) => {
-    let index = 0;
-    for (let x = start; x < end; x += 24) {
-      const raised = Math.sin(time + index * 1.7 + section) > 0;
-      const bob = raised ? -4 : 1;
-      const y = 82 + (index % 2) * 13 + bob;
-      const color = ["#2f79c8", "#d6473f", "#e0ad35", "#4c9b55", "#7e58aa"][index % 5];
-      ctx.fillStyle = "#efb17d";
-      ctx.fillRect(offsetX + x + 5, y, 8, 8);
-      ctx.fillStyle = color;
-      ctx.fillRect(offsetX + x + 3, y + 8, 12, 13);
-      ctx.fillRect(offsetX + x + (raised ? -3 : 0), y + (raised ? 3 : 11), 6, 5);
-      ctx.fillRect(offsetX + x + (raised ? 15 : 12), y + (raised ? 3 : 11), 6, 5);
-      index += 1;
+  if (!armorArenaImage.complete || !armorArenaImage.naturalWidth) return;
+  const time = Date.now() / 140;
+  const stands = [
+    { sourceX: 320, drawX: 160 },
+    { sourceX: 1140, drawX: 570 },
+  ];
+  stands.forEach((stand, side) => {
+    for (let group = 0; group < 6; group += 1) {
+      const sourceX = stand.sourceX + group * 70;
+      const drawX = offsetX + stand.drawX + group * 35;
+      const bob = Math.sin(time + group * 1.35 + side * 0.7) > 0 ? -3 : 1;
+      // Reuse the people already painted in the reference map; no extra spectators are created.
+      ctx.drawImage(armorArenaImage, sourceX, 110, 70, 110, drawX, 55 + bob, 35, 55);
     }
   });
-  for (let i = 0; i < 12; i += 1) {
-    const sparkle = (Math.floor(time * 3) + i * 53) % 430;
-    ctx.fillStyle = ["#ffd34d", "#8ee8ff", "#ff6b50"][i % 3];
-    ctx.fillRect(offsetX + 270 + sparkle, 46 + (i % 4) * 13, 4, 4);
-  }
 }
 
 function drawTownDecor() {
@@ -3994,12 +3844,12 @@ function drawFoxHelper() {
   if (typeof foxRescued !== "boolean" || !foxRescued || !player) return;
   const moving = Math.abs(player.vx) > 0.15;
   const attacking = foxHelperAttackTimer > 70;
-  const frameIndex = attacking ? 5 : moving ? Math.floor(Date.now() / 110) % 5 : 0;
+  const frameIndex = attacking ? 4 + Math.floor(Date.now() / 90) % 4 : moving ? Math.floor(Date.now() / 110) % 8 : 0;
   const frame = foxHelperFrames[frameIndex];
   ctx.save();
   ctx.translate(-cameraX + foxHelperX + 40, foxHelperY + 48);
   ctx.scale(player.facing, 1);
-  if (frame && frame.complete && frame.naturalWidth > 0) ctx.drawImage(frame, -50, -72, 100, 80);
+  if (frame && frame.complete && frame.naturalWidth > 0) ctx.drawImage(frame, -52, -58, 104, 68);
   ctx.restore();
 }
 

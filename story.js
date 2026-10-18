@@ -68,9 +68,9 @@ function damageStoryCage(hitBox) {
   foxTutorialPending = true;
   try { localStorage.setItem("yuanbao.fox-tutorial-pending", "yes"); } catch (_) {}
   try { localStorage.setItem(foxSaveKey, "yes"); } catch (_) { /* Keep session progress if storage is unavailable. */ }
-  effects.push({ x: cage.x - 80, y: cage.y - 40, width: 220, height: 30, life: 180, kind: "loot", text: "第一关胜利！小狐狸获救！" });
+  effects.push({ x: cage.x - 80, y: cage.y - 40, width: 220, height: 30, life: 180, kind: "loot", text: "第一关胜利！小狼获救！" });
   refreshStoryHud();
-  requestLevelVictory(false, "小狐狸获救了！可以先逛商店，点击开始后跟小狐狸学习跳跃和攻击。");
+  requestLevelVictory(false, "小狼获救了！可以先逛商店，点击开始后跟小狼学习跳跃和攻击。");
   return true;
 }
 
@@ -106,7 +106,7 @@ function storyPrompt() {
     return { label: npc.item === "rent" && townHouseRented ? "和房东聊聊" : `购买${npc.itemName}（${npc.cost}金币）`, action: "townBuy", npc };
   }
   if (s.type === "meadow") {
-    if (s.state === "victory") return { label: "跟小狐狸学习", action: "learn" };
+    if (s.state === "victory") return { label: "跟小狼学习", action: "learn" };
     if (s.state === "done") return { label: "前往海洋", action: "next" };
     return null;
   }
@@ -133,12 +133,12 @@ function refreshStoryHud() {
       message = s.message;
     }
   } else if (s.type === "meadow") {
-    title = isFoxTutorial() ? "第一关胜利 · 小狐狸的引导" : s.saved ? "砾石草原 · 再次冒险" : "伙伴任务 · 救出小狐狸";
-    message = s.saved ? "小狐狸已经安全了，这次终点是宝箱，可以直接去打开。" :
-      s.state === "victory" ? "小狐狸：谢谢你打破牢笼！你已经赢了！接下来我教你跳跃和攻击。" :
-      s.state === "tutorial" ? (!s.jump ? "小狐狸：跟我跳！按空格、↑ 或 W 试试跳跃，前面有绿色平台。" : "小狐狸：跳得好！现在按 J 挥动武器，练习攻击。") :
-      s.state === "done" ? "小狐狸：你学会啦！我们一起去海洋冒险吧！" :
-      "小狐狸：我在右边终点！不用打败怪物，靠近牢笼按 J 攻击，就能救我出来！";
+    title = isFoxTutorial() ? "第一关胜利 · 小狼的引导" : s.saved ? "砾石草原 · 再次冒险" : "伙伴任务 · 救出小狼";
+    message = s.saved ? "小狼已经安全了，这次终点是宝箱，可以直接去打开。" :
+      s.state === "victory" ? "小狼：谢谢你打破牢笼！你已经赢了！接下来我教你跳跃和攻击。" :
+      s.state === "tutorial" ? (!s.jump ? "小狼：跟我跳！按空格、↑ 或 W 试试跳跃，前面有绿色平台。" : "小狼：跳得好！现在按 J 挥动武器，练习攻击。") :
+      s.state === "done" ? "小狼：你学会啦！我们一起去海洋冒险吧！" :
+      "小狼：我在右边终点！不用打败怪物，靠近牢笼按 J 攻击，就能救我出来！";
   } else if (s.type === "ocean") {
     const copy = {
       battle: ["海洋救援", "三条鳄鱼抓住了鲸鱼！击败它们，再去沉船旁寻找金色宝箱。"],
@@ -304,16 +304,9 @@ function storyPoly(points, color) {
 }
 
 function drawStoryFox(x, y, time) {
-  ctx.save(); ctx.translate(x, y);
-  storyPoly([[-10, 36], [-31, 24 + Math.sin(time / 12) * 3], [-35, 9], [-20, 16], [4, 28]], "#d87728");
-  storyPoly([[-31, 24], [-35, 9], [-25, 13], [-23, 24]], "#fff0d1");
-  ctx.fillStyle = "#d87728"; ctx.fillRect(0, 19, 35, 24);
-  storyPoly([[6, 19], [3, -6], [17, 3], [27, 1], [39, -5], [38, 24], [23, 35]], "#ed9846");
-  storyPoly([[8, 7], [7, 0], [15, 6]], "#492d34");
-  storyPoly([[29, 6], [35, 0], [35, 10]], "#492d34");
-  storyPoly([[8, 22], [21, 24], [35, 21], [23, 35]], "#fff0d1");
-  ctx.fillStyle = "#202933"; ctx.fillRect(12, 15, 3, 4); ctx.fillRect(29, 15, 3, 4); ctx.fillRect(21, 25, 4, 3);
-  ctx.fillRect(3, 40, 7, 7); ctx.fillRect(27, 40, 7, 7);
+  const frame = foxHelperFrames[Math.floor(time / 7) % foxHelperFrames.length];
+  ctx.save(); ctx.translate(x + 18, y + 42);
+  if (frame?.complete && frame.naturalWidth > 0) ctx.drawImage(frame, -54, -60, 108, 70);
   ctx.restore();
 }
 
