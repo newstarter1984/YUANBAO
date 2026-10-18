@@ -276,6 +276,12 @@ canvas {
   margin-top: 14px;
 }
 
+.creative-world-hint {
+  margin: 0 0 9px !important;
+  color: #543a31;
+  font-size: 13px;
+}
+
 .world-test-buttons {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -436,15 +442,21 @@ button:disabled {
 
 .backpack-panel {
   position: absolute;
-  right: 12px;
-  bottom: 82px;
-  width: min(390px, calc(100% - 24px));
-  max-height: calc(100% - 104px);
+  z-index: 20;
+  left: 50%;
+  top: 50%;
+  right: auto;
+  bottom: auto;
+  transform: translate(-50%, -50%);
+  width: min(650px, calc(100% - 34px));
+  max-height: calc(100% - 40px);
   overflow: auto;
-  border: 5px solid var(--line);
-  background: var(--panel);
-  box-shadow: 8px 8px 0 #0b0a12;
-  padding: 14px;
+  border: 7px solid #241b1a;
+  background: linear-gradient(135deg, #72513b, #4a332a 62%, #35251f);
+  box-shadow: 0 0 0 4px #c69b68, 12px 12px 0 rgba(11,10,18,.75);
+  padding: 18px;
+  color: #fff2cf;
+  image-rendering: pixelated;
 }
 
 .backpack-panel.is-hidden {
@@ -460,43 +472,131 @@ button:disabled {
 
 .backpack-header h3 {
   margin: 0;
-  font-size: 26px;
+  color: #fff2cf;
+  font-size: 30px;
+  text-shadow: 3px 3px 0 #241b1a;
 }
 
 .backpack-header button {
   min-width: 78px;
+  background: #b84235;
+  color: #fff7dd;
 }
+
+.backpack-equipment {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.backpack-equipment > div {
+  min-height: 62px;
+  border: 4px solid #241b1a;
+  background: #927052;
+  box-shadow: inset 0 0 0 3px #b89368;
+  padding: 8px 12px;
+}
+
+.backpack-equipment span,
+.backpack-equipment strong { display: block; }
+.backpack-equipment span { color: #2a1d19; font-size: 12px; font-weight: 900; }
+.backpack-equipment strong { margin-top: 3px; font-size: 19px; }
 
 .inventory-items {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin-top: 12px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 9px;
+  margin-top: 16px;
 }
 
 .inventory-item {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 8px;
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 104px;
+  flex-direction: column;
   align-items: center;
-  border: 4px solid var(--line);
-  background: #fffdf0;
-  padding: 8px;
+  justify-content: center;
+  gap: 3px;
+  border: 4px solid #241b1a;
+  background: #49352d;
+  box-shadow: inset 0 0 0 3px #765746;
+  padding: 7px 5px 5px;
   font-weight: 900;
+  text-align: center;
 }
 
-.inventory-item--slots {
-  grid-column: 1 / -1;
-  background: #d8edf5;
+.inventory-item.is-empty {
+  opacity: .48;
 }
 
 .inventory-item--equipped {
-  background: #fff4c7;
+  background: #6b4a2f;
+  box-shadow: inset 0 0 0 3px #d2a557;
+}
+
+.inventory-icon {
+  display: block;
+  font-size: 28px;
+  line-height: 1;
+  filter: drop-shadow(2px 2px 0 #1b1412);
+}
+
+.inventory-name {
+  max-width: 100%;
+  color: #fff3d7;
+  font-size: 12px;
+  line-height: 1.15;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inventory-count {
+  position: absolute;
+  right: 5px;
+  top: 4px;
+  min-width: 18px;
+  color: #ffe78d;
+  font-size: 13px;
+  text-shadow: 2px 2px 0 #241b1a;
 }
 
 .inventory-item button {
-  min-width: 74px;
+  min-width: 0;
+  min-height: 25px;
+  width: 100%;
+  margin-top: 2px;
+  padding: 2px 4px;
+  border-width: 2px;
+  background: #c89958;
+  font-size: 11px;
 }
+
+.game-running .top-bar,
+.game-running .hud,
+.game-running .game-actions,
+.game-running .objective-hud,
+.game-running .touch-controls,
+.game-running .controls {
+  display: none !important;
+}
+
+.game-running .story-hud {
+  position: absolute;
+  z-index: 8;
+  top: 10px;
+  left: 10px;
+  width: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  pointer-events: none;
+}
+
+.game-running .story-hud > div { display: none; }
+.game-running .story-hud button { pointer-events: auto; }
 
 .story-hud {
   display: flex;
@@ -635,6 +735,14 @@ button:disabled {
   .world-test-buttons {
     grid-template-columns: 1fr;
   }
+
+  .inventory-items { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .backpack-panel { width: calc(100% - 26px); padding: 12px; }
+  .backpack-header h3 { font-size: 23px; }
+  .backpack-equipment > div { min-height: 48px; padding: 5px 8px; }
+  .backpack-equipment strong { font-size: 15px; }
+  .inventory-item { min-height: 82px; }
+  .inventory-icon { font-size: 23px; }
 
   .game-actions {
     position: static;

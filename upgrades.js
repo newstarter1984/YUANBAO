@@ -5,6 +5,7 @@ const objectiveText = document.querySelector("#objectiveText");
 const checkpointText = document.querySelector("#checkpointText");
 const adventureModeButton = document.querySelector("#adventureModeButton");
 const creativeModeButton = document.querySelector("#creativeModeButton");
+const creativeWorldPanel = document.querySelector("#creativeWorldPanel");
 const modeHint = document.querySelector("#modeHint");
 const continueButton = document.querySelector("#continueButton");
 const exportSaveButton = document.querySelector("#exportSaveButton");
@@ -102,6 +103,7 @@ function syncModeUi() {
   unlimitedCoinsMode = gameMode === "creative";
   adventureModeButton.classList.toggle("is-selected", gameMode === "adventure");
   creativeModeButton.classList.toggle("is-selected", gameMode === "creative");
+  creativeWorldPanel?.classList.toggle("is-hidden", gameMode !== "creative");
   modeHint.textContent = gameMode === "creative"
     ? "创造模式：无限金币、测试世界和快速养成，适合自由体验。"
     : "冒险模式：正常金币与真实掉落，成长会自动保存。";

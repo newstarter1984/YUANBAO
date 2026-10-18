@@ -14,6 +14,17 @@ const swampLickerFrames = Array.from({ length: 4 }, (_, index) => {
 const foxHelperFrames = Array.from({ length: 7 }, (_, index) => {
   const image = new Image(); image.src = `assets/fox-helper/frame-${index}.png?v=20261018`; return image;
 });
+const townReferenceImage = new Image();
+townReferenceImage.src = "assets/town-reference.png?v=20261018";
+const shadowCultistFrames = Array.from({ length: 12 }, (_, index) => {
+  const image = new Image(); image.src = `assets/shadow-cultist/frame-${index}.png?v=20261018`; return image;
+});
+const werewolfBossFrames = Array.from({ length: 16 }, (_, index) => {
+  const image = new Image(); image.src = `assets/werewolf-boss/frame-${index}.png?v=20261018`; return image;
+});
+const spellProjectileFrames = Array.from({ length: 8 }, (_, index) => {
+  const image = new Image(); image.src = `assets/spell-projectile/frame-${index}.png?v=20261018`; return image;
+});
 const dwarfWarriorImage = new Image();
 dwarfWarriorImage.src = "assets/dwarf-warrior.gif?v=20261018";
 const dwarfWarriorFrames = Object.fromEntries(
@@ -85,6 +96,8 @@ const backpackButton = document.querySelector("#backpackButton");
 const backpackPanel = document.querySelector("#backpackPanel");
 const closeBackpackButton = document.querySelector("#closeBackpackButton");
 const inventoryItems = document.querySelector("#inventoryItems");
+const backpackWeaponSlot = document.querySelector("#backpackWeaponSlot");
+const backpackCompanionSlot = document.querySelector("#backpackCompanionSlot");
 
 const keys = new Set();
 const gravity = 0.75;
@@ -278,6 +291,7 @@ function startGame() {
   backpackPanel.classList.add("is-hidden");
   playCount += 1;
   gameState = "playing";
+  document.body.classList.add("game-running");
   mainMenu.classList.add("is-hidden");
   gameActions.classList.remove("is-hidden");
   backpackButton.classList.remove("is-hidden");
@@ -363,7 +377,7 @@ function enemySize(kind, number, index) {
     lavaBeast: [90, 76],
     lavaSlime: [66, 44],
     lavaAxeGuard: [86, 86],
-    lavaBoss: [156, 138],
+    lavaBoss: [208, 186],
     skeleton: [54, 68],
   };
   const [baseWidth, baseHeight] = table[kind] || [58, 58];
@@ -568,6 +582,7 @@ function buildLevel(number) {
 function showMenu(reason) {
   hideStory();
   gameState = "menu";
+  document.body.classList.remove("game-running");
   cancelAnimationFrame(animationFrame);
 
   if (reason === "win") {
@@ -621,6 +636,7 @@ function update(frameTime = performance.now()) {
   handleInput();
   if (finishPendingVictory()) return;
   movePlayer();
+  updateDragonFollow();
   if (isFoxTutorial()) {
     updateStory();
     tickTimers();
@@ -862,7 +878,7 @@ function updateTown() {
 }
 
 function isFloatingEnemy(enemy) {
-  return ["drowned", "fish", "shark", "harpooner", "swampWitch", "lavaMage", "lavaBoss"].includes(enemy.kind);
+  return ["drowned", "fish", "shark", "harpooner", "swampWitch", "lavaMage"].includes(enemy.kind);
 }
 
 function animateEnemyLeap(enemy, speed) {
@@ -927,10 +943,10 @@ function castWitchMagic(enemy, targetX = player.x + player.width / 2, targetY = 
   const dy = targetY - (enemy.y + enemy.height / 2);
   const distance = Math.max(1, Math.hypot(dx, dy));
   projectiles.push({
-    x: enemy.x + enemy.width / 2 - 9,
+    x: enemy.x + enemy.width / 2 - 16,
     y: enemy.y + 34,
-    width: 18,
-    height: 18,
+    width: 32,
+    height: 32,
     vx: (dx / distance) * 5.2,
     vy: (dy / distance) * 5.2,
     damage: getEnemyAttackDamage(enemy),
@@ -1042,7 +1058,7 @@ function moveLavaBoss(enemy) {
       enemy.bossTimer = 46;
       enemy.chargeDir = Math.sign(distance);
       enemy.attackTimer = 180;
-      effects.push({ x: enemy.x - 20, y: enemy.y - 34, width: enemy.width + 40, height: 36, life: 54, kind: "loot", text: "岩浆武士冲刺！" });
+      effects.push({ x: enemy.x - 20, y: enemy.y - 34, width: enemy.width + 40, height: 36, life: 54, kind: "loot", text: "狼人 BOSS 猛扑！" });
     } else {
       enemy.attackTimer = 130;
       spawnBossFire(enemy);
@@ -2215,6 +2231,25 @@ function isNearActiveDragon() {
   return Math.hypot((player.x + player.width / 2) - (dragonX + 46), (player.y + player.height / 2) - (dragonY + 30)) < 120;
 }
 
+function updateDragonFollow() {
+  const dragon = getActiveDragon();
+  if (!player || !dragon || dragon.down || isRidingDragon()) return;
+  dragonRestLevel = currentLevel;
+  const followDistance = 118;
+  const targetX = Math.max(20, Math.min(level.worldWidth - 170, player.x - player.facing * followDistance));
+  const targetY = player.onGround ? floorY - 76 : Math.min(floorY - 76, player.y + 44);
+  const dx = targetX - dragonRestX;
+  const dy = targetY - dragonRestY;
+  const distance = Math.hypot(dx, dy);
+  if (distance > 520) {
+    dragonRestX = targetX;
+    dragonRestY = targetY;
+    return;
+  }
+  dragonRestX += dx * Math.min(0.16, distance / 260);
+  dragonRestY += dy * (Math.abs(dy) > 26 ? 0.12 : 0.07);
+}
+
 function renderProfessions() {
   professionChoices.innerHTML = "";
   professionHint.textContent = `${professions[selectedProfession].name}：${professions[selectedProfession].description}`;
@@ -2248,44 +2283,49 @@ function renderProfessions() {
 
 function renderBackpack() {
   inventoryItems.innerHTML = "";
+  if (backpackWeaponSlot) backpackWeaponSlot.textContent = getSpecialWeaponName() || weapons[weaponLevel].name;
+  if (backpackCompanionSlot) {
+    const activeDragon = getActiveDragon();
+    backpackCompanionSlot.textContent = activeDragon && !activeDragon.down ? getDragonType(activeDragon.type).name : (foxRescued ? "小狐狸" : "无");
+  }
   const rows = [
-    { key: "slots", name: `物品栏 6格：${getQuickSlotsText()}`, count: 1, action: "整理", onClick: renderBackpack },
-    { key: "stinkSock", name: "臭袜子", count: inventory.stinkSock, action: "卖 1", onClick: () => sellTreasure("stinkSock", 1) },
-    { key: "redDye", name: "红色染料", count: inventory.redDye, action: "兑换赤兔", onClick: renderShop },
-    { key: "blackDye", name: "黑色染料", count: inventory.blackDye, action: "兑换黑马", onClick: renderShop },
-    { key: "goldenArmor", name: `黄金甲${hasGoldenArmor ? "（已拥有）" : ""}`, count: hasGoldenArmor ? 1 : 0, action: "已拥有", onClick: renderBackpack },
-    { key: "redHare", name: `赤兔宝马${hasRedHare ? "（已拥有）" : ""}`, count: hasRedHare ? 1 : 0, action: "已拥有", onClick: renderBackpack },
-    { key: "blackHorse", name: `黑马${hasBlackHorse ? "（已拥有）" : ""}`, count: hasBlackHorse ? 1 : 0, action: "已拥有", onClick: renderBackpack },
-    { key: "powerPotion", name: "力量药水", count: inventory.powerPotion, action: "使用", onClick: usePowerPotion },
-    { key: "fireResistPotion", name: "抗火药水", count: inventory.fireResistPotion, action: "使用", onClick: useFireResistPotion },
-    { key: "medkit", name: "医疗包", count: inventory.medkit, action: "使用", onClick: useMedkit },
-    { key: "normalArrow", name: `普通箭${equippedArrow === "normalArrow" ? "（已佩戴）" : ""}`, count: inventory.normalArrow, action: equippedArrow === "normalArrow" ? "已佩戴" : "佩戴", onClick: () => equipArrow("normalArrow") },
-    { key: "poisonArrow", name: `剧毒箭${equippedArrow === "poisonArrow" ? "（已佩戴）" : ""}`, count: inventory.poisonArrow, action: equippedArrow === "poisonArrow" ? "已佩戴" : "佩戴", onClick: () => equipArrow("poisonArrow") },
-    { key: "fireArrow", name: `火焰箭${equippedArrow === "fireArrow" ? "（已佩戴）" : ""}`, count: inventory.fireArrow, action: equippedArrow === "fireArrow" ? "已佩戴" : "佩戴", onClick: () => equipArrow("fireArrow") },
-    { key: "lightningSword", name: "闪电剑", count: inventory.lightningSword, action: "佩戴", onClick: () => equipLootWeapon("lightningSword") },
-    { key: "fireSwordLoot", name: "火焰剑", count: inventory.fireSwordLoot || 0, action: "佩戴", onClick: () => equipWeapon(9) },
-    { key: "lightningBoots", name: "闪电靴子", count: inventory.lightningBoots, action: lightningBootsEquipped ? "已佩戴" : "佩戴", onClick: () => useLightningBoots() },
-    { key: "skyAxe", name: "轰天斧", count: inventory.skyAxe, action: "佩戴", onClick: () => equipLootWeapon("skyAxe") },
-    { key: "dragonEgg", name: `龙蛋/幼龙 ${getDragonLibrarySummary()}`, count: inventory.dragonEgg + dragons.length + (dragonEggIncubator ? 1 : 0), action: "去龙库", onClick: () => { shopMode = "dragons"; renderShop(); } },
-    { key: "dragonWand", name: `驯龙杖${equippedTool === "dragonWand" ? "（已佩戴）" : ""}`, count: inventory.dragonWand, action: equippedTool === "dragonWand" ? "已佩戴" : "佩戴", onClick: () => equipTool("dragonWand") },
-    { key: "dragonNest", name: `驯龙巢${equippedTool === "dragonNest" ? "（已佩戴）" : ""}`, count: inventory.dragonNest, action: equippedTool === "dragonNest" ? "已佩戴" : "佩戴", onClick: () => equipTool("dragonNest") },
-    { key: "beef", name: "牛肉", count: inventory.beef, action: "喂龙", onClick: feedDragon },
+    { key: "stinkSock", icon: "🧦", name: "臭袜子", count: inventory.stinkSock, action: "卖出", onClick: () => sellTreasure("stinkSock", 1) },
+    { key: "redDye", icon: "🔴", name: "红色染料", count: inventory.redDye, action: "兑换", onClick: renderShop },
+    { key: "blackDye", icon: "⚫", name: "黑色染料", count: inventory.blackDye, action: "兑换", onClick: renderShop },
+    { key: "goldenArmor", icon: "🛡️", name: "黄金甲", count: hasGoldenArmor ? 1 : 0, action: "拥有", onClick: renderBackpack },
+    { key: "redHare", icon: "🐴", name: "赤兔宝马", count: hasRedHare ? 1 : 0, action: "拥有", onClick: renderBackpack },
+    { key: "blackHorse", icon: "♞", name: "黑马", count: hasBlackHorse ? 1 : 0, action: "拥有", onClick: renderBackpack },
+    { key: "powerPotion", icon: "💪", name: "力量药水", count: inventory.powerPotion, action: "使用", onClick: usePowerPotion },
+    { key: "fireResistPotion", icon: "🔥", name: "抗火药水", count: inventory.fireResistPotion, action: "使用", onClick: useFireResistPotion },
+    { key: "medkit", icon: "➕", name: "医疗包", count: inventory.medkit, action: "使用", onClick: useMedkit },
+    { key: "normalArrow", icon: "➶", name: "普通箭", count: inventory.normalArrow, action: equippedArrow === "normalArrow" ? "已装备" : "装备", onClick: () => equipArrow("normalArrow") },
+    { key: "poisonArrow", icon: "☠", name: "剧毒箭", count: inventory.poisonArrow, action: equippedArrow === "poisonArrow" ? "已装备" : "装备", onClick: () => equipArrow("poisonArrow") },
+    { key: "fireArrow", icon: "🏹", name: "火焰箭", count: inventory.fireArrow, action: equippedArrow === "fireArrow" ? "已装备" : "装备", onClick: () => equipArrow("fireArrow") },
+    { key: "lightningSword", icon: "⚡", name: "闪电剑", count: inventory.lightningSword, action: "装备", onClick: () => equipLootWeapon("lightningSword") },
+    { key: "fireSwordLoot", icon: "🗡️", name: "火焰剑", count: inventory.fireSwordLoot || 0, action: "装备", onClick: () => equipWeapon(9) },
+    { key: "lightningBoots", icon: "🥾", name: "闪电靴子", count: inventory.lightningBoots, action: lightningBootsEquipped ? "已装备" : "装备", onClick: () => useLightningBoots() },
+    { key: "skyAxe", icon: "🪓", name: "轰天斧", count: inventory.skyAxe, action: "装备", onClick: () => equipLootWeapon("skyAxe") },
+    { key: "dragonEgg", icon: "🥚", name: "龙蛋与幼龙", count: inventory.dragonEgg + dragons.length + (dragonEggIncubator ? 1 : 0), action: "查看", onClick: () => { shopMode = "dragons"; renderShop(); } },
+    { key: "dragonWand", icon: "🪄", name: "驯龙杖", count: inventory.dragonWand, action: equippedTool === "dragonWand" ? "已装备" : "装备", onClick: () => equipTool("dragonWand") },
+    { key: "dragonNest", icon: "🪺", name: "驯龙巢", count: inventory.dragonNest, action: equippedTool === "dragonNest" ? "已装备" : "装备", onClick: () => equipTool("dragonNest") },
+    { key: "beef", icon: "🥩", name: "牛肉", count: inventory.beef, action: "喂龙", onClick: feedDragon },
   ];
 
   weapons.forEach((weapon, index) => {
     if (ownedWeapons[index]) {
-      rows.push({ key: `weapon${index}`, name: weapon.name, count: 1, action: index === weaponLevel ? "已佩戴" : "佩戴", onClick: () => equipWeapon(index) });
+      rows.push({ key: `weapon${index}`, icon: "⚔", name: weapon.name, count: 1, action: index === weaponLevel ? "已装备" : "装备", onClick: () => equipWeapon(index) });
     }
   });
 
   for (const row of rows) {
     const item = document.createElement("div");
-    item.className = row.key === "slots" ? "inventory-item inventory-item--slots" : row.key.startsWith("weapon") ? "inventory-item inventory-item--equipped" : "inventory-item";
-    item.innerHTML = `<span>${row.name} x${row.count}</span>`;
+    item.className = `inventory-item${row.key.startsWith("weapon") ? " inventory-item--equipped" : ""}${row.count <= 0 ? " is-empty" : ""}`;
+    item.title = row.name;
+    item.innerHTML = `<span class="inventory-icon" aria-hidden="true">${row.icon || "◆"}</span><span class="inventory-name">${row.name}</span><span class="inventory-count">${row.count}</span>`;
     const button = document.createElement("button");
     button.type = "button";
     button.textContent = row.action;
-    button.disabled = row.count <= 0 || row.action === "已佩戴";
+    button.disabled = row.count <= 0 || row.action === "已装备" || row.action === "拥有";
     button.addEventListener("click", row.onClick);
     item.append(button);
     inventoryItems.append(item);
@@ -2566,7 +2606,6 @@ function draw() {
   drawForegroundDepth();
   drawScreenDepthOverlay();
   drawVisionMask();
-  drawQuickSlots();
 }
 
 function drawMenuBackdrop() {
@@ -2802,12 +2841,12 @@ function renderWorldTestButtons() {
     const button = document.createElement("button");
     button.type = "button";
     button.className = getTheme(currentLevel).id === theme.id ? "is-current" : "";
-    button.textContent = `测试${theme.name}`;
+    button.textContent = theme.name;
     button.addEventListener("click", () => {
       currentLevel = levelNumber;
       level = buildLevel(currentLevel);
-      resultLabel.textContent = `测试：${theme.name}`;
-      menuText.textContent = `已切换到第 ${currentLevel} 关：${theme.name}。点击右下角按钮开始测试。`;
+      resultLabel.textContent = `创造地图：${theme.name}`;
+      menuText.textContent = `已选择${theme.name}，点击开始游戏直接进入。`;
       startButton.textContent = `开始第 ${currentLevel} 关：${level.theme.name}`;
       updateHud();
       drawMenuBackdrop();
@@ -3112,6 +3151,13 @@ function drawThemeDecor() {
 
 function drawTownDecor() {
   const town = level.town;
+  if (townReferenceImage.complete && townReferenceImage.naturalWidth) {
+    for (let x = 0; x < level.worldWidth; x += 960) {
+      ctx.drawImage(townReferenceImage, x, 0, 960, 540);
+    }
+    if (townHouseRented) drawTinyText("床边可睡觉", town.bed.x - 10, floorY - 92, "#fff4c7");
+    return;
+  }
   const night = town.isNight;
   // Street houses and warm windows.
   for (let x = 120; x < level.worldWidth; x += 720) {
@@ -3365,7 +3411,7 @@ function drawEnemies() {
     if (enemy.kind === "scarab") drawScarab(enemy);
     if (enemy.kind === "swampFrog") drawSwampFrog(enemy);
     if (enemy.kind === "swampLicker") drawSwampLicker(enemy);
-    if (enemy.kind === "swampWitch") drawSwampWitch(enemy);
+    if (enemy.kind === "swampWitch") drawShadowCultist(enemy);
     if (enemy.kind === "mudBeast") drawMudBeast(enemy);
     if (enemy.kind === "lavaMage") drawLavaMage(enemy);
     if (enemy.kind === "lavaKnight") drawLavaKnight(enemy);
@@ -3771,6 +3817,19 @@ function drawSwampWitch(enemy) {
   ctx.fillRect(enemy.x + enemy.width - 4, enemy.y + 15, 8, 8);
 }
 
+function drawShadowCultist(enemy) {
+  const frame = shadowCultistFrames[Math.floor(Date.now() / 105 + enemy.phase) % shadowCultistFrames.length];
+  if (frame?.complete && frame.naturalWidth) {
+    ctx.save();
+    ctx.translate(enemy.x + enemy.width / 2, enemy.y + enemy.height);
+    ctx.scale(enemy.facing, 1);
+    ctx.drawImage(frame, -enemy.width * 0.68, -enemy.height * 1.12, enemy.width * 1.36, enemy.height * 1.12);
+    ctx.restore();
+    return;
+  }
+  drawSwampWitch(enemy);
+}
+
 function drawMudBeast(enemy) {
   ctx.fillStyle = enemyFill(enemy, "#5b4a32");
   ctx.fillRect(enemy.x + 8, enemy.y + 18, enemy.width - 16, enemy.height - 18);
@@ -3851,6 +3910,15 @@ function drawLavaAxeGuard(enemy) {
 }
 
 function drawLavaBoss(enemy) {
+  const frame = werewolfBossFrames[Math.floor(Date.now() / 110) % werewolfBossFrames.length];
+  if (frame?.complete && frame.naturalWidth) {
+    ctx.save();
+    ctx.translate(enemy.x + enemy.width / 2, enemy.y + enemy.height);
+    ctx.scale(enemy.facing, 1);
+    ctx.drawImage(frame, -enemy.width / 2, -enemy.height, enemy.width, enemy.height);
+    ctx.restore();
+    return;
+  }
   if (enemy.bossMode === "diving") {
     ctx.save();
     ctx.translate(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2);
@@ -3995,13 +4063,24 @@ function drawBossHealthBar(enemy) {
   ctx.fillRect(x, y, barWidth * ratio, 10);
   ctx.fillStyle = "#ffd34d";
   ctx.fillRect(x, y + 10, Math.max(0, barWidth * ratio), 3);
-  drawTinyText("BOSS", x, y - 8, "#ffd34d");
+  drawTinyText("狼人 BOSS", x, y - 8, "#ffd34d");
 }
 
 function drawProjectiles() {
   ctx.save();
   ctx.translate(-cameraX, 0);
   for (const projectile of projectiles) {
+    if (projectile.kind === "witchMagic") {
+      const frame = spellProjectileFrames[Math.floor(Date.now() / 90) % spellProjectileFrames.length];
+      if (frame?.complete && frame.naturalWidth) {
+        ctx.save();
+        ctx.translate(projectile.x + projectile.width / 2, projectile.y + projectile.height / 2);
+        ctx.scale(Math.sign(projectile.vx) || 1, 1);
+        ctx.drawImage(frame, -30, -24, 60, 48);
+        ctx.restore();
+        continue;
+      }
+    }
     ctx.fillStyle =
       projectile.kind === "grenade" ? "#2f6b3f" :
       projectile.kind === "dragonOrb" ? (projectile.dragonType === "fire" ? "#ff5a2e" : projectile.dragonType === "water" ? "#65d7ff" : projectile.dragonType === "wood" ? "#45d06f" : projectile.dragonType === "earth" ? "#b98235" : "#ffd34d") :

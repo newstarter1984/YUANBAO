@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>元宝的星星大冒险</title>
-    <link rel="stylesheet" href="style.css?v=20260912-rescue-quest" />
+    <link rel="stylesheet" href="style.css?v=20261018-town-wolf-final" />
   </head>
   <body>
     <main class="game-shell">
@@ -102,8 +102,9 @@
               <div id="professionChoices" class="profession-choices"></div>
               <p id="professionHint" class="profession-hint">医生：生命 +100，可叠到 1000。</p>
             </div>
-            <div class="test-panel">
-              <h3>测试世界</h3>
+            <div id="creativeWorldPanel" class="test-panel is-hidden">
+              <h3>创造模式地图</h3>
+              <p class="creative-world-hint">选择地图后，点击开始游戏就能直接进入。</p>
               <div id="worldTestButtons" class="world-test-buttons"></div>
             </div>
             <div class="menu-stats" aria-live="polite">
@@ -163,8 +164,12 @@
         <button id="backpackButton" class="backpack-button" type="button">背包</button>
         <div id="backpackPanel" class="backpack-panel is-hidden">
           <div class="backpack-header">
-            <h3>背包</h3>
+            <h3>冒险背包</h3>
             <button id="closeBackpackButton" type="button">关闭</button>
+          </div>
+          <div class="backpack-equipment" aria-label="装备栏">
+            <div><span>武器</span><strong id="backpackWeaponSlot">小剑</strong></div>
+            <div><span>伙伴</span><strong id="backpackCompanionSlot">无</strong></div>
           </div>
           <div id="inventoryItems" class="inventory-items"></div>
         </div>
@@ -196,7 +201,7 @@
     </main>
 
     <script src="story.js?v=20261018-town-level"></script>
-    <script src="game.js?v=20261018-dragon-health"></script>
-    <script src="upgrades.js?v=20261018-dragon-health"></script>
+    <script src="game.js?v=20261018-town-wolf-final"></script>
+    <script src="upgrades.js?v=20261018-town-wolf-final"></script>
   </body>
 </html>
