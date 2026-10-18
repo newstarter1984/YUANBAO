@@ -1,19 +1,13 @@
 const canvas = document.querySelector("#game");
 const ctx = canvas.getContext("2d");
 ctx.imageSmoothingEnabled = false;
-const emberKnightImage = new Image();
-emberKnightImage.src = "assets/ember-knight.gif?v=20261017";
-const emberKnightFrames = [0, 1, 2, 3].map(index => {
+const blueMageImage = new Image();
+blueMageImage.src = "assets/blue-mage.gif?v=20261018";
+const blueMageFrames = Array.from({ length: 8 }, (_, index) => {
   const image = new Image();
-  image.src = `assets/ember-knight-frame-${index}.png?v=20261018`;
+  image.src = `assets/blue-mage/frame-${index}.png?v=20261018`;
   return image;
 });
-const emberKnightFrameBounds = [
-  { centerX: 130, bottom: 215 },
-  { centerX: 129.5, bottom: 215 },
-  { centerX: 130, bottom: 215 },
-  { centerX: 132.5, bottom: 215 },
-];
 const dwarfWarriorImage = new Image();
 dwarfWarriorImage.src = "assets/dwarf-warrior.gif?v=20261018";
 const dwarfWarriorFrames = Object.fromEntries(
@@ -164,7 +158,7 @@ const dragonTypes = [
 
 const professions = {
   doctor: { name: "医生", button: "回复", description: "点击回复，生命 +100，可叠到 1000。" },
-  emberKnight: { name: "烈焰勇士", button: "炼狱斩", description: "挥动火焰剑冲击前方，造成范围伤害。", portrait: "assets/ember-knight.gif?v=20261017" },
+  blueMage: { name: "蓝袍法师", button: "寒冰法球", description: "从法杖发射寒冰法球，伤害并减速敌人。", portrait: "assets/blue-mage.gif?v=20261018" },
   dwarfWarrior: { name: "矮人勇士", button: "战斧重击", description: "踏步挥动战斧，重创前方敌人。", portrait: "assets/dwarf-warrior.gif?v=20261018" },
 };
 
@@ -211,7 +205,7 @@ let ownedSkins = {
   luBu: false,
   zhangFeiAlt: false,
   zhaoYun: false,
-  emberKnight: true,
+  blueMage: true,
   dwarfWarrior: true,
 };
 let selectedProfession = "doctor";
@@ -1332,19 +1326,21 @@ function useProfessionSkill() {
     effects.push({ x: player.x - 10, y: player.y - 28, width: 100, height: 30, life: 70, kind: "blackFist" });
   }
 
-  if (selectedProfession === "emberKnight") {
-    const reach = 190;
-    const hitBox = {
-      x: player.facing > 0 ? player.x + 18 : player.x - reach + 34,
-      y: player.y - 18,
-      width: reach,
-      height: 104,
-    };
-    player.skillTimer = 210;
-    player.attacking = 48;
-    player.vx = 8 * player.facing;
-    damageEnemiesIfHit(hitBox, getAttackDamage(68));
-    effects.push({ x: player.facing > 0 ? hitBox.x + hitBox.width - 28 : hitBox.x, y: player.y + 18, width: 34, height: 34, life: 12, kind: "emberImpact" });
+  if (selectedProfession === "blueMage") {
+    player.skillTimer = 120;
+    player.attacking = 24;
+    projectiles.push({
+      x: player.facing > 0 ? player.x + player.width : player.x - 30,
+      y: player.y + 20,
+      width: 28,
+      height: 28,
+      vx: 11 * player.facing,
+      vy: 0,
+      damage: getAttackDamage(58),
+      rangeLeft: 720,
+      kind: "mageOrb",
+    });
+    effects.push({ x: player.x + player.width / 2 - 28, y: player.y - 8, width: 64, height: 64, life: 18, kind: "magicCast" });
   }
 
   if (selectedProfession === "dwarfWarrior") {
@@ -1521,7 +1517,7 @@ function moveProjectiles() {
           enemy.cagedTimer = 600;
           effects.push({ x: enemy.x - 8, y: enemy.y - 12, width: enemy.width + 16, height: enemy.height + 22, life: 60, kind: "cageHit" });
         } else {
-          if (projectile.kind === "slowArrow" || projectile.kind === "frostArrow") {
+          if (projectile.kind === "slowArrow" || projectile.kind === "frostArrow" || projectile.kind === "mageOrb") {
             enemy.cagedTimer = Math.max(enemy.cagedTimer, projectile.kind === "frostArrow" ? 90 : 50);
           }
           if (projectile.kind === "fireArrow") {
@@ -2123,8 +2119,8 @@ function renderProfessions() {
     button.append(copy);
     button.addEventListener("click", () => {
       selectedProfession = id;
-      if (id === "emberKnight" || id === "dwarfWarrior") selectedSkin = id;
-      else if (selectedSkin === "emberKnight" || selectedSkin === "dwarfWarrior") selectedSkin = "knight";
+      if (id === "blueMage" || id === "dwarfWarrior") selectedSkin = id;
+      else if (selectedSkin === "blueMage" || selectedSkin === "dwarfWarrior") selectedSkin = "knight";
       updateHud();
       renderProfessions();
     });
@@ -2278,7 +2274,7 @@ function buySkin(skin) {
 function equipSkin(key) {
   if (!ownedSkins[key]) return;
   selectedSkin = key;
-  if (key !== selectedProfession && (selectedProfession === "emberKnight" || selectedProfession === "dwarfWarrior")) selectedProfession = "doctor";
+  if (key !== selectedProfession && (selectedProfession === "blueMage" || selectedProfession === "dwarfWarrior")) selectedProfession = "doctor";
   renderProfessions();
   updateHud();
   renderShop();
@@ -2379,7 +2375,7 @@ function getSpecialWeaponName() {
 function updateActionButtons() {
   const inGame = gameState === "playing" && Boolean(player);
   const canToggleDragon = inGame && getActiveDragon() && isNearActiveDragon();
-  healButton.classList.toggle("is-hidden", !["doctor", "emberKnight", "dwarfWarrior"].includes(selectedProfession));
+  healButton.classList.toggle("is-hidden", !["doctor", "blueMage", "dwarfWarrior"].includes(selectedProfession));
   cageButton.classList.toggle("is-hidden", selectedProfession !== "police");
   blackFistButton.classList.toggle("is-hidden", selectedProfession !== "boxer");
   rageButton.classList.toggle("is-hidden", selectedSkin !== "zhangFei" && selectedSkin !== "zhangFeiAlt");
@@ -2387,14 +2383,14 @@ function updateActionButtons() {
   swiftButton.classList.toggle("is-hidden", selectedSkin !== "zhaoYun");
   thousandKillButton.classList.toggle("is-hidden", selectedSkin !== "zhaoYun");
   mountButton.classList.toggle("is-hidden", !canToggleDragon);
-  healButton.classList.toggle("is-active-skill", ["doctor", "emberKnight", "dwarfWarrior"].includes(selectedProfession));
+  healButton.classList.toggle("is-active-skill", ["doctor", "blueMage", "dwarfWarrior"].includes(selectedProfession));
   cageButton.classList.toggle("is-active-skill", selectedProfession === "police");
   blackFistButton.classList.toggle("is-active-skill", selectedProfession === "boxer");
   rageButton.classList.toggle("is-active-skill", zhangFeiRageTimer > 0);
   swiftButton.classList.toggle("is-active-skill", zhaoYunSwiftTimer > 0);
   thousandKillButton.classList.toggle("is-active-skill", zhaoYunInvincibleTimer > 0);
-  healButton.textContent = selectedProfession === "emberKnight"
-    ? (player && player.skillTimer > 0 ? "炼狱斩冷却" : "炼狱斩")
+  healButton.textContent = selectedProfession === "blueMage"
+    ? (player && player.skillTimer > 0 ? "寒冰法球冷却" : "寒冰法球")
     : selectedProfession === "dwarfWarrior"
       ? (player && player.skillTimer > 0 ? "战斧重击冷却" : "战斧重击")
       : player && player.skillTimer > 0 ? "回复冷却中" : "回复";
@@ -2405,7 +2401,7 @@ function updateActionButtons() {
   swiftButton.textContent = zhaoYunSwiftTimer > 0 ? `飞速${Math.ceil(zhaoYunSwiftTimer / 60)}秒` : zhaoYunSwiftCooldown > 0 ? "飞速冷却" : "飞速";
   thousandKillButton.textContent = zhaoYunInvincibleTimer > 0 ? `无敌${Math.ceil(zhaoYunInvincibleTimer / 60)}秒` : zhaoYunInvincibleCooldown > 0 ? "千杀冷却" : "千杀百万";
   mountButton.textContent = isRidingDragon() ? "下来" : "骑乘";
-  healButton.disabled = !inGame || !["doctor", "emberKnight", "dwarfWarrior"].includes(selectedProfession) || player.skillTimer > 0;
+  healButton.disabled = !inGame || !["doctor", "blueMage", "dwarfWarrior"].includes(selectedProfession) || player.skillTimer > 0;
   cageButton.disabled = !inGame || selectedProfession !== "police" || player.skillTimer > 0;
   blackFistButton.disabled = !inGame || selectedProfession !== "boxer" || player.skillTimer > 0;
   rageButton.disabled = !inGame || (selectedSkin !== "zhangFei" && selectedSkin !== "zhangFeiAlt") || zhangFeiRageCooldown > 0;
@@ -3737,6 +3733,7 @@ function drawProjectiles() {
       projectile.kind === "grenade" ? "#2f6b3f" :
       projectile.kind === "cage" ? "#fff29a" :
       projectile.kind === "witchMagic" ? "#9b5cff" :
+      projectile.kind === "mageOrb" ? "#73d9ff" :
       projectile.kind === "fireArrow" ? "#ff6b2e" :
       projectile.kind === "lightningArrow" ? "#ffd34d" :
       projectile.kind === "frostArrow" ? "#8ee8ff" :
@@ -3744,7 +3741,12 @@ function drawProjectiles() {
       projectile.kind === "poisonArrow" ? "#45d06f" :
       "#211b2c";
     ctx.fillRect(projectile.x, projectile.y, projectile.width, projectile.height);
-    if (projectile.kind === "witchMagic") {
+    if (projectile.kind === "mageOrb") {
+      ctx.fillStyle = "#e7fbff";
+      ctx.fillRect(projectile.x + 7, projectile.y + 7, 14, 14);
+      ctx.fillStyle = "#328ddd";
+      ctx.fillRect(projectile.x - Math.sign(projectile.vx) * 10, projectile.y + 10, 10, 8);
+    } else if (projectile.kind === "witchMagic") {
       ctx.fillStyle = "#d7b8ff";
       ctx.fillRect(projectile.x + 5, projectile.y + 5, 8, 8);
     } else if (projectile.kind === "bossFire") {
@@ -4146,8 +4148,8 @@ function drawPlayer() {
     ctx.fillRect(x + 58, y + 34, 5, 5);
   }
 
-  if (selectedSkin === "emberKnight") {
-    drawEmberKnight(x, isRidingDragon() ? y - 18 : isRidingHorse() ? y - 8 : y, player.facing, player.attacking);
+  if (selectedSkin === "blueMage") {
+    drawBlueMage(x, isRidingDragon() ? y - 18 : isRidingHorse() ? y - 8 : y, player.facing, player.attacking);
     ctx.restore();
     return;
   }
@@ -4203,60 +4205,29 @@ function getCharacterMountMotion(facing) {
   return { x: 0, y: 0, rotation: 0 };
 }
 
-function drawEmberKnight(x, y, facing, attackFrames) {
-  ctx.save();
+function drawBlueMage(x, y, facing, attackFrames) {
   const now = Date.now();
-  const walking = player.onGround && Math.abs(player.vx) > 0.15 && !isRidingDragon() && !isRidingHorse();
+  const riding = isRidingDragon() || isRidingHorse();
+  const walking = player.onGround && Math.abs(player.vx) > 0.15 && !riding;
   const jumping = !player.onGround && !isRidingDragon();
-  const walkPhase = Math.sin(now / 72);
-  const attackMax = attackFrames > 12 ? 48 : 12;
-  const attackProgress = attackFrames > 0 ? 1 - attackFrames / attackMax : 0;
   const attacking = attackFrames > 0;
-  const drawHeight = 98;
-  let offsetX = 0;
-  let offsetY = 0;
-  let rotation = 0;
-
+  const source = blueMageFrames[Math.floor(now / 100) % blueMageFrames.length] || blueMageImage;
+  const mountMotion = getCharacterMountMotion(facing);
+  let offsetY = walking ? Math.sin(now / 95) * 2 : 0;
+  let rotation = attacking ? -0.1 * facing : 0;
   if (jumping) {
     offsetY -= 8;
-    rotation = Math.max(-0.2, Math.min(0.2, player.vy * 0.018));
+    rotation += Math.max(-0.16, Math.min(0.16, player.vy * 0.015));
   }
-  if (characterMountTimer > 0) {
-    const mountProgress = 1 - characterMountTimer / 34;
-    offsetX -= facing * (1 - mountProgress) * 72;
-    offsetY += (1 - mountProgress) * 30 - Math.sin(mountProgress * Math.PI) * 66;
-    rotation -= facing * (1 - mountProgress) * 0.22;
-  }
-  if (characterDismountTimer > 0) {
-    const dismountProgress = 1 - characterDismountTimer / 22;
-    offsetX += facing * dismountProgress * 34;
-    offsetY -= Math.sin(dismountProgress * Math.PI) * 30;
-    rotation += facing * 0.12 * Math.sin(dismountProgress * Math.PI);
-  }
-  if (attacking) rotation -= facing * Math.sin(attackProgress * Math.PI) * 0.13;
-
-  ctx.translate(x + player.width / 2 + offsetX, y + 38 + offsetY);
+  ctx.save();
+  ctx.translate(x + player.width / 2 + mountMotion.x, y + 70 + mountMotion.y + offsetY);
+  ctx.rotate(mountMotion.rotation + rotation);
   ctx.scale(facing, 1);
-  ctx.rotate(rotation * facing);
-  if (jumping) ctx.scale(0.94, 1.07);
-  if (emberKnightImage.complete && emberKnightImage.naturalWidth > 0) {
-    let frameIndex = 0;
-    if (attacking) {
-      const frameOrder = [0, 1, 2, 2, 3, 0];
-      frameIndex = frameOrder[Math.min(frameOrder.length - 1, Math.floor(attackProgress * frameOrder.length))];
-    } else if (walking) {
-      const walkOrder = [0, 1, 0, 3];
-      frameIndex = walkOrder[Math.floor(now / 150) % walkOrder.length];
-    }
-    const source = emberKnightFrames[frameIndex].complete && emberKnightFrames[frameIndex].naturalWidth > 0 ? emberKnightFrames[frameIndex] : emberKnightImage;
-    const alignment = emberKnightFrameBounds[frameIndex];
-    const frameScale = drawHeight / 172;
-    ctx.drawImage(source, -alignment.centerX * frameScale, 49 - alignment.bottom * frameScale, 256 * frameScale, 256 * frameScale);
+  if (source.complete && source.naturalWidth > 0) {
+    ctx.drawImage(source, -64, -112, 128, 128);
   } else {
-    ctx.fillStyle = "#f06a1b";
-    ctx.fillRect(-20, -34, 40, 62);
-    ctx.fillStyle = "#ffd34d";
-    ctx.fillRect(-12, -28, 24, 12);
+    ctx.fillStyle = "#2d6ac5";
+    ctx.fillRect(-22, -62, 44, 62);
   }
   ctx.restore();
 }
