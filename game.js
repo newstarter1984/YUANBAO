@@ -29,6 +29,13 @@ const werewolfBossFrames = Array.from({ length: 16 }, (_, index) => {
 const spellProjectileFrames = Array.from({ length: 8 }, (_, index) => {
   const image = new Image(); image.src = `assets/spell-projectile/frame-${index}.png?v=20261018`; return image;
 });
+const oceanFishFrames = Array.from({ length: 8 }, (_, species) =>
+  Array.from({ length: 8 }, (_, frameIndex) => {
+    const image = new Image();
+    image.src = `assets/ocean-fish/fish-${species}-${frameIndex}.png?v=20261018`;
+    return image;
+  })
+);
 const dwarfWarriorImage = new Image();
 dwarfWarriorImage.src = "assets/dwarf-warrior.gif?v=20261018";
 const dwarfWarriorFrames = Object.fromEntries(
@@ -304,7 +311,6 @@ function startGame() {
   backpackButton.classList.remove("is-hidden");
   attackButton.classList.remove("is-hidden");
   level = buildLevel(currentLevel);
-  if (level.theme.id === "arena") activeMount = "none";
   arenaAllies = level.theme.id === "arena" ? [
     { x: 430, color: "#2f79c8", attack: 10 },
     { x: 490, color: "#d6473f", attack: 24 },
@@ -3547,7 +3553,7 @@ function drawEnemies() {
 function drawArenaDragonBoss(enemy) {
   const airborne = enemy.y < floorY - enemy.height - 35;
   const dragon = getDragonType("wood");
-  drawDragonShape(ctx, enemy.x + 16, enemy.y + 30, dragon, 1.72, airborne, false, enemy.facing, true, enemy.attackTimer > 72);
+  drawDragonShape(ctx, enemy.x + 16, enemy.y + 30, dragon, 1.72, airborne, false, enemy.facing, false, enemy.attackTimer > 72);
 }
 
 function drawArenaAllies() {
@@ -3773,30 +3779,21 @@ function enemyFill(enemy, color) {
 }
 
 function drawFish(enemy) {
-  const swim = Math.sin(Date.now() / 120 + enemy.phase) * 5;
-  const isBlue = Math.floor(enemy.phase / 18) % 2 === 0;
-  const bodyColor = isBlue ? "#2f8df0" : "#ff6b43";
-  const finColor = isBlue ? "#8ee8ff" : "#ffd34d";
-  const stripeColor = isBlue ? "#17445f" : "#b83232";
-  const tailX = enemy.facing > 0 ? enemy.x - 4 : enemy.x + enemy.width - 10;
-  const faceX = enemy.facing > 0 ? enemy.x + enemy.width - 24 : enemy.x + 18;
-  ctx.fillStyle = enemyFill(enemy, bodyColor);
-  ctx.fillRect(enemy.x + 12, enemy.y + 10, enemy.width - 24, enemy.height - 16);
-  ctx.fillRect(enemy.x + 22, enemy.y + 5, enemy.width - 42, 8);
-  ctx.fillRect(enemy.x + 22, enemy.y + enemy.height - 13, enemy.width - 42, 8);
-  addPixelHighlights(enemy.x + 12, enemy.y + 10, enemy.width - 24, enemy.height - 16);
-  ctx.fillStyle = finColor;
-  ctx.fillRect(enemy.x + 28, enemy.y + 1, 20, 8);
-  ctx.fillRect(enemy.x + 34, enemy.y + enemy.height - 7, 18, 7);
-  ctx.fillStyle = stripeColor;
-  for (let stripe = 0; stripe < 3; stripe += 1) {
-    ctx.fillRect(enemy.x + 24 + stripe * 12, enemy.y + 12, 5, enemy.height - 20);
-  }
-  ctx.fillStyle = "#211b2c";
-  ctx.fillRect(faceX, enemy.y + 16, 5, 5);
-  ctx.fillStyle = finColor;
-  ctx.fillRect(tailX, enemy.y + 8 + swim, 12, 12);
-  ctx.fillRect(tailX, enemy.y + 22 - swim, 12, 12);
+  drawOceanFishSprite(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2, Math.floor(enemy.phase / 18), enemy.facing, enemy.width * 1.35, enemy.height * 1.35);
+}
+
+function drawOceanFishSprite(x, y, species, facing = 1, width = 64, height = 38) {
+  const frames = oceanFishFrames[Math.abs(species) % oceanFishFrames.length];
+  const frame = frames[Math.floor(Date.now() / 110 + species) % frames.length];
+  if (!frame?.complete || !frame.naturalWidth) return;
+  const ratio = frame.naturalWidth / Math.max(1, frame.naturalHeight);
+  const drawWidth = Math.min(width, height * ratio);
+  const drawHeight = drawWidth / ratio;
+  ctx.save();
+  ctx.translate(x, y + Math.sin(Date.now() / 170 + species) * 3);
+  ctx.scale(facing >= 0 ? 1 : -1, 1);
+  ctx.drawImage(frame, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+  ctx.restore();
 }
 
 function drawCrab(enemy) {
@@ -4638,7 +4635,7 @@ function drawPlayer() {
   const gait = moving ? Math.sin(Date.now() / 85) * 5 : 0;
   const swimKick = isPlayerInRiver() ? Math.sin(Date.now() / 90) * 6 : gait;
   drawEntityShadow(player, isRidingDragon() || isRidingHorse() ? 1.2 : 1);
-  if (getActiveDragon() && !isRidingDragon() && level.theme.id !== "arena") {
+  if (getActiveDragon() && !isRidingDragon()) {
     drawDragonCompanion(dragonRestX, dragonRestY, gait);
   }
 

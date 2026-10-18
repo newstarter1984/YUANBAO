@@ -411,12 +411,7 @@ function drawStoryWhale(s) {
 }
 
 function drawStoryFish(x, y, i, time) {
-  const sway = Math.sin(time / 10 + i) * 5;
-  const colors = ["#ff947f", "#70ceef", "#f0d06a", "#bf9de3"];
-  storyPoly([[x - 17, y - 12 + sway], [x - 17, y + 12 + sway], [x + 2, y]], colors[i % 4]);
-  ctx.fillStyle = colors[i % 4]; ctx.beginPath(); ctx.ellipse(x + 8, y, 20, 10, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = "#f1f8da"; ctx.fillRect(x + 3, y - 7, 4, 14);
-  ctx.fillStyle = "#142b36"; ctx.fillRect(x + 19, y - 3, 3, 3);
+  drawOceanFishSprite(x, y, i, i % 2 ? -1 : 1, 72 + (i % 3) * 16, 42);
 }
 
 function drawStoryShip(x) {
