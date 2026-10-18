@@ -115,18 +115,22 @@ function storyPrompt() {
     if (town.inside) {
       if (storyNear(town.bed.x + 55, town.bed.y + 44, 130)) return { label: "睡觉到天亮", action: "sleep" };
       if (storyNear(town.bookshelf.x + 45, floorY - 36, 105)) return { label: townBookFound ? "阅读书籍" : "从书柜找到一本书", action: "findBook" };
-      if (town.servants.some(servant => storyNear(servant.x, floorY - 36, 112))) return { label: townServantMealReady ? "让仆人帮忙做饭" : "和仆人聊聊", action: "servantCook" };
+      if (storyNear(town.exit.x + 50, floorY - 36, 82)) return { label: "走出房屋", action: "leaveHouse" };
       if (storyNear(town.chair.x + 40, floorY - 36, 112)) return { label: "坐下休息", action: "sitChair" };
-      if (storyNear(town.exit.x + 76, town.exit.y + 62, 115)) return { label: "走出房屋", action: "leaveHouse" };
+      if (town.servants.some(servant => storyNear(servant.x, floorY - 36, 112))) return { label: townServantMealReady ? "让仆人帮忙做饭" : "和仆人聊聊", action: "servantCook" };
       return null;
     }
     if (townHouseRented && storyNear(town.entrance.x, town.entrance.y, 145)) return { label: "进入我的房屋", action: "enterHouse" };
     const npc = town.npcs.find(person => storyNear(person.x + 14, floorY - 34, 135));
-    if (!npc) return null;
-    if (npc.item === "rent" && townHouseRented) return { label: "询问我的房屋", action: "townBuy", npc };
-    if (npc.item === "shopProperty" && townShopOwned) return { label: townPropertyIncome ? `领取房产收入（${townPropertyIncome}金币）` : "查看我的商铺", action: "townBuy", npc };
-    if (npc.item === "apartmentProperty" && townApartmentOwned) return { label: townApartmentRented ? (townPropertyIncome ? `领取租金（${townPropertyIncome}金币）` : "查看公寓租客") : "把公寓出租", action: "townBuy", npc };
-    return { label: `购买${npc.itemName}（${npc.cost}金币）`, action: "townBuy", npc };
+    if (npc) {
+      if (npc.item === "rent" && townHouseRented) return { label: "询问我的房屋", action: "townBuy", npc };
+      if (npc.item === "shopProperty" && townShopOwned) return { label: townPropertyIncome ? `领取房产收入（${townPropertyIncome}金币）` : "查看我的商铺", action: "townBuy", npc };
+      if (npc.item === "apartmentProperty" && townApartmentOwned) return { label: townApartmentRented ? (townPropertyIncome ? `领取租金（${townPropertyIncome}金币）` : "查看公寓租客") : "把公寓出租", action: "townBuy", npc };
+      return { label: `购买${npc.itemName}（${npc.cost}金币）`, action: "townBuy", npc };
+    }
+    const resident = town.residents.find(person => storyNear(person.x + 14, floorY - 34, 105));
+    if (resident) return { label: `和${resident.name}聊天`, action: "townTalk", resident };
+    return null;
   }
   if (s.type === "meadow") {
     if (s.state === "victory") return { label: "跟小狼学习", action: "learn" };
@@ -157,6 +161,8 @@ function refreshStoryHud() {
         npc.item === "shopProperty" && townShopOwned ? `商铺经纪：你的商铺正在营业，当前可领取 ${townPropertyIncome} 金币。` :
         npc.item === "apartmentProperty" && townApartmentOwned ? (townApartmentRented ? `公寓管理员：租客住得很好，当前可领取 ${townPropertyIncome} 金币。` : "公寓管理员：公寓已经买下，现在可以把它出租。") :
         `${npc.name}：要不要买${npc.itemName}？只要 ${npc.cost} 金币。`;
+    } else if (prompt && prompt.resident) {
+      message = `${prompt.resident.name}：${prompt.resident.line}`;
     } else if (prompt && prompt.action === "sleep") {
       message = level.town.isNight ? "走到床边了。点击睡觉，就能跳过黑夜。" : "现在已经是白天，也可以睡一觉恢复生命。";
     } else {
@@ -326,6 +332,10 @@ function interactStory() {
       renderBackpack();
       break;
     }
+    case "townTalk":
+      s.message = `${prompt.resident.name}：${prompt.resident.line}`;
+      effects.push({ x: prompt.resident.x - 30, y: floorY - 112, width: 170, height: 26, life: 80, kind: "loot", text: "聊了几句" });
+      break;
     case "enterHouse":
       enterTownHouse();
       s.message = "欢迎回家。两位仆人可以做饭，床能跳过黑夜，书柜藏着书，椅子可以坐下休息。";

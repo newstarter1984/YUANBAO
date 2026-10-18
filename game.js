@@ -619,7 +619,13 @@ function buildLevel(number) {
     entrance: { x: 1950, y: floorY - 80 },
     bed: { x: 0, y: floorY - 118, width: 92, height: 94 },
     bookshelf: { x: 118, y: 185, width: 92, height: 118 },
-    servants: [{ x: 557, y: 246 }, { x: 681, y: 246 }],
+    servants: [
+      { x: 557, y: 246, builtIn: true, color: "#31578c" },
+      { x: 681, y: 246, builtIn: true, color: "#31578c" },
+      { x: 405, y: 300, color: "#6f4a97", sprite: 2 },
+      { x: 765, y: 300, color: "#487f58", sprite: 1 },
+      { x: 920, y: 300, color: "#9b593f", sprite: 3 },
+    ],
     chair: { x: 826, y: 268, width: 86, height: 90 },
     exit: { x: 285, y: floorY - 128, width: 100, height: 128 },
     npcs: [
@@ -630,6 +636,18 @@ function buildLevel(number) {
       { x: 2450, name: "商铺经纪", item: "shopProperty", itemName: "城镇商铺", cost: 1200, amount: 1, color: "#7d62aa" },
       { x: 2810, name: "公寓管理员", item: "apartmentProperty", itemName: "城镇公寓", cost: 1800, amount: 1, color: "#bc5e51" },
       { x: 3220, name: "旅行商人", item: "fireResistPotion", itemName: "抗火药水", cost: 8, amount: 1, color: "#3f7f91" },
+    ],
+    residents: [
+      { x: 210, left: 150, right: 360, vx: 0.38, phase: 0, sprite: 2, name: "花匠", color: "#6f9650", line: "月影花在夜里会发出淡淡的光。" },
+      { x: 560, left: 500, right: 700, vx: -0.34, phase: 17, sprite: 0, name: "学徒", color: "#765b9d", line: "我正在学习制作冒险用的药水。" },
+      { x: 930, left: 860, right: 1040, vx: 0.3, phase: 31, sprite: 1, name: "镇民", color: "#b56555", line: "欢迎来到月影小镇！" },
+      { x: 1260, left: 1200, right: 1390, vx: -0.42, phase: 43, sprite: 3, name: "木匠", color: "#9a673d", line: "你的新房子很结实，我检查过了。" },
+      { x: 1740, left: 1660, right: 1870, vx: 0.28, phase: 59, sprite: 4, name: "邻居", color: "#3f7893", line: "买下房子后，我们就是邻居啦。" },
+      { x: 2160, left: 2070, right: 2290, vx: -0.36, phase: 71, sprite: 2, name: "厨师学徒", color: "#b36c3e", line: "听说你家的仆人很会做饭。" },
+      { x: 2520, left: 2440, right: 2630, vx: 0.32, phase: 83, sprite: 1, name: "店员", color: "#5b899f", line: "商铺营业后，每天都会赚到金币。" },
+      { x: 2920, left: 2860, right: 3070, vx: -0.3, phase: 97, sprite: 0, name: "租客", color: "#8c6b9c", line: "公寓很舒服，我会按时付租金。" },
+      { x: 3370, left: 3290, right: 3500, vx: 0.4, phase: 109, sprite: 4, name: "巡夜人", color: "#495a78", line: "夜里小心骷髅兵，早点回家睡觉。" },
+      { x: 3650, left: 3540, right: 3760, vx: -0.35, phase: 127, sprite: 3, name: "旅人", color: "#90654c", line: "我从很远的皇家营地来到这里。" },
     ],
   } : null;
 
@@ -1064,6 +1082,14 @@ function updateRoyalCompanion() {
 function updateTown() {
   if (!level.town) return;
   level.town.clock += 1;
+  if (level.town.inside) return;
+  for (const resident of level.town.residents) {
+    resident.x += resident.vx;
+    if (resident.x <= resident.left || resident.x >= resident.right) {
+      resident.x = Math.max(resident.left, Math.min(resident.right, resident.x));
+      resident.vx *= -1;
+    }
+  }
 }
 
 function isFloatingEnemy(enemy) {
@@ -3426,6 +3452,10 @@ function drawTownDecor() {
     drawTinyText("书柜", 128, 174, "#fff4c7");
     drawTinyText("仆人", 602, 232, "#fff4c7");
     drawTinyText("椅子", 838, 256, "#fff4c7");
+    town.servants.filter(servant => !servant.builtIn).forEach((servant, index) => {
+      const bob = Math.sin(town.clock * 0.08 + index) > 0 ? -2 : 0;
+      drawTownResident(servant.x, floorY - 68 + bob, servant, "仆人");
+    });
     return;
   }
   if (townReferenceImage.complete && townReferenceImage.naturalWidth) {
@@ -3435,6 +3465,11 @@ function drawTownDecor() {
     drawTinyText(townHouseRented ? "我的房屋 · 门前按 E" : "房屋 600 金币", town.house.x + 180, floorY - 112, "#fff4c7");
     drawTinyText(townShopOwned ? "我的商铺" : "商铺 1200 金币", 2390, floorY - 105, "#fff4c7");
     drawTinyText(townApartmentOwned ? (townApartmentRented ? "我的公寓 · 已出租" : "我的公寓 · 可出租") : "公寓 1800 金币", 2735, floorY - 105, "#fff4c7");
+    for (const npc of town.npcs) drawTownNpc(npc.x, floorY - 68, npc.color, npc.name);
+    for (const resident of town.residents) {
+      const bob = Math.sin(town.clock * 0.11 + resident.phase) > 0 ? -2 : 1;
+      drawTownResident(resident.x, floorY - 68 + bob, resident, resident.name);
+    }
     return;
   }
   const night = town.isNight;
@@ -3492,6 +3527,33 @@ function drawTownNpc(x, y, color, name) {
   ctx.fillStyle = color; ctx.fillRect(x - 7, y + 24, 42, 36);
   ctx.fillStyle = "#332733"; ctx.fillRect(x + 6, y + 8, 5, 5); ctx.fillRect(x + 19, y + 8, 5, 5);
   ctx.fillRect(x - 3, y + 58, 12, 12); ctx.fillRect(x + 22, y + 58, 12, 12);
+  if (name) drawTinyText(name, x - 26, y - 12, "#fff4c7");
+}
+
+function drawTownResident(x, y, resident, name) {
+  const spriteIndex = resident.sprite || 0;
+  const walkingFrame = Math.floor(level.town.clock / 9 + (resident.phase || 0)) % 5;
+  const images = [
+    arenaAllyImages[0],
+    arenaAllyImages[1],
+    arenaAllyImages[2],
+    dwarfWarriorFrames.walk[walkingFrame % dwarfWarriorFrames.walk.length],
+    eliteKnightFrames[walkingFrame % 4],
+  ];
+  const image = images[spriteIndex % images.length];
+  if (!image || !image.complete || !image.naturalWidth) {
+    drawTownNpc(x, y, resident.color || "#557fb5", name);
+    return;
+  }
+  ctx.save();
+  if ((resident.vx || 1) < 0) {
+    ctx.translate(x + 24, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(image, -24, y, 48, 68);
+  } else {
+    ctx.drawImage(image, x - 24, y, 48, 68);
+  }
+  ctx.restore();
   drawTinyText(name, x - 26, y - 12, "#fff4c7");
 }
 

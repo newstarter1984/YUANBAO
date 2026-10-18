@@ -28,8 +28,11 @@ const { chromium } = require(playwrightPath);
       startGame();
       const near = x => { player.x = x - player.width / 2; player.y = floorY - player.height; };
 
+      near(210);
+      const residentPrompt = storyPrompt();
       near(1494);
       const buyPrompt = storyPrompt();
+      const townPopulation = level.town.npcs.length + level.town.residents.length;
       interactStory();
       const bought = townHouseRented;
 
@@ -72,10 +75,13 @@ const { chromium } = require(playwrightPath);
       near(level.town.entrance.x); interactStory();
       near(46); interactStory();
       const income = townPropertyIncome;
-      return { buyPrompt: buyPrompt.action, bought, doorPrompt: doorPrompt.action, entered, cookPrompt: cookPrompt.action, meal, bookPrompt: bookPrompt.action, book, chairPrompt: chairPrompt.action, sitting, sleepPrompt: sleepPrompt.action, daylight, exitPrompt: exitPrompt.action, left, properties, income };
+      return { residentPrompt: residentPrompt.action, buyPrompt: buyPrompt.action, townPopulation, houseServants: level.town.servants.length, bought, doorPrompt: doorPrompt.action, entered, cookPrompt: cookPrompt.action, meal, bookPrompt: bookPrompt.action, book, chairPrompt: chairPrompt.action, sitting, sleepPrompt: sleepPrompt.action, daylight, exitPrompt: exitPrompt.action, left, properties, income };
     });
 
+    assert.equal(result.residentPrompt, "townTalk");
     assert.equal(result.buyPrompt, "townBuy");
+    assert.ok(result.townPopulation >= 17);
+    assert.ok(result.houseServants >= 5);
     assert.equal(result.bought, true);
     assert.equal(result.doorPrompt, "enterHouse");
     assert.deepEqual(result.entered, { inside: true, width: 960, enemies: 0 });
