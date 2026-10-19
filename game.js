@@ -41,6 +41,11 @@ const lavaReaperImage = new Image();
 lavaReaperImage.src = "assets/lava-reaper/reaper.gif?v=20261018";
 const woodWyrmImage = new Image();
 woodWyrmImage.src = "assets/wood-wyrm/wood-wyrm.gif?v=20261019";
+const pirateShipDeckImage = new Image(); pirateShipDeckImage.src = "assets/pirate-conflict/ship-deck.png?v=20261019";
+const pirateKingImage = new Image(); pirateKingImage.src = "assets/pirate-conflict/pirate-king.gif?v=20261019";
+const cannonSailorImage = new Image(); cannonSailorImage.src = "assets/pirate-conflict/cannon-sailor.gif?v=20261019";
+const piratePriestImage = new Image(); piratePriestImage.src = "assets/pirate-conflict/priest.gif?v=20261019";
+const fishfolkInkbenderImage = new Image(); fishfolkInkbenderImage.src = "assets/pirate-conflict/fishfolk-inkbender.gif?v=20261019";
 const lavaHoundFrames = Array.from({ length: 8 }, (_, index) => {
   const image = new Image(); image.src = `assets/lava-hound/frame-${index}.png?v=20261018`; return image;
 });
@@ -458,6 +463,9 @@ function enemySize(kind, number, index) {
     royalHound: [78, 52],
     skeleton: [54, 68],
     woodWyrm: [82, 62],
+    pirateKing: [108, 96],
+    cannonSailor: [82, 82],
+    fishfolkInkbender: [86, 92],
   };
   const [baseWidth, baseHeight] = table[kind] || [58, 58];
   return [baseWidth + sizeBonus, baseHeight + sizeBonus];
@@ -3763,6 +3771,9 @@ function drawEnemies() {
     drawEntityShadow(enemy, ["lavaBoss", "arenaDragon"].includes(enemy.kind) ? 1.15 : 0.95);
     if (enemy.kind === "slime") drawSlime(enemy);
     if (enemy.kind === "woodWyrm") drawWoodWyrm(enemy);
+    if (enemy.kind === "pirateKing") drawPirateStoryEnemy(enemy, "king");
+    if (enemy.kind === "cannonSailor") drawPirateStoryEnemy(enemy, "sailor");
+    if (enemy.kind === "fishfolkInkbender") drawPirateStoryEnemy(enemy, "inkbender");
     if (enemy.kind === "skeleton") drawSkeleton(enemy);
     if (enemy.kind === "bat") drawBat(enemy);
     if (enemy.kind === "guard") drawGuard(enemy);
@@ -4059,6 +4070,30 @@ function drawWoodWyrm(enemy) {
   ctx.drawImage(woodWyrmBuffer, -enemy.width * 0.68, -enemy.height * 1.18, enemy.width * 1.36, enemy.height * 1.18);
   ctx.restore();
 }
+
+
+const pirateSpriteBuffers = {};
+function getPirateStorySprite(kind) {
+  const config = {
+    king: [pirateKingImage, 490, 145, 235, 190], sailor: [cannonSailorImage, 410, 18, 175, 150],
+    priest: [piratePriestImage, 175, 55, 125, 140], inkbender: [fishfolkInkbenderImage, 250, 90, 130, 125],
+  }[kind];
+  if (!config || !config[0].complete || !config[0].naturalWidth) return null;
+  const tick = Math.floor(Date.now() / 100);
+  if (pirateSpriteBuffers[kind]?.tick === tick) return pirateSpriteBuffers[kind].canvas;
+  const [, sx, sy, sw, sh] = config;
+  const canvas = pirateSpriteBuffers[kind]?.canvas || document.createElement("canvas"); canvas.width = sw; canvas.height = sh;
+  const b = canvas.getContext("2d", { willReadFrequently: true }); b.imageSmoothingEnabled = false; b.clearRect(0, 0, sw, sh);
+  b.drawImage(config[0], sx, sy, sw, sh, 0, 0, sw, sh);
+  const pixels = b.getImageData(0, 0, sw, sh), backgrounds = [[55,53,64],[47,47,46],[65,62,73],[91,87,104],[72,68,86]];
+  for (let i=0;i<pixels.data.length;i+=4) if (backgrounds.some(c=>Math.abs(pixels.data[i]-c[0])<=4&&Math.abs(pixels.data[i+1]-c[1])<=4&&Math.abs(pixels.data[i+2]-c[2])<=4)) pixels.data[i+3]=0;
+  b.putImageData(pixels,0,0); pirateSpriteBuffers[kind]={tick,canvas}; return canvas;
+}
+function drawPirateStoryEnemy(enemy, kind) {
+  const sprite=getPirateStorySprite(kind); if(!sprite)return; ctx.save(); ctx.translate(enemy.x+enemy.width/2,enemy.y+enemy.height); ctx.scale(enemy.facing,1);
+  ctx.drawImage(sprite,-enemy.width*.72,-enemy.height*1.14,enemy.width*1.44,enemy.height*1.14); ctx.restore();
+}
+function drawPiratePriest(x,y,facing=1) { const sprite=getPirateStorySprite("priest"); if(!sprite)return; ctx.save();ctx.translate(x,y);ctx.scale(facing,1);ctx.drawImage(sprite,-38,-80,76,84);ctx.restore(); }
 
 function drawBat(enemy) {
   const step = Math.sin(Date.now() / 100 + enemy.phase) * 3;

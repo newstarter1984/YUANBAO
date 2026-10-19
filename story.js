@@ -28,7 +28,7 @@ function initializeStoryLevel() {
     level.story = {
       type: "ocean", state: "battle", clock: 0, timer: 0,
       whaleX: 430, whaleY: 255, net: 0,
-      shipX: 650, rewarded: false,
+      shipX: 650, rewarded: false, priestShotTimer: 0,
     };
     level.enemies = [];
     level.waveHazard = null;
@@ -143,7 +143,7 @@ function storyPrompt() {
     if (s.state === "apology") return { label: "接受皇家伙伴", action: "acceptRoyalCompanion" };
     return null;
   }
-  if (s.state === "rescued" && storyNear(level.chest.x + 38, floorY - 45, 150)) return { label: "打开沉船里的金色宝箱", action: "treasure" };
+  if (s.state === "reconciled" && storyNear(level.chest.x + 38, floorY - 45, 150)) return { label: "打开沉船里的金色宝箱", action: "treasure" };
   return null;
 }
 
@@ -177,8 +177,10 @@ function refreshStoryHud() {
       "小狼：我在右边终点！不用打败怪物，靠近牢笼按 J 攻击，就能救我出来！";
   } else if (s.type === "ocean") {
     const copy = {
-      battle: ["海洋救援", "三条鳄鱼抓住了鲸鱼！击败它们，再去沉船旁寻找金色宝箱。"],
-      rescued: ["鲸鱼获救", "沉船旁的金色宝箱已经出现。打开它就会返回主界面。"],
+      battle: ["海洋救援", "三条鳄鱼抓住了鲸鱼！击败它们，再调查前方两艘正在交战的海盗船。"],
+      pirateConflict: ["两船冲突", "海盗王和炮手正在交战。先打败两人，阻止他们继续误会。"],
+      inkbender: ["幕后挑拨者", "鱼人墨法师才是挑起冲突的坏人！五名牧师会帮助你击败它。"],
+      reconciled: ["两船和解", "海盗王和炮手接受了你的建议。沉船旁的金色宝箱已经出现。"],
     };
     [title, message] = copy[s.state];
   } else if (s.type === "royal") {
@@ -400,7 +402,7 @@ function interactStory() {
       level.chest.opened = true;
       inventory.dragonEgg += 1;
       inventory.beef += 1;
-      s.state = "rescued";
+      s.state = "reconciled";
       renderBackpack();
       updateHud();
       requestLevelVictory(true, "沉船宝箱已经打开！获得龙蛋 ×1、牛排 ×1，已回到主界面。");
@@ -449,6 +451,17 @@ function beginWhaleBattle() {
     level.enemies.push(crocodile);
   }
   updateHud();
+}
+
+
+function beginPirateConflict() {
+  const s=level.story; s.state="pirateConflict";
+  level.enemies=[["pirateKing",350],["cannonSailor",790]].map(([kind,x],i)=>{ const e=buildEnemy(kind,x,level.number,i,"ocean"); e.pirateConflict=true; e.hp=e.maxHp=Math.max(120,getAttackDamage(weapons[weaponLevel].damage)*8); e.y=e.baseY=floorY-e.height; e.patrolLeft=kind==="pirateKing"?110:650; e.patrolRight=kind==="pirateKing"?550:1090; return e; });
+  effects.push({x:430,y:120,width:330,height:32,life:180,kind:"loot",text:"阻止两艘海盗船继续交战！"}); updateHud();
+}
+function beginInkbenderBattle() {
+  const s=level.story; s.state="inkbender"; const e=buildEnemy("fishfolkInkbender",570,level.number,0,"ocean"); e.pirateConflict=true; e.hp=e.maxHp=Math.max(240,getAttackDamage(weapons[weaponLevel].damage)*15); e.y=e.baseY=floorY-e.height; e.patrolLeft=260;e.patrolRight=940; level.enemies=[e];
+  effects.push({x:430,y:120,width:360,height:32,life:180,kind:"loot",text:"发现幕后坏人：鱼人墨法师！"}); updateHud();
 }
 
 function spawnRoyalPursuers() {
@@ -504,10 +517,12 @@ function updateStory() {
   }
   if (s.type === "ocean") {
     player.y = Math.max(80, player.y);
-    if (s.state === "battle" && level.enemies.filter(e => e.questCrocodile && e.alive).length === 0) {
-      s.state = "rescued";
-      level.chest.locked = false;
-      effects.push({ x: level.chest.x - 70, y: level.chest.y - 35, width: 220, height: 30, life: 140, kind: "loot", text: "金色宝箱出现了！" });
+    if (s.state === "battle" && level.enemies.filter(e => e.questCrocodile && e.alive).length === 0) beginPirateConflict();
+    else if (s.state === "pirateConflict" && level.enemies.every(e => !e.alive)) beginInkbenderBattle();
+    else if (s.state === "inkbender") {
+      const villain=level.enemies.find(e=>e.kind==="fishfolkInkbender"&&e.alive);
+      if (villain) { s.priestShotTimer=(s.priestShotTimer+1)%120; if(s.priestShotTimer===0){ villain.hp=Math.max(0,villain.hp-8); villain.hurtFlash=10; effects.push({x:villain.x-15,y:villain.y-10,width:villain.width+30,height:45,life:20,kind:"magicHit"}); if(villain.hp===0){villain.alive=false;villain.deathFall=24;} } }
+      else { s.state="reconciled"; level.chest.locked=false; effects.push({x:level.chest.x-160,y:level.chest.y-45,width:380,height:30,life:180,kind:"loot",text:"两船已经和解，金色宝箱出现了！"}); }
     }
   }
   if (s.type === "royal") {
@@ -666,7 +681,12 @@ function drawStoryScene() {
         ctx.fillStyle = "#dbcba9"; ctx.fillRect(x - 8, y - 3, 26, 7);
       }
       drawStoryWhale(s);
-      if (s.state === "rescued") {
+      if (["pirateConflict","inkbender","reconciled"].includes(s.state) && pirateShipDeckImage.complete && pirateShipDeckImage.naturalWidth) {
+        ctx.save(); ctx.imageSmoothingEnabled=false; ctx.drawImage(pirateShipDeckImage,0,0,315,180,20,190,540,300); ctx.translate(1200,0);ctx.scale(-1,1);ctx.drawImage(pirateShipDeckImage,0,0,315,180,20,190,540,300);ctx.restore();
+        [[180,335],[300,315],[500,350],[750,325],[990,345]].forEach((p,i)=>drawPiratePriest(p[0],p[1]+Math.sin(s.clock/15+i)*4,i<3?1:-1));
+        if (["inkbender","reconciled"].includes(s.state)) { drawPirateStoryEnemy({x:125,y:floorY-96,width:108,height:96,facing:1},"king"); drawPirateStoryEnemy({x:975,y:floorY-82,width:82,height:82,facing:-1},"sailor"); }
+      }
+      if (s.state === "reconciled") {
         const c = level.chest;
         ctx.fillStyle = "rgba(255,211,77,.18)"; ctx.beginPath(); ctx.arc(c.x + 38, c.y + 24, 70, 0, Math.PI * 2); ctx.fill();
         drawBlock3D(c.x, c.y + 15, 76, 42, "#bd8e28", "#ffe39a", "#785626", 8);
