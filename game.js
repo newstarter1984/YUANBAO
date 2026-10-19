@@ -39,6 +39,8 @@ const lavaDungeonImage = new Image();
 lavaDungeonImage.src = "assets/lava-dungeon.gif?v=20261018";
 const lavaReaperImage = new Image();
 lavaReaperImage.src = "assets/lava-reaper/reaper.gif?v=20261018";
+const woodWyrmImage = new Image();
+woodWyrmImage.src = "assets/wood-wyrm/wood-wyrm.gif?v=20261019";
 const lavaHoundFrames = Array.from({ length: 8 }, (_, index) => {
   const image = new Image(); image.src = `assets/lava-hound/frame-${index}.png?v=20261018`; return image;
 });
@@ -420,7 +422,7 @@ function enemyKindsForTheme(themeId) {
   if (themeId === "desert") return ["mummy", "scorpion", "sandGolem", "scarab"];
   if (themeId === "swamp") return ["swampLicker", "swampFrog", "swampWitch", "mudBeast"];
   if (themeId === "lava") return ["lavaMage", "lavaKnight", "lavaBlade", "lavaSoldier", "lavaBeast", "lavaSlime"];
-  if (themeId === "gravel") return ["slime"];
+  if (themeId === "gravel") return ["slime", "woodWyrm", "slime", "woodWyrm"];
   return ["slime", "bat", "guard", "brute"];
 }
 
@@ -455,6 +457,7 @@ function enemySize(kind, number, index) {
     royalRaider: [66, 76],
     royalHound: [78, 52],
     skeleton: [54, 68],
+    woodWyrm: [82, 62],
   };
   const [baseWidth, baseHeight] = table[kind] || [58, 58];
   return [baseWidth + sizeBonus, baseHeight + sizeBonus];
@@ -3759,6 +3762,7 @@ function drawEnemies() {
     drawEnemySightCircle(enemy);
     drawEntityShadow(enemy, ["lavaBoss", "arenaDragon"].includes(enemy.kind) ? 1.15 : 0.95);
     if (enemy.kind === "slime") drawSlime(enemy);
+    if (enemy.kind === "woodWyrm") drawWoodWyrm(enemy);
     if (enemy.kind === "skeleton") drawSkeleton(enemy);
     if (enemy.kind === "bat") drawBat(enemy);
     if (enemy.kind === "guard") drawGuard(enemy);
@@ -4024,6 +4028,36 @@ function drawSlime(enemy) {
   ctx.fillStyle = "#211b2c";
   ctx.fillRect(enemy.x + 14, enemy.y + 24, 6, 6);
   ctx.fillRect(enemy.x + enemy.width - 20, enemy.y + 24, 6, 6);
+}
+
+const woodWyrmBuffer = document.createElement("canvas");
+woodWyrmBuffer.width = 175;
+woodWyrmBuffer.height = 160;
+let woodWyrmBufferTick = -1;
+function drawWoodWyrm(enemy) {
+  if (!woodWyrmImage.complete || !woodWyrmImage.naturalWidth) return;
+  const tick = Math.floor(Date.now() / 100);
+  if (woodWyrmBufferTick !== tick) {
+    woodWyrmBufferTick = tick;
+    const bufferCtx = woodWyrmBuffer.getContext("2d", { willReadFrequently: true });
+    bufferCtx.imageSmoothingEnabled = false;
+    bufferCtx.clearRect(0, 0, 175, 160);
+    bufferCtx.drawImage(woodWyrmImage, 405, 75, 175, 160, 0, 0, 175, 160);
+    const pixels = bufferCtx.getImageData(0, 0, 175, 160);
+    const backdropColors = [[55, 53, 64], [47, 47, 46], [65, 62, 73], [91, 87, 104], [72, 68, 86]];
+    for (let index = 0; index < pixels.data.length; index += 4) {
+      const red = pixels.data[index], green = pixels.data[index + 1], blue = pixels.data[index + 2];
+      if (backdropColors.some(([r, g, b]) => Math.abs(red - r) <= 3 && Math.abs(green - g) <= 3 && Math.abs(blue - b) <= 3)) pixels.data[index + 3] = 0;
+    }
+    bufferCtx.putImageData(pixels, 0, 0);
+  }
+  const attacking = enemy.attackTimer > 34;
+  ctx.save();
+  ctx.translate(enemy.x + enemy.width / 2, enemy.y + enemy.height);
+  ctx.scale(enemy.facing, 1);
+  if (attacking) ctx.rotate(-0.1);
+  ctx.drawImage(woodWyrmBuffer, -enemy.width * 0.68, -enemy.height * 1.18, enemy.width * 1.36, enemy.height * 1.18);
+  ctx.restore();
 }
 
 function drawBat(enemy) {
