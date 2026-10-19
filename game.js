@@ -14,6 +14,10 @@ const swampLickerFrames = Array.from({ length: 4 }, (_, index) => {
 const foxHelperFrames = Array.from({ length: 8 }, (_, index) => {
   const image = new Image(); image.src = `assets/lava-hound/frame-${index}.png?v=20261018`; return image;
 });
+const townChallengeVillageImage = new Image(); townChallengeVillageImage.src = "assets/town-challenge/village.png?v=20261019";
+const townChallengeRoomImage = new Image(); townChallengeRoomImage.src = "assets/town-challenge/market-room.gif?v=20261019";
+const fourNoblesImage = new Image(); fourNoblesImage.src = "assets/town-challenge/four-nobles.gif?v=20261019";
+const captureGuardImage = new Image(); captureGuardImage.src = "assets/town-challenge/spear-guards.gif?v=20261019";
 const townReferenceImage = new Image();
 townReferenceImage.src = "assets/town-reference.png?v=20261018";
 const townHomeInteriorImage = new Image();
@@ -463,6 +467,7 @@ function enemySize(kind, number, index) {
     royalHound: [78, 52],
     skeleton: [54, 68],
     woodWyrm: [82, 62],
+    townNoble: [64, 76],
     pirateKing: [108, 96],
     cannonSailor: [82, 82],
     fishfolkInkbender: [86, 92],
@@ -640,6 +645,8 @@ function buildLevel(number) {
     inside: false,
     outsideState: null,
     house: { x: 1640, width: 620 },
+    publicHouses: [{id:"inn",name:"旅店",x:760},{id:"shop",name:"商店",x:2480},{id:"manor",name:"大宅",x:3260}],
+    selectedHouse: null, returnX: 0,
     entrance: { x: 1950, y: floorY - 80 },
     bed: { x: 0, y: floorY - 118, width: 92, height: 94 },
     bookshelf: { x: 118, y: 185, width: 92, height: 118 },
@@ -3474,7 +3481,9 @@ function drawArenaCrowdCheer(offsetX) {
 function drawTownDecor() {
   const town = level.town;
   if (town.inside) {
-    if (townHomeInteriorImage.complete && townHomeInteriorImage.naturalWidth) {
+    if (town.selectedHouse && townChallengeRoomImage.complete && townChallengeRoomImage.naturalWidth) {
+      ctx.drawImage(townChallengeRoomImage, 0, 0, townChallengeRoomImage.naturalWidth, townChallengeRoomImage.naturalHeight, 0, 0, 960, 540);
+    } else if (townHomeInteriorImage.complete && townHomeInteriorImage.naturalWidth) {
       ctx.drawImage(townHomeInteriorImage, 0, 0, 960, 540);
     } else {
       ctx.fillStyle = "#6e452c"; ctx.fillRect(0, 0, 960, 540);
@@ -3491,10 +3500,10 @@ function drawTownDecor() {
     });
     return;
   }
-  if (townReferenceImage.complete && townReferenceImage.naturalWidth) {
-    for (let x = 0; x < level.worldWidth; x += 960) {
-      ctx.drawImage(townReferenceImage, x, 0, 960, 540);
-    }
+  if (townChallengeVillageImage.complete && townChallengeVillageImage.naturalWidth) {
+    ctx.save(); ctx.imageSmoothingEnabled=false;
+    ctx.drawImage(townChallengeVillageImage, 0, 0, townChallengeVillageImage.naturalWidth, townChallengeVillageImage.naturalHeight, 0, 0, level.worldWidth, 540);
+    ctx.restore();
     drawTinyText(townHouseRented ? "我的房屋 · 门前按 E" : "房屋 600 金币", town.house.x + 180, floorY - 112, "#fff4c7");
     drawTinyText(townShopOwned ? "我的商铺" : "商铺 1200 金币", 2390, floorY - 105, "#fff4c7");
     drawTinyText(townApartmentOwned ? (townApartmentRented ? "我的公寓 · 已出租" : "我的公寓 · 可出租") : "公寓 1800 金币", 2735, floorY - 105, "#fff4c7");
@@ -3544,6 +3553,22 @@ function drawTownDecor() {
     drawTownNpc(npc.x, floorY - 68, npc.color, npc.name);
   }
   if (townHouseRented) drawTinyText("床边可睡觉", town.bed.x - 10, floorY - 92, "#fff4c7");
+}
+
+const captureGuardBuffer=document.createElement("canvas");captureGuardBuffer.width=130;captureGuardBuffer.height=160;let captureGuardTick=-1;
+function drawCaptureGuard(x,y,facing=1){
+  if(!captureGuardImage.complete||!captureGuardImage.naturalWidth)return;const tick=Math.floor(Date.now()/100);
+  if(captureGuardTick!==tick){captureGuardTick=tick;const b=captureGuardBuffer.getContext("2d",{willReadFrequently:true});b.clearRect(0,0,130,160);b.drawImage(captureGuardImage,260,140,130,160,0,0,130,160);const d=b.getImageData(0,0,130,160);for(let i=0;i<d.data.length;i+=4){const r=d.data[i],g=d.data[i+1],bl=d.data[i+2];if([[55,53,64],[91,87,104],[65,62,73]].some(c=>Math.abs(r-c[0])<5&&Math.abs(g-c[1])<5&&Math.abs(bl-c[2])<5))d.data[i+3]=0;}b.putImageData(d,0,0)}
+  ctx.save();ctx.translate(x,y);ctx.scale(facing,1);ctx.drawImage(captureGuardBuffer,-43,-82,86,88);ctx.restore();
+}
+
+const townNobleBuffers=new Map();
+function drawTownNoble(enemy) {
+  if(!fourNoblesImage.complete||!fourNoblesImage.naturalWidth)return;
+  const key=enemy.nobleIndex||0, tick=Math.floor(Date.now()/100); let entry=townNobleBuffers.get(key);
+  if(!entry){entry={canvas:document.createElement("canvas"),tick:-1};entry.canvas.width=96;entry.canvas.height=125;townNobleBuffers.set(key,entry)}
+  if(entry.tick!==tick){entry.tick=tick;const b=entry.canvas.getContext("2d",{willReadFrequently:true});b.clearRect(0,0,96,125);b.drawImage(fourNoblesImage,105+key*70,135,96,135,0,0,96,125);const d=b.getImageData(0,0,96,125);for(let i=0;i<d.data.length;i+=4){const r=d.data[i],g=d.data[i+1],bl=d.data[i+2];if((Math.abs(r-47)<5&&Math.abs(g-47)<5&&Math.abs(bl-46)<5)||(Math.abs(r-55)<5&&Math.abs(g-53)<5&&Math.abs(bl-64)<5))d.data[i+3]=0;}b.putImageData(d,0,0)}
+  ctx.save();ctx.translate(enemy.x+enemy.width/2,enemy.y+enemy.height);ctx.scale(enemy.facing,1);ctx.drawImage(entry.canvas,-42,-82,84,88);ctx.restore();
 }
 
 function drawTownStall(x, color) {
@@ -3771,6 +3796,7 @@ function drawEnemies() {
     drawEntityShadow(enemy, ["lavaBoss", "arenaDragon"].includes(enemy.kind) ? 1.15 : 0.95);
     if (enemy.kind === "slime") drawSlime(enemy);
     if (enemy.kind === "woodWyrm") drawWoodWyrm(enemy);
+    if (enemy.kind === "townNoble") drawTownNoble(enemy);
     if (enemy.kind === "pirateKing") drawPirateStoryEnemy(enemy, "king");
     if (enemy.kind === "cannonSailor") drawPirateStoryEnemy(enemy, "sailor");
     if (enemy.kind === "fishfolkInkbender") drawPirateStoryEnemy(enemy, "inkbender");

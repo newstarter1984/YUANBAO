@@ -17,7 +17,7 @@ function hideStory() {
 function initializeStoryLevel() {
   hideStory();
   if (level.theme.id === "town") {
-    level.story = { type: "town", state: "explore", clock: 0, message: "和镇上的居民聊聊。花 600 金币买下房屋后，可以从门口进入自己的家。" };
+    level.story = { type: "town", state: "explore", clock: 0, captureTimer: 0, message: "和镇上的居民聊聊。花 600 金币买下房屋后，可以从门口进入自己的家。" };
   } else if (level.theme.id === "gravel") {
     level.story = { type: "meadow", state: "rescue", jump: false, attack: false, saved: foxRescued, clock: 0 };
     if (foxTutorialPending) {
@@ -121,6 +121,8 @@ function storyPrompt() {
       return null;
     }
     if (townHouseRented && storyNear(town.entrance.x, town.entrance.y, 145)) return { label: "进入我的房屋", action: "enterHouse" };
+    const publicHouse = town.publicHouses?.find(h => storyNear(h.x, floorY - 70, 125));
+    if (publicHouse) return { label: `进入${publicHouse.name}`, action: "enterPublicHouse", house: publicHouse };
     const npc = town.npcs.find(person => storyNear(person.x + 14, floorY - 34, 135));
     if (npc) {
       if (npc.item === "rent" && townHouseRented) return { label: "询问我的房屋", action: "townBuy", npc };
@@ -153,8 +155,12 @@ function refreshStoryHud() {
   if (!s) return;
   let title, message;
   if (s.type === "town") {
-    title = level.town.inside ? "我的房屋" : level.town.isNight ? "月影小镇 · 夜晚" : "月影小镇 · 白天";
+    title = s.state === "duel" ? "四贵族挑战" : s.state === "captured" ? "大宅异变" : level.town.inside ? "小镇房屋" : "横向月影村庄";
     const prompt = storyPrompt();
+    if (s.state === "captured") message = s.captureTimer > 180 ? "两名长矛士兵从两侧抓住你，正把你押往大宅门口。你被绑住，无法说话或移动。" : "眼前一片漆黑……三秒后，你将面对四名贵族。";
+    else if (s.state === "duel") message = "四名贵族认为你的战斗力不够强。打败他们完成挑战；如果倒下，本关失败。";
+    else if (s.state === "cleared") message = "你打赢了四名贵族，他们承认了你的实力。三栋房子仍可自由进入。";
+    else
     if (prompt && prompt.npc) {
       const npc = prompt.npc;
       message = npc.item === "rent" && townHouseRented ? "房产经纪：房子已经属于你，走到门前就能进去。" :
@@ -212,9 +218,9 @@ function positionStoryInteraction() {
   storyInteract.style.top = `${canvas.offsetTop + (floorY - 85) * scale}px`;
 }
 
-function enterTownHouse() {
+function enterTownHouse(publicAccess = false) {
   const town = level.town;
-  if (!town || town.inside || !townHouseRented) return;
+  if (!town || town.inside || (!townHouseRented && !publicAccess)) return;
   town.outsideState = {
     worldWidth: level.worldWidth,
     platforms: level.platforms,
@@ -259,7 +265,8 @@ function leaveTownHouse() {
   Object.assign(level, outside);
   town.outsideState = null;
   town.inside = false;
-  player.x = town.entrance.x;
+  player.x = town.returnX || town.entrance.x;
+  town.selectedHouse = null;
   player.y = floorY - player.height;
   player.vx = player.vy = 0;
   player.onGround = true;
@@ -344,7 +351,13 @@ function interactStory() {
       break;
     case "leaveHouse":
       leaveTownHouse();
-      s.message = "你走出了自己的房屋，回到月影小镇。";
+      s.message = "你走出了房屋，回到横向月影村庄。";
+      break;
+    case "enterPublicHouse":
+      level.town.selectedHouse = prompt.house.id;
+      level.town.returnX = prompt.house.x;
+      enterTownHouse(true);
+      s.message = `你进入了${prompt.house.name}。走到出口可以返回村庄。`;
       break;
     case "servantCook":
       if (townServantMealReady) {
@@ -512,8 +525,10 @@ function updateStory() {
   if (!s) return;
   s.clock += 1;
   if (s.type === "town") {
-    refreshStoryHud();
-    return;
+    if (!level.town.inside && s.state === "explore" && player.x > 3420) { s.state="captured"; s.captureTimer=270; s.captureStartX=player.x; player.vx=0; keys.clear(); effects.push({x:player.x-120,y:90,width:320,height:32,life:150,kind:"loot",text:"大宅突然震动起来！"}); }
+    if (s.state === "captured") { player.vx=0; player.vy=0; keys.clear(); if(s.captureTimer>180) player.x += (3500-player.x)*0.055; s.captureTimer-=1; if(s.captureTimer<=0){ s.state="duel"; player.x=390;player.y=floorY-player.height; level.enemies=[]; [0,1,2,3].forEach((n,i)=>{const e=buildEnemy("townNoble",600+i*130,level.number,i,"town");e.nobleIndex=n;e.hp=e.maxHp=Math.max(90,getAttackDamage(weapons[weaponLevel].damage)*7);e.y=e.baseY=floorY-e.height;e.patrolLeft=280;e.patrolRight=1100;level.enemies.push(e)}); updateHud(); } }
+    else if(s.state === "duel" && level.enemies.every(e=>!e.alive)){s.state="cleared";effects.push({x:player.x-60,y:player.y-55,width:300,height:30,life:180,kind:"loot",text:"挑战成功！四名贵族认可了你"});}
+    refreshStoryHud(); return;
   }
   if (s.type === "ocean") {
     player.y = Math.max(80, player.y);
@@ -651,7 +666,15 @@ function drawStoryScene() {
   const s = level.story;
   if (!s) return;
   ctx.save(); ctx.translate(-cameraX, 0);
-  if (s.type === "meadow") {
+  if (s.type === "town") {
+    if (s.state === "captured") {
+      const shake=s.captureTimer>240?Math.sin(s.clock*1.7)*10:0; ctx.save();ctx.translate(shake,0);
+      drawCaptureGuard(player.x-45,floorY-2,1); drawCaptureGuard(player.x+player.width+45,floorY-2,-1);
+      ctx.strokeStyle="#c89b55";ctx.lineWidth=5;ctx.beginPath();ctx.ellipse(player.x+player.width/2,player.y+42,player.width*.7,18,0,0,Math.PI*2);ctx.stroke();
+      if(s.captureTimer<=180) for(let i=0;i<4;i++) drawTownNoble({x:3420+i*72,y:floorY-76,width:64,height:76,facing:-1,nobleIndex:i}); ctx.restore();
+      if(s.captureTimer<=180){ctx.fillStyle="rgba(0,0,0,.96)";ctx.fillRect(cameraX,0,canvas.width,canvas.height);drawTinyText(`你被绑住了……${Math.max(1,Math.ceil(s.captureTimer/60))}`,cameraX+canvas.width/2-95,canvas.height/2,"#ffffff");}
+    }
+  } else if (s.type === "meadow") {
     if (!s.saved || s.state === "freed") {
       const x = level.chest.x, y = floorY - 93;
       const free = isFoxTutorial();
