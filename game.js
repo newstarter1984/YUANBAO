@@ -679,10 +679,13 @@ function buildLevel(number) {
   } : null;
 
   if (town) {
-    town.house.x=420; town.house.width=360; town.entrance.x=600;
-    town.publicHouses=[{id:"inn",name:"旅店",x:245},{id:"shop",name:"商店",x:615},{id:"manor",name:"大宅",x:1010}];
-    town.npcs.forEach((npc,index)=>{npc.x=130+index*145;});
-    town.residents.forEach((resident,index)=>{resident.x=85+index*105;resident.left=Math.max(35,resident.x-45);resident.right=Math.min(1160,resident.x+55);});
+    town.house.x=430; town.house.width=360; town.entrance={x:610,y:420};
+    town.publicHouses=[{id:"inn",name:"旅店",x:155,y:225},{id:"shop",name:"商店",x:390,y:200},{id:"manor",name:"大宅",x:730,y:200}];
+    const npcPlaces=[[190,300],[360,330],[535,290],[695,330],[860,285],[1010,335],[1110,265]];
+    town.npcs.forEach((npc,index)=>{[npc.x,npc.y]=npcPlaces[index];});
+    const residentPlaces=[[275,250],[460,365],[650,255],[805,375],[945,230],[1080,390]];
+    town.residents=town.residents.slice(0,residentPlaces.length);
+    town.residents.forEach((resident,index)=>{[resident.x,resident.y]=residentPlaces[index];resident.left=resident.x-30;resident.right=resident.x+30;resident.vx*=0.55;});
   }
 
   return {
@@ -3516,15 +3519,13 @@ function drawTownDecor() {
   if (townChallengeVillageImage.complete && townChallengeVillageImage.naturalWidth) {
     ctx.save(); ctx.imageSmoothingEnabled=false;
     ctx.fillStyle="#5b963f";ctx.fillRect(0,0,level.worldWidth,540);
-    ctx.drawImage(townChallengeVillageImage,0,0,townChallengeVillageImage.naturalWidth,townChallengeVillageImage.naturalHeight,60,0,1080,540);
+    ctx.drawImage(townChallengeVillageImage,0,0,townChallengeVillageImage.naturalWidth,townChallengeVillageImage.naturalHeight,0,-30,1200,600);
     ctx.restore();
-    drawTinyText(townHouseRented ? "我的房屋 · 门前按 E" : "房屋 600 金币", town.house.x + 180, floorY - 112, "#fff4c7");
-    drawTinyText(townShopOwned ? "我的商铺" : "商铺 1200 金币", 2390, floorY - 105, "#fff4c7");
-    drawTinyText(townApartmentOwned ? (townApartmentRented ? "我的公寓 · 已出租" : "我的公寓 · 可出租") : "公寓 1800 金币", 2735, floorY - 105, "#fff4c7");
-    for (const npc of town.npcs) drawTownNpc(npc.x, floorY - 68, npc.color, npc.name);
+    drawTinyText("旅店",130,150,"#fff4c7"); drawTinyText("商店",365,125,"#fff4c7"); drawTinyText("大宅",705,125,"#fff4c7");
+    for (const npc of town.npcs) drawTownNpc(npc.x, npc.y, npc.color, npc.name);
     for (const resident of town.residents) {
       const bob = Math.sin(town.clock * 0.11 + resident.phase) > 0 ? -2 : 1;
-      drawTownResident(resident.x, floorY - 68 + bob, resident, resident.name);
+      drawTownResident(resident.x, resident.y + bob, resident, resident.name);
     }
     return;
   }

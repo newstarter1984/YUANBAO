@@ -120,16 +120,16 @@ function storyPrompt() {
       return null;
     }
     if (townHouseRented && storyNear(town.entrance.x, town.entrance.y, 145)) return { label: "进入我的房屋", action: "enterHouse" };
-    const publicHouse = town.publicHouses?.find(h => storyNear(h.x, floorY - 70, 125));
+    const publicHouse = town.publicHouses?.find(h => storyNear(h.x, h.y, 105));
     if (publicHouse) return { label: `进入${publicHouse.name}`, action: "enterPublicHouse", house: publicHouse };
-    const npc = town.npcs.find(person => storyNear(person.x + 14, floorY - 34, 135));
+    const npc = town.npcs.find(person => storyNear(person.x + 14, person.y + 34, 105));
     if (npc) {
       if (npc.item === "rent" && townHouseRented) return { label: "询问我的房屋", action: "townBuy", npc };
       if (npc.item === "shopProperty" && townShopOwned) return { label: townPropertyIncome ? `领取房产收入（${townPropertyIncome}金币）` : "查看我的商铺", action: "townBuy", npc };
       if (npc.item === "apartmentProperty" && townApartmentOwned) return { label: townApartmentRented ? (townPropertyIncome ? `领取租金（${townPropertyIncome}金币）` : "查看公寓租客") : "把公寓出租", action: "townBuy", npc };
       return { label: `购买${npc.itemName}（${npc.cost}金币）`, action: "townBuy", npc };
     }
-    const resident = town.residents.find(person => storyNear(person.x + 14, floorY - 34, 105));
+    const resident = town.residents.find(person => storyNear(person.x + 14, person.y + 34, 90));
     if (resident) return { label: `和${resident.name}聊天`, action: "townTalk", resident };
     return null;
   }
@@ -524,8 +524,8 @@ function updateStory() {
   if (!s) return;
   s.clock += 1;
   if (s.type === "town") {
-    if (!level.town.inside && s.state === "explore" && player.x > 990) { s.state="captured"; s.captureTimer=270; s.captureStartX=player.x; player.vx=0; keys.clear(); effects.push({x:player.x-120,y:90,width:320,height:32,life:150,kind:"loot",text:"士兵出现"}); }
-    if (s.state === "captured") { player.vx=0; player.vy=0; keys.clear(); if(s.captureTimer>180) player.x += (1040-player.x)*0.055; s.captureTimer-=1; if(s.captureTimer<=0){ s.state="duel"; player.x=270;player.y=330; level.enemies=[]; [0,1,2,3].forEach((n,i)=>{const e=buildEnemy("townNoble",520+i*145,level.number,i,"town");e.nobleIndex=n;e.hp=e.maxHp=Math.max(90,getAttackDamage(weapons[weaponLevel].damage)*7);e.y=e.baseY=floorY-e.height;e.patrolLeft=400;e.patrolRight=1160;level.enemies.push(e)}); updateHud(); } }
+    if (!level.town.inside && s.state === "explore" && Math.hypot(player.x-730,player.y-200)<105) { s.state="captured"; s.captureTimer=270; s.captureStartX=player.x; s.captureStartY=player.y; player.vx=0; keys.clear(); effects.push({x:player.x-120,y:90,width:320,height:32,life:150,kind:"loot",text:"士兵出现"}); }
+    if (s.state === "captured") { player.vx=0; player.vy=0; keys.clear(); if(s.captureTimer>180){ player.x+=(730-player.x)*0.055; player.y+=(245-player.y)*0.055; } s.captureTimer-=1; if(s.captureTimer<=0){ s.state="duel"; player.x=270;player.y=330; level.enemies=[]; [0,1,2,3].forEach((n,i)=>{const e=buildEnemy("townNoble",520+i*145,level.number,i,"town");e.nobleIndex=n;e.hp=e.maxHp=Math.max(90,getAttackDamage(weapons[weaponLevel].damage)*7);e.y=e.baseY=floorY-e.height;e.patrolLeft=400;e.patrolRight=1160;level.enemies.push(e)}); updateHud(); } }
     else if(s.state === "duel" && level.enemies.every(e=>!e.alive)){s.state="cleared";effects.push({x:player.x-60,y:player.y-55,width:300,height:30,life:180,kind:"loot",text:"挑战成功！四名贵族认可了你"});}
     refreshStoryHud(); return;
   }
@@ -670,7 +670,7 @@ function drawStoryScene() {
       const shake=s.captureTimer>240?Math.sin(s.clock*1.7)*10:0; ctx.save();ctx.translate(shake,0);
       drawCaptureGuard(player.x-45,floorY-2,1); drawCaptureGuard(player.x+player.width+45,floorY-2,-1);
       ctx.strokeStyle="#c89b55";ctx.lineWidth=5;ctx.beginPath();ctx.ellipse(player.x+player.width/2,player.y+42,player.width*.7,18,0,0,Math.PI*2);ctx.stroke();
-      if(s.captureTimer<=180) for(let i=0;i<4;i++) drawTownNoble({x:790+i*72,y:floorY-76,width:64,height:76,facing:-1,nobleIndex:i}); ctx.restore();
+      if(s.captureTimer<=180) for(let i=0;i<4;i++) drawTownNoble({x:610+i*72,y:floorY-76,width:64,height:76,facing:-1,nobleIndex:i}); ctx.restore();
       if(s.captureTimer<=180){ctx.fillStyle="rgba(0,0,0,.96)";ctx.fillRect(cameraX,0,canvas.width,canvas.height);drawTinyText(`${Math.max(1,Math.ceil(s.captureTimer/60))}`,cameraX+canvas.width/2-95,canvas.height/2,"#ffffff");}
     }
   } else if (s.type === "meadow") {
