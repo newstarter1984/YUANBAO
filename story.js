@@ -525,8 +525,8 @@ function updateStory() {
   if (!s) return;
   s.clock += 1;
   if (s.type === "town") {
-    if (!level.town.inside && s.state === "explore" && player.x > 3420) { s.state="captured"; s.captureTimer=270; s.captureStartX=player.x; player.vx=0; keys.clear(); effects.push({x:player.x-120,y:90,width:320,height:32,life:150,kind:"loot",text:"大宅突然震动起来！"}); }
-    if (s.state === "captured") { player.vx=0; player.vy=0; keys.clear(); if(s.captureTimer>180) player.x += (3500-player.x)*0.055; s.captureTimer-=1; if(s.captureTimer<=0){ s.state="duel"; player.x=390;player.y=floorY-player.height; level.enemies=[]; [0,1,2,3].forEach((n,i)=>{const e=buildEnemy("townNoble",600+i*130,level.number,i,"town");e.nobleIndex=n;e.hp=e.maxHp=Math.max(90,getAttackDamage(weapons[weaponLevel].damage)*7);e.y=e.baseY=floorY-e.height;e.patrolLeft=280;e.patrolRight=1100;level.enemies.push(e)}); updateHud(); } }
+    if (!level.town.inside && s.state === "explore" && player.x > 990) { s.state="captured"; s.captureTimer=270; s.captureStartX=player.x; player.vx=0; keys.clear(); effects.push({x:player.x-120,y:90,width:320,height:32,life:150,kind:"loot",text:"大宅突然震动起来！"}); }
+    if (s.state === "captured") { player.vx=0; player.vy=0; keys.clear(); if(s.captureTimer>180) player.x += (1040-player.x)*0.055; s.captureTimer-=1; if(s.captureTimer<=0){ s.state="duel"; player.x=270;player.y=330; level.enemies=[]; [0,1,2,3].forEach((n,i)=>{const e=buildEnemy("townNoble",520+i*145,level.number,i,"town");e.nobleIndex=n;e.hp=e.maxHp=Math.max(90,getAttackDamage(weapons[weaponLevel].damage)*7);e.y=e.baseY=floorY-e.height;e.patrolLeft=400;e.patrolRight=1160;level.enemies.push(e)}); updateHud(); } }
     else if(s.state === "duel" && level.enemies.every(e=>!e.alive)){s.state="cleared";effects.push({x:player.x-60,y:player.y-55,width:300,height:30,life:180,kind:"loot",text:"挑战成功！四名贵族认可了你"});}
     refreshStoryHud(); return;
   }
@@ -671,7 +671,7 @@ function drawStoryScene() {
       const shake=s.captureTimer>240?Math.sin(s.clock*1.7)*10:0; ctx.save();ctx.translate(shake,0);
       drawCaptureGuard(player.x-45,floorY-2,1); drawCaptureGuard(player.x+player.width+45,floorY-2,-1);
       ctx.strokeStyle="#c89b55";ctx.lineWidth=5;ctx.beginPath();ctx.ellipse(player.x+player.width/2,player.y+42,player.width*.7,18,0,0,Math.PI*2);ctx.stroke();
-      if(s.captureTimer<=180) for(let i=0;i<4;i++) drawTownNoble({x:3420+i*72,y:floorY-76,width:64,height:76,facing:-1,nobleIndex:i}); ctx.restore();
+      if(s.captureTimer<=180) for(let i=0;i<4;i++) drawTownNoble({x:790+i*72,y:floorY-76,width:64,height:76,facing:-1,nobleIndex:i}); ctx.restore();
       if(s.captureTimer<=180){ctx.fillStyle="rgba(0,0,0,.96)";ctx.fillRect(cameraX,0,canvas.width,canvas.height);drawTinyText(`你被绑住了……${Math.max(1,Math.ceil(s.captureTimer/60))}`,cameraX+canvas.width/2-95,canvas.height/2,"#ffffff");}
     }
   } else if (s.type === "meadow") {

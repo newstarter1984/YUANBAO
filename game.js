@@ -529,7 +529,7 @@ function getBossHp() {
 
 function buildLevel(number) {
   const theme = getTheme(number);
-  const worldWidth = theme.id === "arena" ? 960 : ["ocean", "lava", "royal"].includes(theme.id) ? 1200 : 3800 + number * 850;
+  const worldWidth = theme.id === "arena" ? 960 : ["ocean", "lava", "royal", "town"].includes(theme.id) ? 1200 : 3800 + number * 850;
   const enemyCount = ["arena", "lava", "royal"].includes(theme.id) ? 0 : theme.id === "town" ? 6 : theme.id === "swamp" ? 5 + number : 4 + number;
   const platforms = ["ocean", "town", "royal"].includes(theme.id) ? [] : [
     { x: 210, y: 378, width: 150, height: 20 },
@@ -682,6 +682,13 @@ function buildLevel(number) {
     ],
   } : null;
 
+  if (town) {
+    town.house.x=420; town.house.width=360; town.entrance.x=600;
+    town.publicHouses=[{id:"inn",name:"旅店",x:245},{id:"shop",name:"商店",x:615},{id:"manor",name:"大宅",x:1010}];
+    town.npcs.forEach((npc,index)=>{npc.x=130+index*145;});
+    town.residents.forEach((resident,index)=>{resident.x=85+index*105;resident.left=Math.max(35,resident.x-45);resident.right=Math.min(1160,resident.x+55);});
+  }
+
   return {
     number,
     theme,
@@ -828,6 +835,15 @@ function handleInput() {
     player.facing = 1;
   }
 
+  if (level.theme.id === "town" && level.town && !level.town.inside) {
+    player.vy = 0;
+    if (keys.has("ArrowUp") || keys.has("KeyW")) player.vy = -moveSpeed;
+    if (keys.has("ArrowDown") || keys.has("KeyS")) player.vy = moveSpeed;
+    if (keys.has("KeyJ")) attack();
+    if (keys.has("KeyK")) throwGrenade();
+    return;
+  }
+
   const wantsJump = keys.has("Space") || keys.has("ArrowUp") || keys.has("KeyW");
   if (wantsJump) jumpBufferFrames = Math.max(jumpBufferFrames, 7);
   else jumpBufferFrames = Math.max(0, jumpBufferFrames - 1);
@@ -910,6 +926,12 @@ function moveWaveHazard() {
 }
 
 function movePlayer() {
+  if (level.theme.id === "town" && level.town && !level.town.inside) {
+    player.x = Math.max(18, Math.min(level.worldWidth - player.width - 18, player.x + player.vx));
+    player.y = Math.max(105, Math.min(floorY - player.height, player.y + player.vy));
+    player.onGround = true;
+    return;
+  }
   const previousBottom = player.y + player.height;
 
   player.x += player.vx;
@@ -3502,7 +3524,8 @@ function drawTownDecor() {
   }
   if (townChallengeVillageImage.complete && townChallengeVillageImage.naturalWidth) {
     ctx.save(); ctx.imageSmoothingEnabled=false;
-    ctx.drawImage(townChallengeVillageImage, 0, 0, townChallengeVillageImage.naturalWidth, townChallengeVillageImage.naturalHeight, 0, 0, level.worldWidth, 540);
+    ctx.fillStyle="#5b963f";ctx.fillRect(0,0,level.worldWidth,540);
+    ctx.drawImage(townChallengeVillageImage,0,0,townChallengeVillageImage.naturalWidth,townChallengeVillageImage.naturalHeight,60,0,1080,540);
     ctx.restore();
     drawTinyText(townHouseRented ? "我的房屋 · 门前按 E" : "房屋 600 金币", town.house.x + 180, floorY - 112, "#fff4c7");
     drawTinyText(townShopOwned ? "我的商铺" : "商铺 1200 金币", 2390, floorY - 105, "#fff4c7");
