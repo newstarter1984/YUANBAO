@@ -681,6 +681,11 @@ function buildLevel(number) {
   if (town) {
     town.house.x=430; town.house.width=360; town.entrance={x:610,y:420};
     town.publicHouses=[{id:"inn",name:"旅店",x:155,y:225},{id:"shop",name:"商店",x:390,y:200},{id:"manor",name:"大宅",x:730,y:200}];
+    town.blockers=[
+      {x:0,y:35,width:310,height:155},{x:405,y:20,width:385,height:150},
+      {x:0,y:405,width:315,height:135},{x:350,y:410,width:320,height:130},
+      {x:840,y:195,width:250,height:80}
+    ];
     const npcPlaces=[[190,300],[360,330],[535,290],[695,330],[860,285],[1010,335],[1110,265]];
     town.npcs.forEach((npc,index)=>{[npc.x,npc.y]=npcPlaces[index];});
     const residentPlaces=[[275,250],[460,365],[650,255],[805,375],[945,230],[1080,390]];
@@ -926,9 +931,13 @@ function moveWaveHazard() {
 
 function movePlayer() {
   if (level.theme.id === "town" && level.town && !level.town.inside) {
-    player.x = Math.max(18, Math.min(level.worldWidth - player.width - 18, player.x + player.vx));
-    player.y = Math.max(105, Math.min(floorY - player.height, player.y + player.vy));
-    player.onGround = true;
+    const minY=105,maxY=floorY-player.height,minX=18,maxX=level.worldWidth-player.width-18;
+    const blocked=(x,y)=>level.town.blockers.some(block=>touches({x:x+10,y:y+player.height-16,width:Math.max(12,player.width-20),height:14},block));
+    const nextX=Math.max(minX,Math.min(maxX,player.x+player.vx));
+    if(!blocked(nextX,player.y)) player.x=nextX;
+    const nextY=Math.max(minY,Math.min(maxY,player.y+player.vy));
+    if(!blocked(player.x,nextY)) player.y=nextY;
+    player.onGround=true;
     return;
   }
   const previousBottom = player.y + player.height;
