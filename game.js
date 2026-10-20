@@ -374,8 +374,8 @@ function startGame() {
   ] : [];
 
   player = {
-    x: level.theme.id === "arena" ? 360 : level.theme.id === "town" ? 330 : 80,
-    y: level.theme.id === "town" ? 280 : floorY - 72,
+    x: level.theme.id === "arena" ? 360 : level.theme.id === "town" ? 560 : 80,
+    y: level.theme.id === "town" ? 330 : floorY - 72,
     width: isRidingDragon() ? 78 : isRidingHorse() ? 70 : 48,
     height: isRidingDragon() ? 88 : isRidingHorse() ? 84 : 72,
     vx: 0,
@@ -654,7 +654,7 @@ function buildLevel(number) {
       { x: 920, y: 300, color: "#9b593f", sprite: 3 },
     ],
     chair: { x: 826, y: 268, width: 86, height: 90 },
-    exit: { x: 285, y: floorY - 128, width: 100, height: 128 },
+    exit: { x: 430, y: floorY - 128, width: 100, height: 128 },
     npcs: [
       { x: 420, name: "药草商人", item: "medkit", itemName: "医疗包", cost: 25, amount: 1, color: "#4b8d57" },
       { x: 790, name: "面包师", item: "beef", itemName: "牛排", cost: 12, amount: 1, color: "#d78b47" },

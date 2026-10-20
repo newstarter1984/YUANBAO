@@ -249,7 +249,7 @@ function enterTownHouse(publicAccess = false) {
   level.coral = [];
   level.waveHazard = null;
   level.chest = { x: -1000, y: -1000, width: 1, height: 1, opened: true, locked: true };
-  player.x = 475;
+  player.x = town.selectedHouse ? 455 : 475;
   player.y = floorY - player.height;
   player.vx = player.vy = 0;
   player.onGround = true;
@@ -265,8 +265,9 @@ function leaveTownHouse() {
   town.outsideState = null;
   town.inside = false;
   player.x = town.returnX || town.entrance.x;
+  player.y = town.returnY || floorY - player.height;
   town.selectedHouse = null;
-  player.y = floorY - player.height;
+  town.returnX = 0; town.returnY = 0;
   player.vx = player.vy = 0;
   player.onGround = true;
   cameraX = Math.max(0, player.x - canvas.width * 0.42);
@@ -355,6 +356,7 @@ function interactStory() {
     case "enterPublicHouse":
       level.town.selectedHouse = prompt.house.id;
       level.town.returnX = prompt.house.x;
+      level.town.returnY = prompt.house.y + 55;
       enterTownHouse(true);
       s.message = `你进入了${prompt.house.name}。走到出口可以返回村庄。`;
       break;
