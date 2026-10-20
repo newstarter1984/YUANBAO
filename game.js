@@ -354,10 +354,6 @@ let frameAccumulator = 0;
 const fixedStepMs = 1000 / 60;
 let jumpBufferFrames = 0;
 let coyoteFrames = 0;
-function playSound() {
-  // Sound is intentionally disabled.
-}
-
 function startGame() {
   pendingVictory = null;
   backpackPanel.classList.add("is-hidden");
@@ -1487,7 +1483,6 @@ function attack() {
 
   if (isBowWeapon(weapon) && !prepareArrow(weapon)) return;
 
-  playSound("attack");
   player.attackTimer = weapon.cooldown;
   player.attacking = 12;
   recordStoryAction("attack");
@@ -1876,11 +1871,9 @@ function collectAnimal(animal) {
   if (!animal.alive) return;
   animal.alive = false;
   const gained = animal.kind === "cow" ? 1 + Math.floor(Math.random() * 2) : animal.kind === "pig" ? 1 : 0;
-  playSound(animal.kind);
   effects.push({ x: animal.x, y: animal.y - 20, width: animal.width, height: animal.height, life: 34, kind: "animalPoof" });
   if (gained > 0) {
     addExperience(gained, animal.x, animal.y);
-    playSound("animalDrop");
   }
 }
 
@@ -1890,7 +1883,6 @@ function addExperience(amount, x, y) {
   while (experience >= experienceNeeded) {
     experience -= experienceNeeded;
     heroLevel += 1;
-    playSound("levelUp");
     effects.push({ x: player ? player.x - 18 : x, y: player ? player.y - 38 : y, width: 150, height: 30, life: 90, kind: "levelUp" });
   }
   updateHud();
@@ -2059,7 +2051,6 @@ function hurtPlayer(amount) {
   if (isFoxTutorial()) return;
   if (blackFistTimer > 0 || guanYuInvincibleTimer > 0 || zhangFeiRageTimer > 0 || zhaoYunInvincibleTimer > 0 || player.invincible > 0 || gameState !== "playing") return;
 
-  playSound("hurt");
   if (isRidingDragon()) hurtActiveDragon();
   player.hearts -= amount;
   player.invincible = 76;

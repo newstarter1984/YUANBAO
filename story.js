@@ -11,7 +11,6 @@ try { foxRescued = localStorage.getItem(foxSaveKey) === "yes"; } catch (_) { /* 
 
 function hideStory() {
   storyHud.classList.add("is-hidden");
-  if ("speechSynthesis" in window) window.speechSynthesis.cancel();
 }
 
 function initializeStoryLevel() {
@@ -155,9 +154,9 @@ function refreshStoryHud() {
   if (!s) return;
   let title, message;
   if (s.type === "town") {
-    title = s.state === "duel" ? "四贵族挑战" : s.state === "captured" ? "大宅异变" : level.town.inside ? "小镇房屋" : "横向月影村庄";
+    title = s.state === "duel" ? "四贵族挑战" : s.state === "captured" ? "小镇" : level.town.inside ? "房屋" : "小镇";
     const prompt = storyPrompt();
-    if (s.state === "captured") message = s.captureTimer > 180 ? "两名长矛士兵从两侧抓住你，正把你押往大宅门口。你被绑住，无法说话或移动。" : "眼前一片漆黑……三秒后，你将面对四名贵族。";
+    if (s.state === "captured") message = s.captureTimer > 180 ? "押送中。" : "三秒后开始挑战。";
     else if (s.state === "duel") message = "四名贵族认为你的战斗力不够强。打败他们完成挑战；如果倒下，本关失败。";
     else if (s.state === "cleared") message = "你打赢了四名贵族，他们承认了你的实力。三栋房子仍可自由进入。";
     else
@@ -351,7 +350,7 @@ function interactStory() {
       break;
     case "leaveHouse":
       leaveTownHouse();
-      s.message = "你走出了房屋，回到横向月影村庄。";
+      s.message = "你回到了小镇。";
       break;
     case "enterPublicHouse":
       level.town.selectedHouse = prompt.house.id;
@@ -525,7 +524,7 @@ function updateStory() {
   if (!s) return;
   s.clock += 1;
   if (s.type === "town") {
-    if (!level.town.inside && s.state === "explore" && player.x > 990) { s.state="captured"; s.captureTimer=270; s.captureStartX=player.x; player.vx=0; keys.clear(); effects.push({x:player.x-120,y:90,width:320,height:32,life:150,kind:"loot",text:"大宅突然震动起来！"}); }
+    if (!level.town.inside && s.state === "explore" && player.x > 990) { s.state="captured"; s.captureTimer=270; s.captureStartX=player.x; player.vx=0; keys.clear(); effects.push({x:player.x-120,y:90,width:320,height:32,life:150,kind:"loot",text:"士兵出现"}); }
     if (s.state === "captured") { player.vx=0; player.vy=0; keys.clear(); if(s.captureTimer>180) player.x += (1040-player.x)*0.055; s.captureTimer-=1; if(s.captureTimer<=0){ s.state="duel"; player.x=270;player.y=330; level.enemies=[]; [0,1,2,3].forEach((n,i)=>{const e=buildEnemy("townNoble",520+i*145,level.number,i,"town");e.nobleIndex=n;e.hp=e.maxHp=Math.max(90,getAttackDamage(weapons[weaponLevel].damage)*7);e.y=e.baseY=floorY-e.height;e.patrolLeft=400;e.patrolRight=1160;level.enemies.push(e)}); updateHud(); } }
     else if(s.state === "duel" && level.enemies.every(e=>!e.alive)){s.state="cleared";effects.push({x:player.x-60,y:player.y-55,width:300,height:30,life:180,kind:"loot",text:"挑战成功！四名贵族认可了你"});}
     refreshStoryHud(); return;
@@ -672,7 +671,7 @@ function drawStoryScene() {
       drawCaptureGuard(player.x-45,floorY-2,1); drawCaptureGuard(player.x+player.width+45,floorY-2,-1);
       ctx.strokeStyle="#c89b55";ctx.lineWidth=5;ctx.beginPath();ctx.ellipse(player.x+player.width/2,player.y+42,player.width*.7,18,0,0,Math.PI*2);ctx.stroke();
       if(s.captureTimer<=180) for(let i=0;i<4;i++) drawTownNoble({x:790+i*72,y:floorY-76,width:64,height:76,facing:-1,nobleIndex:i}); ctx.restore();
-      if(s.captureTimer<=180){ctx.fillStyle="rgba(0,0,0,.96)";ctx.fillRect(cameraX,0,canvas.width,canvas.height);drawTinyText(`你被绑住了……${Math.max(1,Math.ceil(s.captureTimer/60))}`,cameraX+canvas.width/2-95,canvas.height/2,"#ffffff");}
+      if(s.captureTimer<=180){ctx.fillStyle="rgba(0,0,0,.96)";ctx.fillRect(cameraX,0,canvas.width,canvas.height);drawTinyText(`${Math.max(1,Math.ceil(s.captureTimer/60))}`,cameraX+canvas.width/2-95,canvas.height/2,"#ffffff");}
     }
   } else if (s.type === "meadow") {
     if (!s.saved || s.state === "freed") {
