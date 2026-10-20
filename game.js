@@ -374,8 +374,8 @@ function startGame() {
   ] : [];
 
   player = {
-    x: level.theme.id === "arena" ? 360 : 80,
-    y: floorY - 72,
+    x: level.theme.id === "arena" ? 360 : level.theme.id === "town" ? 330 : 80,
+    y: level.theme.id === "town" ? 280 : floorY - 72,
     width: isRidingDragon() ? 78 : isRidingHorse() ? 70 : 48,
     height: isRidingDragon() ? 88 : isRidingHorse() ? 84 : 72,
     vx: 0,
