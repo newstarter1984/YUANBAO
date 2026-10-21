@@ -14,6 +14,7 @@ const swampLickerFrames = Array.from({ length: 4 }, (_, index) => {
 const foxHelperFrames = Array.from({ length: 8 }, (_, index) => {
   const image = new Image(); image.src = `assets/lava-hound/frame-${index}.png?v=20261018`; return image;
 });
+const townPeopleImage = new Image(); townPeopleImage.src = "assets/town-people/villagers.gif?v=20261021";
 const townChallengeVillageImage = new Image(); townChallengeVillageImage.src = "assets/town-challenge/village.png?v=20261019";
 const townChallengeRoomImage = new Image(); townChallengeRoomImage.src = "assets/town-challenge/market-room.gif?v=20261019";
 const fourNoblesImage = new Image(); fourNoblesImage.src = "assets/town-challenge/four-nobles.gif?v=20261019";
@@ -3603,40 +3604,23 @@ function drawTownStall(x, color) {
   ctx.fillStyle = "#a66b3f"; ctx.fillRect(x, floorY - 55, 112, 16);
 }
 
-function drawTownNpc(x, y, color, name) {
-  ctx.fillStyle = "rgba(0,0,0,.24)"; ctx.fillRect(x - 16, y + 62, 48, 8);
-  ctx.fillStyle = "#f0b37b"; ctx.fillRect(x, y, 28, 25);
-  ctx.fillStyle = color; ctx.fillRect(x - 7, y + 24, 42, 36);
-  ctx.fillStyle = "#332733"; ctx.fillRect(x + 6, y + 8, 5, 5); ctx.fillRect(x + 19, y + 8, 5, 5);
-  ctx.fillRect(x - 3, y + 58, 12, 12); ctx.fillRect(x + 22, y + 58, 12, 12);
-  if (name) drawTinyText(name, x - 26, y - 12, "#fff4c7");
+const townPeopleBuffers=new Map();
+function getTownPersonSprite(role) {
+  if(!townPeopleImage.complete||!townPeopleImage.naturalWidth)return null;
+  const crops={male:[105,20,120,110],female:[105,135,120,120],merchant:[235,270,120,115],butler:[480,270,120,115]};
+  const crop=crops[role]||crops.male,tick=Math.floor(Date.now()/100);let entry=townPeopleBuffers.get(role);
+  if(!entry){entry={canvas:document.createElement("canvas"),tick:-1};entry.canvas.width=crop[2];entry.canvas.height=crop[3];townPeopleBuffers.set(role,entry)}
+  if(entry.tick!==tick){entry.tick=tick;const b=entry.canvas.getContext("2d",{willReadFrequently:true});b.imageSmoothingEnabled=false;b.clearRect(0,0,crop[2],crop[3]);b.drawImage(townPeopleImage,...crop,0,0,crop[2],crop[3]);const d=b.getImageData(0,0,crop[2],crop[3]);const bg=[[55,53,64],[91,87,104],[65,62,73],[72,68,86]];for(let i=0;i<d.data.length;i+=4){const r=d.data[i],g=d.data[i+1],bl=d.data[i+2];if(bg.some(c=>Math.abs(r-c[0])<=4&&Math.abs(g-c[1])<=4&&Math.abs(bl-c[2])<=4))d.data[i+3]=0;}b.putImageData(d,0,0)}
+  return entry.canvas;
 }
-
-function drawTownResident(x, y, resident, name) {
-  const spriteIndex = resident.sprite || 0;
-  const walkingFrame = Math.floor(level.town.clock / 9 + (resident.phase || 0)) % 5;
-  const images = [
-    arenaAllyImages[0],
-    arenaAllyImages[1],
-    arenaAllyImages[2],
-    dwarfWarriorFrames.walk[walkingFrame % dwarfWarriorFrames.walk.length],
-    eliteKnightFrames[walkingFrame % 4],
-  ];
-  const image = images[spriteIndex % images.length];
-  if (!image || !image.complete || !image.naturalWidth) {
-    drawTownNpc(x, y, resident.color || "#557fb5", name);
-    return;
-  }
-  ctx.save();
-  if ((resident.vx || 1) < 0) {
-    ctx.translate(x + 24, 0);
-    ctx.scale(-1, 1);
-    ctx.drawImage(image, -24, y, 48, 68);
-  } else {
-    ctx.drawImage(image, x - 24, y, 48, 68);
-  }
-  ctx.restore();
-  drawTinyText(name, x - 26, y - 12, "#fff4c7");
+function drawTownPerson(x,y,role,facing,name){
+  const sprite=getTownPersonSprite(role);if(!sprite)return;ctx.save();ctx.translate(x,y+68);ctx.scale(facing,1);ctx.drawImage(sprite,-31,-70,62,70);ctx.restore();if(name)drawTinyText(name,x-26,y-12,"#fff4c7");
+}
+function drawTownNpc(x,y,color,name){
+  const role=name&&/管理员|经纪|商人|师/.test(name)?"merchant":"butler";drawTownPerson(x+14,y,role,1,name);
+}
+function drawTownResident(x,y,resident,name){
+  const role=name==="仆人"?"butler":((resident.sprite||0)%2?"female":"male");drawTownPerson(x,y,role,(resident.vx||1)<0?-1:1,name);
 }
 
 function drawStars() {
