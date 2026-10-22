@@ -14,6 +14,7 @@ const swampLickerFrames = Array.from({ length: 4 }, (_, index) => {
 const foxHelperFrames = Array.from({ length: 8 }, (_, index) => {
   const image = new Image(); image.src = `assets/lava-hound/frame-${index}.png?v=20261018`; return image;
 });
+const leprechaunRaiderImage = new Image(); leprechaunRaiderImage.src = "assets/royal-raider/leprechaun.gif?v=20261022";
 const townPeopleImage = new Image(); townPeopleImage.src = "assets/town-people/villagers.gif?v=20261021";
 const townChallengeVillageImage = new Image(); townChallengeVillageImage.src = "assets/town-challenge/village.png?v=20261019";
 const townChallengeRoomImage = new Image(); townChallengeRoomImage.src = "assets/town-challenge/market-room.gif?v=20261019";
@@ -680,7 +681,7 @@ function buildLevel(number) {
   } : null;
 
   if (town) {
-    town.house.x=430; town.house.width=360; town.entrance={x:610,y:420};
+    town.house.x=430; town.house.width=360; town.entrance={x:610,y:350};
     town.publicHouses=[{id:"inn",name:"旅店",x:155,y:225},{id:"shop",name:"商店",x:390,y:200},{id:"manor",name:"大宅",x:730,y:200}];
     town.blockers=[
       {x:0,y:35,width:310,height:155},{x:405,y:20,width:385,height:150},
@@ -3909,16 +3910,13 @@ function getRoyalEnemySprite(image, backdropColors) {
   return buffer;
 }
 
+const leprechaunRaiderBuffer=document.createElement("canvas");leprechaunRaiderBuffer.width=120;leprechaunRaiderBuffer.height=130;let leprechaunRaiderTick=-1;
+function getLeprechaunRaiderSprite(){
+  if(!leprechaunRaiderImage.complete||!leprechaunRaiderImage.naturalWidth)return null;const tick=Math.floor(Date.now()/100);
+  if(leprechaunRaiderTick!==tick){leprechaunRaiderTick=tick;const b=leprechaunRaiderBuffer.getContext("2d",{willReadFrequently:true});b.clearRect(0,0,120,130);b.drawImage(leprechaunRaiderImage,225,85,120,130,0,0,120,130);const d=b.getImageData(0,0,120,130),bg=[[55,53,64],[91,87,104],[65,62,73],[72,68,86]];for(let i=0;i<d.data.length;i+=4){const r=d.data[i],g=d.data[i+1],bl=d.data[i+2];if(bg.some(c=>Math.abs(r-c[0])<=4&&Math.abs(g-c[1])<=4&&Math.abs(bl-c[2])<=4))d.data[i+3]=0;}b.putImageData(d,0,0)}return leprechaunRaiderBuffer;
+}
 function drawRoyalRaider(enemy) {
-  const frame = shadowCultistFrames[Math.floor(Date.now() / 105 + enemy.phase) % shadowCultistFrames.length];
-  const sprite = getRoyalEnemySprite(frame, [[55, 53, 64], [47, 47, 46], [91, 87, 104], [65, 62, 73], [59, 59, 57], [51, 51, 50]]);
-  if (!sprite) return;
-  ctx.save();
-  ctx.filter = "brightness(0.72) saturate(0.65)";
-  ctx.translate(enemy.x + enemy.width / 2, enemy.y + enemy.height);
-  ctx.scale(enemy.facing, 1);
-  ctx.drawImage(sprite, -enemy.width * 0.7, -enemy.height * 1.1, enemy.width * 1.4, enemy.height * 1.1);
-  ctx.restore();
+  const sprite=getLeprechaunRaiderSprite();if(!sprite)return;ctx.save();ctx.translate(enemy.x+enemy.width/2,enemy.y+enemy.height);ctx.scale(enemy.facing,1);ctx.drawImage(sprite,-enemy.width*.72,-enemy.height*1.12,enemy.width*1.44,enemy.height*1.12);ctx.restore();
 }
 
 function drawRoyalHound(enemy) {

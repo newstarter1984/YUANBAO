@@ -265,7 +265,7 @@ function leaveTownHouse() {
   town.outsideState = null;
   town.inside = false;
   player.x = town.returnX || town.entrance.x;
-  player.y = town.returnY || floorY - player.height;
+  player.y = town.returnY || town.entrance.y || floorY - player.height;
   town.selectedHouse = null;
   town.returnX = 0; town.returnY = 0;
   player.vx = player.vy = 0;

@@ -65,6 +65,10 @@ const { chromium } = require(playwrightPath);
     });
 
     assert.deepEqual(result.initial, { theme: "royal", state: "letter", prompt: "openRoyalLetter", guards: 10 });
+    await page.waitForFunction(() => leprechaunRaiderImage.complete && leprechaunRaiderImage.naturalWidth > 0);
+    const raiderPixels = await page.evaluate(() => { const c=getLeprechaunRaiderSprite(),d=c.getContext("2d").getImageData(0,0,c.width,c.height).data;let opaque=0,transparent=0;for(let i=3;i<d.length;i+=4){if(d[i])opaque++;else transparent++;}return {opaque,transparent}; });
+    assert.ok(raiderPixels.opaque>100 && raiderPixels.transparent>100, "strong raider uses cleaned leprechaun sprite");
+
     assert.deepEqual(result.letter, {
       state: "summons",
       prompt: "enterRoyalDuel",
