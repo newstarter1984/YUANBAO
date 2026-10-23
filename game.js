@@ -681,7 +681,7 @@ function buildLevel(number) {
   } : null;
 
   if (town) {
-    town.house.x=430; town.house.width=360; town.entrance={x:610,y:350};
+    town.house.x=430; town.house.width=360; town.entrance={x:690,y:335};
     town.publicHouses=[{id:"inn",name:"旅店",x:155,y:225},{id:"shop",name:"商店",x:390,y:200},{id:"manor",name:"大宅",x:730,y:200}];
     town.blockers=[
       {x:0,y:35,width:310,height:155},{x:405,y:20,width:385,height:150},

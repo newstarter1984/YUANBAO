@@ -266,6 +266,12 @@ function leaveTownHouse() {
   town.inside = false;
   player.x = town.returnX || town.entrance.x;
   player.y = town.returnY || town.entrance.y || floorY - player.height;
+  const footBlocked = () => town.blockers.some(block => touches({ x: player.x + 10, y: player.y + player.height - 16, width: Math.max(12, player.width - 20), height: 14 }, block));
+  if (footBlocked()) {
+    const safeExits = [{ x: 690, y: 335 }, { x: 560, y: 330 }, { x: 330, y: 300 }];
+    const safe = safeExits.find(point => { player.x = point.x; player.y = point.y; return !footBlocked(); });
+    if (!safe) { player.x = 560; player.y = 330; }
+  }
   town.selectedHouse = null;
   town.returnX = 0; town.returnY = 0;
   player.vx = player.vy = 0;
