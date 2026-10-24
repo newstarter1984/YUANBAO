@@ -262,7 +262,6 @@ let hasGoldenArmor = false;
 let hasDragonAdult = false;
 let dragonFeedCount = 0;
 let dragonAttackTimer = 0;
-let dragonBiteTimer = 0;
 let dragonAttackTargetX = 0;
 let dragonAttackTargetY = 0;
 let foxHelperX = 90;
@@ -1335,11 +1334,6 @@ function dragonAssistAttack() {
   dragonAttackTimer = activeDragon.type === "gold" ? 68 : 84;
   dragonAttackTargetX = target.x + target.width / 2;
   dragonAttackTargetY = target.y + target.height / 2;
-  if (dragonBiteTimer <= 0) {
-    target.cagedTimer = Math.max(target.cagedTimer, 600);
-    dragonBiteTimer = 360;
-    effects.push({ x: target.x - 8, y: target.y - 28, width: target.width + 16, height: 34, life: 80, kind: "loot", text: "龙咬住了怪物！" });
-  }
   const attackStyle = activeDragon.type === "fire" ? "flame" : activeDragon.type === "water" ? "frost" : activeDragon.type === "wood" ? "roots" : activeDragon.type === "earth" ? "quake" : "claw";
   if (activeDragon.type === "wood") target.cagedTimer = Math.max(target.cagedTimer, 210);
   if (activeDragon.type === "water") target.cagedTimer = Math.max(target.cagedTimer, 110);
@@ -2666,7 +2660,6 @@ function tickTimers() {
   zhaoYunInvincibleTimer = Math.max(0, zhaoYunInvincibleTimer - 1);
   zhaoYunInvincibleCooldown = Math.max(0, zhaoYunInvincibleCooldown - 1);
   dragonAttackTimer = Math.max(0, dragonAttackTimer - 1);
-  dragonBiteTimer = Math.max(0, dragonBiteTimer - 1);
 
   for (const enemy of level.enemies) {
     enemy.hurtFlash = Math.max(0, enemy.hurtFlash - 1);
@@ -4787,7 +4780,7 @@ function drawDragonShape(targetCtx, x, y, dragon, scale, flying, saddled, facing
   const flap = flying ? Math.sin(motionTime / 70) * 24 : Math.sin(motionTime / 210) * 4;
   const tailSway = flying || moving ? Math.sin(motionTime / 110) * 8 : Math.sin(motionTime / 360) * 3;
   const headBob = flying ? Math.sin(motionTime / 115) * 3 : moving ? walkCycle * 2 : 0;
-  const jawDrop = attacking ? 9 + Math.sin(motionTime / 45) * 2 : 0;
+  const jawDrop = 0;
   dragonPolygon(targetCtx, [[10,55],[-22,47],[-48,30 + tailSway],[-39,56 + tailSway],[-62,63 + tailSway],[-28,66],[7,64]], dark);
   dragonPolygon(targetCtx, [[-46,34 + tailSway],[-55,17 + tailSway],[-36,31 + tailSway],[-31,15 + tailSway],[-22,45]], body);
   dragonPolygon(targetCtx, [[34,42],[18,4 + flap],[55,22 + flap],[77,-8 + flap],[82,43]], dark);
@@ -4836,10 +4829,6 @@ function drawDragonShape(targetCtx, x, y, dragon, scale, flying, saddled, facing
   targetCtx.fillStyle = belly;
   targetCtx.fillRect(111, 43 + headBob, 5, 5);
   targetCtx.fillRect(122, 43 + headBob, 5, 5);
-  if (attacking) {
-    dragonPolygon(targetCtx, [[112,47 + headBob],[116,54 + headBob + jawDrop],[120,47 + headBob]], "#fffbe8");
-    dragonPolygon(targetCtx, [[122,47 + headBob],[126,54 + headBob + jawDrop],[130,47 + headBob]], "#fffbe8");
-  }
   targetCtx.save();
   targetCtx.shadowColor = accent;
   targetCtx.shadowBlur = 8;
@@ -4850,8 +4839,8 @@ function drawDragonShape(targetCtx, x, y, dragon, scale, flying, saddled, facing
   targetCtx.fillRect(104, 28 + headBob, 3, 3);
   targetCtx.fillRect(127, 34 + headBob, 4, 3);
   targetCtx.fillStyle = accent;
-  targetCtx.globalAlpha = attacking ? 0.85 : 0.35;
-  targetCtx.fillRect(130, 32 + headBob, attacking ? 10 : 5, 3);
+  targetCtx.globalAlpha = 0.35;
+  targetCtx.fillRect(130, 32 + headBob, 5, 3);
   targetCtx.globalAlpha = 1;
   drawDragonSurfaceDetails(targetCtx, dragon, headBob, flap);
   const legY = flying ? 66 : 72;
@@ -4879,9 +4868,9 @@ function drawDragonShape(targetCtx, x, y, dragon, scale, flying, saddled, facing
 function drawDragonPixelSprite(targetCtx, x, y, dragon, scale, flying, saddled, facing, moving, attacking) {
   const frames = dragonSpriteFrames[dragon.key];
   if (!frames) return false;
-  const action = attacking ? "attack" : flying ? "fly" : moving ? "walk" : "idle";
+  const action = flying ? "fly" : moving ? "walk" : "idle";
   const sequence = frames[action];
-  const frameIndex = Math.floor(Date.now() / (action === "fly" ? 85 : action === "walk" ? 105 : action === "attack" ? 125 : 165)) % sequence.length;
+  const frameIndex = Math.floor(Date.now() / (action === "fly" ? 85 : action === "walk" ? 105 : 165)) % sequence.length;
   const source = sequence[frameIndex];
   if (!source.complete || source.naturalWidth <= 0) return false;
 
@@ -4896,13 +4885,6 @@ function drawDragonPixelSprite(targetCtx, x, y, dragon, scale, flying, saddled, 
     targetCtx.translate(-60, -52);
   }
   targetCtx.drawImage(source, -30, -42, 180, 160);
-  if (attacking) {
-    const chomp = Math.floor(Date.now() / 75) % 2;
-    targetCtx.fillStyle = "#4a1720";
-    targetCtx.fillRect(102, 52, 34, 8 + chomp * 8);
-    targetCtx.fillStyle = "#fffdf0";
-    for (let tooth = 0; tooth < 4; tooth += 1) targetCtx.fillRect(105 + tooth * 8, 50 + chomp * 7, 5, 7);
-  }
   if (saddled) {
     targetCtx.fillStyle = "#5b2b1d";
     targetCtx.fillRect(42, 47, 38, 10);
@@ -5278,7 +5260,7 @@ function drawDwarfWarrior(x, y, facing, attackFrames) {
 
 function drawDragonMount(x, y, gait) {
   const dragon = getDragonType(getActiveDragon()?.type || "wood");
-  drawDragonShape(ctx, x - 48, y + 5, dragon, 1.28, !player.onGround, true, player.facing, Math.abs(player.vx) > 0.15, dragonAttackTimer > 52);
+  drawDragonShape(ctx, x - 48, y + 5, dragon, 1.28, !player.onGround, true, player.facing, Math.abs(player.vx) > 0.15, false);
 }
 
 function drawDragonCompanion(x, y, gait) {
@@ -5288,25 +5270,13 @@ function drawDragonCompanion(x, y, gait) {
     drawDragonFallen(x, y, dragon);
     return;
   }
-  let drawX = x;
-  let drawY = y;
   let facing = 1;
-  let flying = false;
-  let biting = false;
   if (dragonAttackTimer > 0 && dragonAttackTargetX) {
-    const duration = getActiveDragon()?.type === "gold" ? 68 : 84;
-    const progress = Math.max(0, Math.min(1, 1 - dragonAttackTimer / duration));
-    const travel = progress < 0.42 ? progress / 0.42 : progress < 0.68 ? 1 : Math.max(0, (1 - progress) / 0.32);
-    const eased = travel * travel * (3 - 2 * travel);
-    drawX = x + (dragonAttackTargetX - x - 70) * eased;
-    drawY = y + (dragonAttackTargetY - y - 55) * eased - Math.sin(eased * Math.PI) * 72;
     facing = dragonAttackTargetX >= x ? 1 : -1;
-    flying = travel > 0.04 && travel < 0.98;
-    biting = progress >= 0.4 && progress <= 0.72;
   }
   ctx.save();
   ctx.globalAlpha = 0.92;
-  drawDragonShape(ctx, drawX, drawY, dragon, 1.02, flying, false, facing, !flying, biting);
+  drawDragonShape(ctx, x, y, dragon, 1.02, false, false, facing, true, false);
   ctx.restore();
 }
 
