@@ -828,6 +828,10 @@ function update(frameTime = performance.now()) {
 function handleInput() {
   player.vx = 0;
   if (player.sittingTimer > 0) return;
+  if (level.story?.type === "town" && level.story.state === "captured") {
+    player.vy = 0;
+    return;
+  }
   const moveSpeed = getPlayerMoveSpeed();
 
   if (keys.has("ArrowLeft") || keys.has("KeyA")) {
